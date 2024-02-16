@@ -8,20 +8,22 @@ if __name__ == '__main__':
     import numpy as np
     from queue import Queue
     from signals import simulate_system
+    from scipy.fft import fft
     from math import pi
     
     system_params = {
         'dictionary': 'real',
         'filter': 'butter',
         'sampled_LO': 'y',
-        'wavelets': 'n',
+        'wavelets': 'y',
         'rand_demod': 'n',
         'rd_clock_freq': 4,
         'adc_clock_freq': 100,
+        'wave_freq': [2,20],
         'start': -3,
         'stop': 3,
         'spacing': 0.001,
-        'recovery': 'o_omp'}
+        'recovery': 'spgl1'}
     #Input signal parameters
     wave_params = [
         {'amp': 0,
@@ -44,8 +46,8 @@ if __name__ == '__main__':
         'amp':1,
         'freq':100,
         'phase':0,
-        'phase_delta': 0.2,
-        'phase_freq': 0.5,
+        'phase_delta': 0.01,
+        'phase_freq': 0.1,
         'phase_offset': 0}
     # Gabor atoms with Gaussian window parameters
     # f_c = center frequencies of atoms
@@ -55,8 +57,8 @@ if __name__ == '__main__':
     psi_params = [
         {
             'amp': 0.5,
-            'f_c': 10,
-            'width': 0.1,
+            'f_c': 20,
+            'width': 0.001,
             'shift': 0,
             'angle': pi/4
         }
@@ -103,15 +105,33 @@ if __name__ == '__main__':
         y_mixed = signals[16]
         LO = signals[17]
         x = signals[18]
+        wavelet_train = signals[19]
+        single_wavelet = signals[20]
+        filt_down = signals[21]
         # print(matching_tones)
         # test1 = np.nonzero(matching_tones)
         # for ii in test1:
         #     print(abs(matching_tones[ii]))
         plt.figure()
+        plt.suptitle("Sample Train Generated from Local Oscillator Rising-Zero Crossings\nLO Frequency: {}Hz | Modulation Frequency: {}Hz | Modulation Delta: {}"\
+.format(LO_params['freq'], LO_params['phase_freq'], LO_params['phase_delta']))
         # plt.subplot(4,1,1)
         # plt.title("Multi-tone Real-Valued Input Signal: Time Domain | Tones at {}Hz and {}Hz".format(wave_params[1]['freq'],wave_params[2]['freq']))
         # plt.xlim(-0.1,0.1)
         # plt.plot(t,x)
+        plt.subplot(1,2,1)
+        plt.title("Time Domain")
+        plt.plot(t,zero_crossings, label="Zero Crossings", color="blue")
+        plt.plot(t, LO, label="Modulated LO", color="orange")
+        plt.legend()
+        plt.xlim(-0.05,0.05)
+        plt.ylabel("Amplitude")
+        plt.xlabel("Seconds")
+        plt.subplot(1,2,2)
+        plt.title("Frequency Domain")
+        plt.plot(complex_tf,np.fft.fftshift(abs(fft(zero_crossings))))
+        plt.ylabel("Magnitude")
+        plt.xlabel("Hertz")       
         # plt.subplot(4,1,1)
         # plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
         # plt.title("Multi-tone Real-Valued Input Signal: Frequency Domain | Tones at {}Hz and {}Hz".format(wave_params[1]['freq'],wave_params[2]['freq']))
@@ -126,58 +146,53 @@ if __name__ == '__main__':
         # plt.plot(complex_tf,np.fft.fftshift(abs(np.fft.fft(zero_crossings))))
         # plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
         # plt.xlim(-0.1,0.1)
-        # plt.plot(t,LO)          
-        # plt.subplot(3,1,1)
+        # plt.plot(t,LO)
+        # plt.subplot(5,1,1)
+        # plt.title("Single Wavelet Zero Time Shift")
+        # plt.plot(t, single_wavelet)
+        # plt.plot(complex_tf,np.fft.fftshift(abs(np.fft.fft(single_wavelet))))
+        # plt.plot(tf_sampled,np.fft.fftshift(abs(test_model)))
+        # plt.subplot(5,1,2)
+        # plt.title("Wavelet Train")
+        # plt.plot(t, wavelet_train)
+        # plt.plot(tf_sampled,np.fft.fftshift(abs(y_sampled)))
+        # plt.plot(complex_tf,np.fft.fftshift(abs(np.fft.fft(wavelet_train))))       
+        # plt.subplot(5,1,3)
         # plt.title("Mixing Action Between Input Signal and LO: Frequency Domain")
         # plt.title("Mixing Action Between Input Signal and LO | {}Hz Low Pass Filter Overlay | Frequency Domain".format(filter_params['cutoff_freq']))
         # plt.plot(complex_tf,np.fft.fftshift(abs(y_mixed)))
         # plt.plot(t,zero_crossings)
         # plt.xlim(-0.1,0.1)
-        # plt.subplot(3,1,3)
-        # plt.title("Rising Zero Crossings: LO Sample Train Frequency Domain")
-        # plt.plot(complex_tf,np.fft.fftshift(abs(np.fft.fft(zero_crossings))))
         # plt.subplot(6,1,3)
         # plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
         # plt.plot(complex_tf,np.fft.fftshift(abs(y_mixed)), complex_tf,np.fft.fftshift(abs(y_filtered).max()*abs(filt_freq)))
         # plt.plot(complex_tf,np.fft.fftshift(abs(filt_freq)))
-        plt.subplot(4,1,1)
-        plt.title("LO Mixing Frequency Domain Comb Function | LO frequency (f_s1): " + str(LO_freq) + "Hz | Modulation Frequency (f_mod): " + \
-                str(LO_params['phase_freq']) + "Hz | Modulation Deviation (f_delta): " + \
-                str(LO_params['phase_delta']) + "\nFiltered Input Signal using Maximally Flat {}th Order Butterworth Low-pass FIR Filter".format(filter_params['order']))
+        # plt.subplot(5,1,4)
+        # plt.title("LO Mixing Frequency Domain Comb Function | LO frequency (f_s1): " + str(LO_freq) + "Hz | Modulation Frequency (f_mod): " + \
+        #         str(LO_params['phase_freq']) + "Hz | Modulation Deviation (f_delta): " + \
+        #         str(LO_params['phase_delta']) + "\nFiltered Input Signal using Maximally Flat {}th Order Butterworth Low-pass FIR Filter".format(filter_params['order']))
         # plt.title("Filtered Input Signal using Maximally Flat {}th Order Butterworth Low-pass FIR Filter".format(filter_params['order']))
-        test1 = abs(filt_freq[np.argmax(abs(y_filtered))])
-        test2 = abs(y_filtered).max() / test1
-        plt.plot(complex_tf,np.fft.fftshift(abs(y_filtered)), complex_tf,np.fft.fftshift(test2*abs(filt_freq)))
-        plt.subplot(4,1,2)
-        plt.title("Sampled Filtered Input Signal: Frequency Domain | ADC Sample Rate: {}Hz".format(system_params['adc_clock_freq']))
-        plt.xticks(np.arange(min(tf_sampled), max(tf_sampled)+1, 5))
-        plt.plot(tf_sampled,np.fft.fftshift(abs(y_sampled)))
+        # test1 = abs(filt_freq[np.argmax(abs(y_filtered))])
+        # test2 = abs(y_filtered).max() / test1
+        # plt.plot(complex_tf,np.fft.fftshift(abs(y_filtered)), complex_tf,np.fft.fftshift(test2*abs(filt_freq)))
+        # plt.subplot(5,1,5)
+        # plt.title("Sampled Filtered Input Signal: Frequency Domain | ADC Sample Rate: {}Hz".format(system_params['adc_clock_freq']))
+        # plt.xticks(np.arange(min(tf_sampled), max(tf_sampled)+1, 5))
+        # plt.plot(tf_sampled,np.fft.fftshift(abs(y_sampled)))
         # plt.plot(tf_sampled,np.fft.fftshift(abs(y_sampled)), tf_sampled, np.fft.fftshift(abs(y_sampled).max()*abs(filt_freq_down)))
-        plt.subplot(4,1,3)
-        plt.xticks(np.arange(min(tf_sampled), max(tf_sampled)+1, 5))
-        plt.title("Improved Output From CS Model With Low-Pass Filter Compensation")
-        plt.plot(tf_sampled,np.fft.fftshift(abs(test_model)))
+        # plt.subplot(4,1,3)
+        # plt.xticks(np.arange(min(tf_sampled), max(tf_sampled)+1, 5))
+        # plt.title("Improved Output From CS Model With Low-Pass Filter Compensation")
+        # plt.plot(tf_sampled,np.fft.fftshift(abs(test_model)))
         # plt.plot(tf_sampled,np.fft.fftshift(abs(test_model)), tf_sampled, np.fft.fftshift(abs(y_sampled).max()*abs(filt_freq_down)))
         # plt.subplot(6,1,6)
-        plt.subplot(4,1,4)
-        plt.title("Reconstructed Input Signal Using SPGL-1: Frequency Domain")
-        plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
+        # plt.subplot(5,1,5)
+        # plt.title("Reconstructed Input Signal Using SPGL-1: Frequency Domain")
+        # plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
         # plt.plot(tf_sampled,np.fft.fftshift(abs(coef)))
         # plt.plot(complex_tf, abs(coef))
-        plt.tight_layout()
-        plt.show()
-        # plt.subplot(3,1,3)
-        # plt.plot(complex_tf,np.fft.fftshift(matching_tones))
-        # plt.show()
-    # plt.subplot(2,2,1)
-    # plt.plot(tf_imag,np.real(xf_input))
-    # plt.subplot(2,2,2)
-    # plt.plot(complex_tf,np.imag(xf_input))
-    # plt.subplot(2,2,3)
-    # plt.plot(complex_tf,coef_real)
-    # plt.subplot(2,2,4)
-    # plt.plot(complex_tf,coef_imag)
-    
+        # plt.tight_layout()
+        plt.show()   
     # plt.subplot(1,2,1)
     # plt.title("Pulse Train From Non-Modulated LO Rising Zero Crossings")
     # plt.plot(t,rising_zero_crossings)

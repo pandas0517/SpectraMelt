@@ -32,31 +32,33 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     xf = fft(x)
     complex_tf = np.linspace(-1/(2*system_params['spacing']), 1/(2*system_params['spacing']), int(t.size))
     # Create Phase Modulated Local Oscillator
-    LO_mod, rising_zero_crossings, LO = generate_LO(t, LO_params, system_params)
+    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast = generate_LO(t, LO_params, system_params)
     if ( system_params['wavelets'] == 'y' ):
         #Create wavelet train
-        first_modulation = generate_wavelet_train(system_params, psi_params, rising_zero_crossings, t)
+        first_modulation, no_shift_wavelet, wavelet_test = generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t)
     else:
         first_modulation = rising_zero_crossings
     #Mix wavelet train with input signal
-    y_mixed = np.copy(x*first_modulation)
+    y_mixed = np.copy(x*rising_zero_crossings)
+    # y_mixed = np.copy(x*first_modulation)
     #Random Demodulation
     y_demod = random_demodulation(y_mixed, system_params)
     #Filter demodulated signal
     y_filtered, filt_freq, filt_freq_down = filter_signal(y_demod, t, filter_params, system_params)
     # x_filtered, filt_freq = filter_signal(x, t, filter_params, system_params)
     #Downsample with ADC
-    y_sampled, LO_mod_sampled, t_sampled, tf_sampled, sample_train, filt_sampled = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
+    y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
     #Create NYFR Dictionary for signal reconstruction
-    dictionary = create_nyfr_dict(t, LO_mod, LO_mod_sampled, filt_freq_down, system_params)
+    dictionary = create_nyfr_dict(t, LO_mod, LO_mod_sampled, filt_sampled, system_params)
     # dictionary = create_nyfr_dict(t, LO_mod, system_params)
     # test_model = np.matmul(abs(filt_freq_down)*np.eye(filt_freq_down.size),np.matmul(dictionary,xf))
     # test_model = np.matmul(np.real(dictionary),np.real(xf)) + np.matmul(np.imag(dictionary),np.imag(xf))*1j
     # test_model = np.matmul(np.imag(dictionary),np.imag(xf))*1j
-    test_model = np.matmul(np.real(dictionary),np.real(xf))
+    # test_model = np.matmul(np.real(dictionary),np.real(xf))
+    test_model = np.matmul(dictionary,xf)
     #Recover signal
-    coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
-    # coef = xf
+    # coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
+    coef = xf
     # coef1 = np.multiply(test,fft(test_model))
     matching_tones = np.multiply(xf,coef)
     # matching_tones = np.multiply(np.abs(xf),np.abs(coef))
@@ -69,7 +71,7 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     current_run.append(xf)
     current_run.append(coef)
     current_run.append(non_zero_matches)
-    current_run.append(first_modulation)
+    current_run.append(rising_zero_crossings)
     current_run.append(fft(y_mixed))
     current_run.append(fft(y_filtered))
     current_run.append(t)
@@ -82,6 +84,9 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     current_run.append(fft(y_mixed))
     current_run.append(LO)
     current_run.append(x)
+    current_run.append(first_modulation)
+    current_run.append(no_shift_wavelet)
+    current_run.append(fft(filt_sampled))
     # current_run = [ LO_params['freq'], system_params['adc_clock_freq'], complex_tf, xf, coef, matching_tones ]
     manager_queue.put(current_run)
 
@@ -143,32 +148,94 @@ def generate_LO(t, LO_params, system_params):
         if (LO[i] > LO[i-1]):
             rising_zero_crossings[i] = 1
     
-    return LO_modulation, rising_zero_crossings, LO
+    clock_ticks = round(1/(system_params['spacing']*system_params['wave_freq'][0]))
+    adc_start_time = (rising_zero_crossings!=0).argmax(axis=0)
+    sample_train = np.zeros_like(t)   
+    for i in range(adc_start_time, t.size, clock_ticks):
+        sample_train[i] = 1
 
-def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, t):
+    clock_ticks_fast = round(1/(system_params['spacing']*system_params['wave_freq'][1]))
+    sample_train_fast = np.zeros_like(t)   
+    for i in range(adc_start_time, t.size, clock_ticks_fast):
+        sample_train_fast[i] = 1
+
+    return LO_modulation, rising_zero_crossings, LO, sample_train, sample_train_fast
+
+def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t):
     rising_zero_crossings_idx = np.nonzero(rising_zero_crossings)[0]
+    sample_train_idx = np.nonzero(sample_train)[0]
     # Adding shifts from rising zero crossings into the Gabor atom parameters
-    psi_par = []
+    psi_par_mod_lo = []
     for idx in range(0, rising_zero_crossings_idx.size, len(psi_params)):
         count = 0
         for params in psi_params:
-            param = dict(params)
+            param_mod_lo = dict(params)
             if (idx+count < rising_zero_crossings_idx.size):
-                param['shift'] = int(rising_zero_crossings_idx[idx+count])
-            if ( param['shift'] <= len(t) ):
-                psi_par.append(param)
+                param_mod_lo['shift'] = int(rising_zero_crossings_idx[idx+count])
+            if ( param_mod_lo['shift'] <= len(t) ):
+                psi_par_mod_lo.append(param_mod_lo)
+            count+=1
+            
+    psi_par_adc_shift = []
+    for idx in range(0, sample_train_idx.size, len(psi_params)):
+        count = 0
+        for params in psi_params:
+            param_adc_shift = dict(params)
+            if (idx+count < sample_train_idx.size):
+                param_adc_shift['shift'] = int(sample_train_idx[idx+count])
+            if ( param_adc_shift['shift'] <= len(t) ):
+                psi_par_adc_shift.append(param_adc_shift)
             count+=1
     #Gabor wavelet train construction
     wavelet = []
     wavelet_train = np.zeros_like(rising_zero_crossings)
-    for param in psi_par:
+    for param in psi_par_mod_lo:
         psi = param['amp']*((2**(1/4))/(sqrt(param['width'])*pi**(1/4)))* \
             e**(2*pi*param['f_c']*(t-t[param['shift']])*1j)* \
             e**(-(((t-t[param['shift']])/param['width'])**2))
         wavelet.append(psi)
         wavelet_train = np.add(psi,wavelet_train)
-    return wavelet_train
-    # return wavelet
+    
+    wavelet_no_shift = []
+    no_shift_wavelet = np.zeros_like(t)
+    for param in psi_par_adc_shift:
+        psi = param['amp']*((2**(1/4))/(sqrt(param['width'])*pi**(1/4)))* \
+            e**(2*pi*param['f_c']*(t-t[param['shift']])*1j)* \
+            e**(-(((t-t[param['shift']])/param['width'])**2))
+        wavelet_no_shift.append(psi)
+        no_shift_wavelet = np.add(psi, no_shift_wavelet)      
+    time_shifts = [ np.where( t == -1.5 )[0][0], np.where( t == 0 )[0][0], np.where( t == 1.5 )[0][0] ]    
+    wavelet_test = []
+    test_params = [
+        {
+            'amp': 0.5,
+            'f_c': -35,
+            'shift': 0,
+            'width': 0.01,
+            'wavelet': no_shift_wavelet},
+        {
+            'amp': 0.5,
+            'f_c': 0,
+            'shift': 0,
+            'width': 0.01,
+            'wavelet': no_shift_wavelet},
+        {
+            'amp': 0.5,
+            'f_c': 35,
+            'shift': 0,
+            'width': 0.1,
+            'wavelet': no_shift_wavelet}
+        ]
+    for t_param in test_params:
+        for time_shift in time_shifts:
+            param = dict(t_param)
+            psi_test = t_param['amp']*((2**(1/4))/(sqrt(t_param['width'])*pi**(1/4)))* \
+                e**(2*pi*t_param['f_c']*(t-t[time_shift])*1j)* \
+                e**(-(((t-t[time_shift])/t_param['width'])**2))
+            param['wavelet'] = psi_test
+            param['shift'] = time_shift
+            wavelet_test.append(param)
+    return wavelet_train, no_shift_wavelet, wavelet_test
 
 def random_demodulation(data, system_params):
     clock_ticks = 1/(system_params['rd_clock_freq']*system_params['spacing'])
@@ -221,14 +288,14 @@ def downsample(data, LO_modulation, t, system_params, rising_zero_crossings, fil
         downsampled_t[index_data] = t[i]
         downsampled_filt[index_data] = filt_time[i]
     downsampled_tf = np.linspace(-1/(2*system_params['spacing']*clock_ticks), 1/(2*system_params['spacing']*clock_ticks), downsampled_data_size)
-    return downsampled_data, downsampled_LO, downsampled_t, downsampled_tf, sample_train, downsampled_filt
+    return downsampled_data, downsampled_LO, downsampled_t, downsampled_tf, downsampled_filt
 
-def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_freq_down, system_params):
+def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params):
     # K_band = t.size*(system_params['spacing']*system_params['adc_clock_freq'])
     # K_band = ceil(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
     K_band = round(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
     Zones = int(t.size/K_band)
-
+    filt_freq_down = fft(filt_down)
     M_index = []
     M_temp = [0,0]
     # M_temp = [-2,1]
@@ -242,11 +309,12 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_freq_down, system_pa
  
     R_init = np.eye(K_band)
     # test_init = (abs(filt_freq_down)*abs(filt_freq_down)) * np.eye(K_band)
-    test_init = abs(filt_freq_down) * np.eye(K_band)
+    # test_init = abs(filt_freq_down) * np.eye(K_band)
+    test_init = filt_freq_down * np.eye(K_band)
     R = np.copy(R_init)
     # dft_matrix = dft(K_band)
     dft_matrix = np.matmul(test_init,dft(K_band))
-    idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
+    idft_norm = np.transpose(np.conjugate(dft_matrix))/(10*K_band)
     # idft_norm = np.transpose(np.conjugate(dft_matrix))/(K_band)
     if (system_params['dictionary'] == 'complex'):
         for i in (range(Zones-1)):
@@ -269,7 +337,7 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_freq_down, system_pa
     elif (system_params['dictionary'] == 'real'):
         for i in (range(2*Zones-1)):
             R = np.hstack((R,R_init))
-        # R_filt = filt_freq_down * np.eye(K_band)
+        # R_filt = fft(filt_freq_down) * np.eye(K_band)
         R_row, R_col = R.shape 
         S = np.zeros((R_col,R_col),dtype='complex')
         PSI = np.zeros((R_col, int(R_col/2)),dtype='complex')
@@ -290,8 +358,8 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_freq_down, system_pa
         if ( system_params['sampled_LO'] == 'y' ):
             LO_list = []
             for i in (range(0,Zones)):
-                LO_list.append(np.flip(LO_mod_sampled))
-                # LO_list.append(LO_mod_sampled)
+                # LO_list.append(np.flip(LO_mod_sampled))
+                LO_list.append(LO_mod_sampled)
             LO_mod_concat = np.concatenate(LO_list)
             double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
         elif ( system_params['sampled_LO'] == 't' ):
