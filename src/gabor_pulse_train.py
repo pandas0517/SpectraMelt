@@ -22,7 +22,7 @@ if __name__ == '__main__':
         'rand_demod': 'n',
         'rd_clock_freq': 4,
         'adc_clock_freq': 20,
-        'wave_freq': [2,20],
+        'wave_freq': [10,20],
         'start': -3,
         'stop': 3,
         'spacing': 0.001,
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         'amp':1,
         'freq':100,
         'phase':0,
-        'phase_delta': 1,
+        'phase_delta': 0.4,
         'phase_freq': 0.5,
         'phase_offset': 0}
     # Gabor atoms with Gaussian window parameters
@@ -61,13 +61,13 @@ if __name__ == '__main__':
         {
             'amp': 0.5,
             'f_c': 18,
-            'width': 0.06,
+            'width': 0.1,
             'shift': 0,
             'angle': pi/4},
         {
             'amp': 0.5,
             'f_c': -18,
-            'width': 0.06,
+            'width': 0.1,
             'shift': 0,
             'angle': pi/4
         }
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     xf = fft(x)
     complex_tf = np.linspace(-1/(2*system_params['spacing']), 1/(2*system_params['spacing']), int(t.size))
     # Create Phase Modulated Local Oscillator
-    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast = generate_LO(t, LO_params, system_params)
+    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t, LO_params, system_params)
     if ( system_params['wavelets'] == 'y' ):
         #Create wavelet train
         first_modulation, no_shift_wavelet, wavelet_test = generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t)
@@ -99,35 +99,48 @@ if __name__ == '__main__':
     # y_mixed = np.copy(x*first_modulation)
     y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
     y_filt_wavelet = np.copy(y_filtered*no_shift_wavelet)
+    zero_pad_y_wavelet = np.pad(y_filt_wavelet, (clock_ticks-1,0), 'constant', constant_values=(0,0))
+    y_integrate = np.zeros_like(y_filt_wavelet)
+    for counter in range(0, zero_pad_y_wavelet.size - clock_ticks + 1):
+        y_integrate[counter] = np.trapz(zero_pad_y_wavelet[counter:counter+clock_ticks-1])
+
     plt.figure()
-    plt.subplot(3,2,1)
-    # plt.plot( t[short_start:short_end], abs(first_modulation[short_start:short_end]) )
-    plt.plot( t[short_start:short_end], abs(rising_zero_crossings[short_start:short_end]) )
-    plt.title('Time Domain Magnitude Representation: Wavelet Modulation\nLO Modulation Frequency: {}Hz \
-| LO Modulation Delta: {}'.format(LO_params['freq'],LO_params['phase_freq'],LO_params['phase_delta']))
-    plt.ylabel('Modulated LO\nLO Frequency: {}Hz\nWavelet Sample Train'.format(LO_params['freq']))
-    plt.subplot(3,2,2)
-    # plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(first_modulation[short_start:short_end]))) )
-    plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(rising_zero_crossings[short_start:short_end]))) )
-    plt.title('Frequency Domain Magnitude Representation: Wavelet Modulation\nGabor Wavelet - Center Frequencies: {}Hz and {}Hz | Width: \
-{} | Scaling: {}'.format(psi_params[0]['f_c'],psi_params[1]['f_c'],psi_params[0]['width'],psi_params[0]['amp']))
-    plt.ylabel('Modulated LO\nLO Frequency: {}Hz\nWavelet Sample Train'.format(LO_params['freq']))
-    plt.subplot(3,2,3)
-    plt.plot( t[short_start:short_end], abs(rising_zero_crossings[short_start:short_end]))
-    plt.plot( t[short_start:short_end], abs(LO[short_start:short_end]))
-    plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][0]))
-    plt.subplot(3,2,4)
-    plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(rising_zero_crossings[short_start:short_end]))))
-    plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][0]))
-    plt.subplot(3,2,5)
-    plt.plot( t[short_start:short_end], abs(y_mixed[short_start:short_end]) )
-    plt.xlabel('Seconds')
-    plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][1]))
-    plt.subplot(3,2,6)
-    plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(y_mixed[short_start:short_end]))) )
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][1]))
+    plt.subplot(4,1,1)
+    plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(no_shift_wavelet[short_start:short_end]))))
+    plt.subplot(4,1,2)
+    plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(y_filt_wavelet[short_start:short_end]))))
+    plt.subplot(4,1,3)
+    plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(y_filtered[short_start:short_end]))))
+    plt.subplot(4,1,4)
+    plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(y_integrate[short_start:short_end]))))
     plt.show()
+#     plt.subplot(3,2,1)
+#     # plt.plot( t[short_start:short_end], abs(first_modulation[short_start:short_end]) )
+#     plt.plot( t[short_start:short_end], abs(rising_zero_crossings[short_start:short_end]) )
+#     plt.title('Time Domain Magnitude Representation: Wavelet Modulation\nLO Modulation Frequency: {}Hz \
+# | LO Modulation Delta: {}'.format(LO_params['freq'],LO_params['phase_freq'],LO_params['phase_delta']))
+#     plt.ylabel('Modulated LO\nLO Frequency: {}Hz\nWavelet Sample Train'.format(LO_params['freq']))
+#     plt.subplot(3,2,2)
+#     # plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(first_modulation[short_start:short_end]))) )
+#     plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(rising_zero_crossings[short_start:short_end]))) )
+#     plt.title('Frequency Domain Magnitude Representation: Wavelet Modulation\nGabor Wavelet - Center Frequencies: {}Hz and {}Hz | Width: \
+# {} | Scaling: {}'.format(psi_params[0]['f_c'],psi_params[1]['f_c'],psi_params[0]['width'],psi_params[0]['amp']))
+#     plt.ylabel('Modulated LO\nLO Frequency: {}Hz\nWavelet Sample Train'.format(LO_params['freq']))
+#     plt.subplot(3,2,3)
+#     plt.plot( t[short_start:short_end], abs(rising_zero_crossings[short_start:short_end]))
+#     plt.plot( t[short_start:short_end], abs(LO[short_start:short_end]))
+#     plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][0]))
+#     plt.subplot(3,2,4)
+#     plt.plot(complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(rising_zero_crossings[short_start:short_end]))))
+#     plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][0]))
+#     plt.subplot(3,2,5)
+#     plt.plot( t[short_start:short_end], abs(y_mixed[short_start:short_end]) )
+#     plt.xlabel('Seconds')
+#     plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][1]))
+#     plt.subplot(3,2,6)
+#     plt.plot( complex_tf[short_start:short_end], np.fft.fftshift(abs(fft(y_mixed[short_start:short_end]))) )
+#     plt.xlabel('Frequency (Hz)')
+#     plt.ylabel('No Modulation\nLO Frequency: {}Hz\nWavelet Sample Train'.format(system_params['wave_freq'][1]))
 #     plt.subplot(3,3,1)
 #     plt.plot( t, np.real(wavelet_test[6]['wavelet']), label="Time Shift -1.5 Seconds", color="blue" )
 #     plt.title("Real Part of Gabor Wavelet at Different Time Shifts\nScaling: {} | Center Frequency: {}Hz | \

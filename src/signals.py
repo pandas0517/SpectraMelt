@@ -30,14 +30,15 @@ from OMP import OMP
 def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filter_params, manager_queue):
     x, t, num_tones = multi_tone_sine_wave(system_params, wave_params, filter_params)
     xf = fft(x)
-    complex_tf = np.linspace(-1/(2*system_params['spacing']), 1/(2*system_params['spacing']), int(t.size))
+    complex_tf = np.linspace(-1/(2*system_params['spacing']), 1/(2*system_params['spacing']), int(t.size), endpoint=False)
     # Create Phase Modulated Local Oscillator
-    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast = generate_LO(t, LO_params, system_params)
+    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t, LO_params, system_params)
     if ( system_params['wavelets'] == 'y' ):
         #Create wavelet train
         first_modulation, no_shift_wavelet, wavelet_test = generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t)
     else:
         first_modulation = rising_zero_crossings
+        no_shift_wavelet = 0
     #Mix wavelet train with input signal
     y_mixed = np.copy(x*rising_zero_crossings)
     # y_mixed = np.copy(x*first_modulation)
@@ -47,9 +48,9 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     y_filtered, filt_freq, filt_freq_down = filter_signal(y_demod, t, filter_params, system_params)
     # x_filtered, filt_freq = filter_signal(x, t, filter_params, system_params)
     #Downsample with ADC
-    y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
+    y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
     #Create NYFR Dictionary for signal reconstruction
-    dictionary = create_nyfr_dict(t, LO_mod, LO_mod_sampled, filt_sampled, system_params)
+    dictionary = create_nyfr_dict(t, LO_mod, LO_mod_sampled, filt_sampled, system_params, tf_sampled)
     # dictionary = create_nyfr_dict(t, LO_mod, system_params)
     # test_model = np.matmul(abs(filt_freq_down)*np.eye(filt_freq_down.size),np.matmul(dictionary,xf))
     # test_model = np.matmul(np.real(dictionary),np.real(xf)) + np.matmul(np.imag(dictionary),np.imag(xf))*1j
@@ -57,8 +58,8 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     # test_model = np.matmul(np.real(dictionary),np.real(xf))
     test_model = np.matmul(dictionary,xf)
     #Recover signal
-    # coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
-    coef = xf
+    coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
+    # coef = xf
     # coef1 = np.multiply(test,fft(test_model))
     matching_tones = np.multiply(xf,coef)
     # matching_tones = np.multiply(np.abs(xf),np.abs(coef))
@@ -72,13 +73,13 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     current_run.append(coef)
     current_run.append(non_zero_matches)
     current_run.append(rising_zero_crossings)
-    current_run.append(fft(y_mixed))
-    current_run.append(fft(y_filtered))
+    current_run.append(y_mixed)
+    current_run.append(y_filtered)
     current_run.append(t)
     current_run.append(t_sampled)
     current_run.append(tf_sampled)
-    current_run.append(fft(y_sampled))
-    current_run.append(fft(test_model))
+    current_run.append(y_sampled)
+    current_run.append(test_model)
     current_run.append(filt_freq)
     current_run.append(filt_freq_down)
     current_run.append(fft(y_mixed))
@@ -87,6 +88,7 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     current_run.append(first_modulation)
     current_run.append(no_shift_wavelet)
     current_run.append(fft(filt_sampled))
+    current_run.append(downsample_train)
     # current_run = [ LO_params['freq'], system_params['adc_clock_freq'], complex_tf, xf, coef, matching_tones ]
     manager_queue.put(current_run)
 
@@ -96,8 +98,8 @@ def multi_tone_sine_wave(system_params, wave_params, filter_params):
     else:
         start_time = system_params['start']
     stop_time = system_params['stop']
-    total_time = int( abs( start_time - stop_time ) )
-    points_per_second = int(1/system_params['spacing'])
+    total_time = abs( start_time - stop_time )
+    points_per_second = 1/system_params['spacing']
     K_band = int( points_per_second / system_params['adc_clock_freq'] )
     K_band_remainder = int(points_per_second % system_params['adc_clock_freq'])
     if ( K_band_remainder != 0 ):
@@ -112,7 +114,7 @@ def multi_tone_sine_wave(system_params, wave_params, filter_params):
         K_band = int( points_per_second / system_params['adc_clock_freq'] )
     system_params['spacing'] = 1/points_per_second
     # print(system_params['spacing'])
-    num_time_points = total_time * points_per_second
+    num_time_points = int ( total_time * points_per_second )
     t = np.linspace(start_time, stop_time, num_time_points, endpoint=False)
     x = []
     x_input = np.zeros_like(t)
@@ -132,6 +134,7 @@ def generate_LO(t, LO_params, system_params):
     LO = LO_params['amp']*sin(2*pi*LO_params['freq']*t+LO_params['phase']+LO_modulation)
     #zero-crossing pulse generator 
     zero_crossings = np.where(np.diff(np.signbit(LO)))[0] + 1
+    # test 
     rising_zero_crossings = np.zeros_like(t)
     #edge case
     start = t[0]-system_params['spacing']
@@ -159,7 +162,7 @@ def generate_LO(t, LO_params, system_params):
     for i in range(adc_start_time, t.size, clock_ticks_fast):
         sample_train_fast[i] = 1
 
-    return LO_modulation, rising_zero_crossings, LO, sample_train, sample_train_fast
+    return LO_modulation, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks
 
 def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t):
     rising_zero_crossings_idx = np.nonzero(rising_zero_crossings)[0]
@@ -177,15 +180,12 @@ def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sam
             count+=1
             
     psi_par_adc_shift = []
-    for idx in range(0, sample_train_idx.size, len(psi_params)):
-        count = 0
-        for params in psi_params:
-            param_adc_shift = dict(params)
-            if (idx+count < sample_train_idx.size):
-                param_adc_shift['shift'] = int(sample_train_idx[idx+count])
-            if ( param_adc_shift['shift'] <= len(t) ):
-                psi_par_adc_shift.append(param_adc_shift)
-            count+=1
+    for count, idx in enumerate(sample_train_idx):
+        current_wave = count % 2
+        params = psi_params[current_wave]
+        param_adc_shift = dict(params)         
+        param_adc_shift['shift'] = idx
+        psi_par_adc_shift.append(param_adc_shift)
     #Gabor wavelet train construction
     wavelet = []
     wavelet_train = np.zeros_like(rising_zero_crossings)
@@ -195,7 +195,6 @@ def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sam
             e**(-(((t-t[param['shift']])/param['width'])**2))
         wavelet.append(psi)
         wavelet_train = np.add(psi,wavelet_train)
-    
     wavelet_no_shift = []
     no_shift_wavelet = np.zeros_like(t)
     for param in psi_par_adc_shift:
@@ -204,7 +203,8 @@ def generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sam
             e**(-(((t-t[param['shift']])/param['width'])**2))
         wavelet_no_shift.append(psi)
         no_shift_wavelet = np.add(psi, no_shift_wavelet)      
-    time_shifts = [ np.where( t == -1.5 )[0][0], np.where( t == 0 )[0][0], np.where( t == 1.5 )[0][0] ]    
+    # time_shifts = [ np.where( t == -1.5 )[0][0], np.where( t == 0 )[0][0], np.where( t == 1.5 )[0][0] ]
+    time_shifts = [ 1, 2, 3 ]
     wavelet_test = []
     test_params = [
         {
@@ -272,25 +272,28 @@ def filter_signal(data, t, filter_params, system_params):
 
 def downsample(data, LO_modulation, t, system_params, rising_zero_crossings, filt_freq):
     filt_time = ifft(filt_freq)
+    test = fft(filt_time)
     clock_ticks = round(1/(system_params['spacing']*system_params['adc_clock_freq']))
     downsampled_data_size = int(data.size/clock_ticks) 
-    sample_train = np.zeros_like(data)
+    downsample_train = np.zeros_like(data)
     downsampled_data = np.zeros(downsampled_data_size,dtype=data.dtype)
     downsampled_LO = np.zeros(downsampled_data_size,dtype=data.dtype)
     downsampled_t = np.zeros(downsampled_data_size,dtype=data.dtype)
     downsampled_filt = np.zeros(downsampled_data_size,dtype=filt_freq.dtype)
     downsampled_range = data.size
-    adc_start_time = (rising_zero_crossings!=0).argmax(axis=0)    
+    # test = np.where( t == 0 )   
+    # adc_start_time = (rising_zero_crossings!=0).argmax(axis=0)
+    adc_start_time = 0
     for index_data,i in enumerate(range(adc_start_time, downsampled_range, clock_ticks)):
-        sample_train[i] = 1
+        downsample_train[i] = 1
         downsampled_data[index_data] = data[i]
         downsampled_LO[index_data] = LO_modulation[i]
         downsampled_t[index_data] = t[i]
         downsampled_filt[index_data] = filt_time[i]
-    downsampled_tf = np.linspace(-1/(2*system_params['spacing']*clock_ticks), 1/(2*system_params['spacing']*clock_ticks), downsampled_data_size)
-    return downsampled_data, downsampled_LO, downsampled_t, downsampled_tf, downsampled_filt
+    downsampled_tf = np.linspace(-1/(2*system_params['spacing']*clock_ticks), 1/(2*system_params['spacing']*clock_ticks), downsampled_data_size, endpoint=False)
+    return downsampled_data, downsampled_LO, downsampled_t, downsampled_tf, downsampled_filt, downsample_train
 
-def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params):
+def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params, tf_sampled):
     # K_band = t.size*(system_params['spacing']*system_params['adc_clock_freq'])
     # K_band = ceil(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
     K_band = round(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
@@ -310,11 +313,15 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params)
     R_init = np.eye(K_band)
     # test_init = (abs(filt_freq_down)*abs(filt_freq_down)) * np.eye(K_band)
     # test_init = abs(filt_freq_down) * np.eye(K_band)
+    # test_11 = 1/ ( 0.001*np.power(tf_sampled,2) - 2.1 )
+    # test_11 = -5e-8*np.power(tf_sampled,4) + 2e-12*np.power(tf_sampled,3) - 5e-6*np.power(tf_sampled,2) + 4e-9*tf_sampled + 0.9988
     test_init = filt_freq_down * np.eye(K_band)
+    # test_init = test_11 * np.eye(K_band)
     R = np.copy(R_init)
-    # dft_matrix = dft(K_band)
-    dft_matrix = np.matmul(test_init,dft(K_band))
-    idft_norm = np.transpose(np.conjugate(dft_matrix))/(10*K_band)
+    dft_matrix = dft(K_band)
+    # dft_matrix = np.matmul(test_init,dft(K_band))
+    ## dft_matrix = np.matmul( dft(filt_freq_down ), np.eye(K_band) )
+    idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
     # idft_norm = np.transpose(np.conjugate(dft_matrix))/(K_band)
     if (system_params['dictionary'] == 'complex'):
         for i in (range(Zones-1)):
@@ -397,26 +404,29 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
     match system_params['recovery']:
     # if ( system_params['recovery'] == 'omp' ):
         case 'omp':
-            coef_real = OMP(dictionary, y_sampled/y_sampled_norm)
-            # omp_real = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
-            # omp_imag = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
+            # coef_real = OMP(dictionary, y_sampled/y_sampled_norm)
+            omp_real = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
+            omp_imag = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
             # omp_real.fit(np.real(dictionary), y_sampled/y_sampled_norm)
             # omp_imag.fit(np.imag(dictionary), y_sampled/y_sampled_norm)
-            # omp_real.fit(np.real(dictionary), y_sampled)
-            # omp_imag.fit(np.imag(dictionary), y_sampled)
-            # coef_imag = omp_imag.coef_
+            omp_real.fit(np.real(dictionary), y_sampled)
+            omp_imag.fit(np.imag(dictionary), y_sampled)
+            coef_imag = omp_imag.coef_
+            coef_real = omp_real.coef_
     # elif ( system_params['recovery'] == 'o_mp' ):
         case 'o_omp':
             coef_real = orthogonal_mp(np.real(dictionary),y_sampled/y_sampled_norm)
             coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
     # elif ( system_params['recovery'] == 'spg_bp' ):
         case 'spg_bp':
-            coef_real,resid,grad,info = spg_bp(dictionary,y_sampled/y_sampled_norm)
+            # coef_real,resid,grad,info = spg_bp(dictionary,y_sampled/y_sampled_norm)
+            coef_real,resid,grad,info = spg_bp(dictionary,y_sampled)
             # coef_real,resid_real,grad_real,info_real = spg_bp(np.real(dictionary),y_sampled/y_sampled_norm)
             # coef_imag,resid_imag,grad_imag,info_imag = spg_bp(np.imag(dictionary),y_sampled/y_sampled_norm)
     # elif ( system_params['recovery'] == 'spgl1' ):
         case 'spgl1':
-            coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm)
+            # coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm)
+            coef_real,resid,grad,info = spgl1(dictionary,y_sampled)
             #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
             #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
     coef = coef_real + coef_imag*1j
