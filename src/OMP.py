@@ -41,7 +41,7 @@ def define_x(s,N):
     return x.T,index
 
 # def OMP(A,y,N,stop=np.infty,r_thresh=0.01):
-def OMP(A,y,stop=np.infty,r_thresh=0.01):
+def OMP(A,y,stop=np.inf,r_thresh=0.01):
     '''Orthogonal Matching pursuit algorithm
     :args
     A: measurement matrix

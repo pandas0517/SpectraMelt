@@ -3,7 +3,6 @@ Created on Jul 26, 2023
 
 @author: pete
 '''
-import wave
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import numpy as np
