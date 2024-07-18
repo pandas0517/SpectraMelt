@@ -26,8 +26,7 @@ from spgl1 import spg_bp
 from spgl1 import spgl1
 from scipy import linalg
 from OMP import OMP
-import tensorflow as tf
-from tensorflow.keras import layers, losses
+
 def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filter_params, manager_queue):
     x, t, num_tones = multi_tone_sine_wave(system_params, wave_params, filter_params)
     xf = fft(x)
@@ -90,6 +89,7 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     current_run.append(no_shift_wavelet)
     current_run.append(fft(filt_sampled))
     current_run.append(downsample_train)
+    current_run.append(dictionary)
     # current_run = [ LO_params['freq'], system_params['adc_clock_freq'], complex_tf, xf, coef, matching_tones ]
     manager_queue.put(current_run)
 
@@ -430,5 +430,7 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
             coef_real,resid,grad,info = spgl1(dictionary,y_sampled)
             #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
             #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
+        case _:
+            print("No recovery performed")
     coef = coef_real + coef_imag*1j
     return coef

@@ -10,6 +10,7 @@ if __name__ == '__main__':
     from signals import simulate_system
     from scipy.fft import fft, ifft
     from math import pi
+    from autoencoder import create_test_set, create_autoencoder
 
     system_params = {
         'dictionary': 'real',
@@ -23,7 +24,8 @@ if __name__ == '__main__':
         'start': -0.5,
         'stop': 0.5,
         'spacing': 0.0001,
-        'recovery': 'spgl1'}
+        'wb_filt_cut_freq': 5,
+        'recovery': 'none'}
     #Input signal parameters
     wave_params = [
         {'amp': 0,
@@ -35,10 +37,10 @@ if __name__ == '__main__':
         {'amp': 0,
          'freq': 110,
          'phase': 0},
-        {'amp': 1,
+        {'amp': 0.5,
          'freq': 215,
          'phase': 0},
-        {'amp': 1,
+        {'amp': 0.5,
          'freq': 345,
          'phase': 0}]
     #Phase modulated local oscillator (NYFR) parameters
@@ -109,7 +111,14 @@ if __name__ == '__main__':
         single_wavelet = signals[20]
         filt_down = signals[21]
         downsample_train = signals[22]
-        y_start = np.where( complex_tf == -1000 )[0][0]
-        y_end = np.where( complex_tf == 1000 )[0][0]
-        test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
-        y_mixed_max = test_y1[y_start:y_end].max()
+        dictionary = signals[23]
+        # y_start = np.where( complex_tf == -1000 )[0][0]
+        # y_end = np.where( complex_tf == 1000 )[0][0]
+        # test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
+        # y_mixed_max = test_y1[y_start:y_end].max()
+    test_set = create_test_set(dictionary, system_params, wave_params)
+    autoencoder = create_autoencoder(dictionary, test_set)
+    plt.figure()
+    plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
+    plt.show()
+    
