@@ -11,6 +11,7 @@ if __name__ == '__main__':
     from scipy.fft import fft, ifft
     from math import pi
     from autoencoder import create_test_set, create_autoencoder
+    import random
 
     system_params = {
         'dictionary': 'real',
@@ -72,6 +73,12 @@ if __name__ == '__main__':
         'cutoff_freq': 50,
         'window_size': 150}
     # eps = 1+0*1j
+    # tttt_1d = np.arange(45)
+    # tttt_3d = tttt_1d.reshape((3,3,5))
+    # tttt_3d = tttt_3d[:,:,np.random.permutation(tttt_3d.shape[2])]
+    # for n in range(5):
+    #     print(tttt_3d[:,:,n])
+    #     pass
     eps = 15
     max_lo_freq = 4 + LO_params['freq']
     # num_lo_freq = int(( max_lo_freq - LO_params['freq'] ) / 2 )
@@ -117,6 +124,7 @@ if __name__ == '__main__':
         # test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
         # y_mixed_max = test_y1[y_start:y_end].max()
     test_set = create_test_set(dictionary, system_params, wave_params)
+    # test_set = 0
     autoencoder = create_autoencoder(dictionary, test_set)
     plt.figure()
     plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
