@@ -10,8 +10,8 @@ if __name__ == '__main__':
     from signals import simulate_system
     from scipy.fft import fft, ifft
     from math import pi
-    from autoencoder import create_test_set, create_autoencoder
-    import random
+    from decoder import create_test_set, create_decoder
+    # import tensorflow as tf
 
     system_params = {
         'dictionary': 'real',
@@ -25,7 +25,7 @@ if __name__ == '__main__':
         'start': -0.5,
         'stop': 0.5,
         'spacing': 0.0001,
-        'wb_filt_cut_freq': 5,
+        'wbf_cut_mod': 4,
         'recovery': 'none'}
     #Input signal parameters
     wave_params = [
@@ -38,10 +38,10 @@ if __name__ == '__main__':
         {'amp': 0,
          'freq': 110,
          'phase': 0},
-        {'amp': 0.5,
+        {'amp': 1,
          'freq': 215,
          'phase': 0},
-        {'amp': 0.5,
+        {'amp': 1,
          'freq': 345,
          'phase': 0}]
     #Phase modulated local oscillator (NYFR) parameters
@@ -123,10 +123,16 @@ if __name__ == '__main__':
         # y_end = np.where( complex_tf == 1000 )[0][0]
         # test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
         # y_mixed_max = test_y1[y_start:y_end].max()
-    test_set = create_test_set(dictionary, system_params, wave_params)
-    # test_set = 0
-    autoencoder = create_autoencoder(dictionary, test_set)
-    plt.figure()
-    plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
-    plt.show()
+    test_set = create_test_set(dictionary, system_params, wave_params, filter_params)
+    decoder = create_decoder(dictionary, test_set)
+    # decoder_real = tf.keras.models.load_model('decoder_real.keras')
+    # decoder_imag = tf.keras.models.load_model('decoder_imag.keras')
+    # plt.figure()
+    # plt.subplot(3,1,1)
+    # plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
+    # # plt.subplot(2,1,2)
+    # # plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
+    # plt.subplot(3,1,2)
+    # plt.plot(complex_tf,coef)
+    # plt.show()
     

@@ -26,6 +26,7 @@ from spgl1 import spg_bp
 from spgl1 import spgl1
 from scipy import linalg
 from OMP import OMP
+import tensorflow as tf
 
 def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filter_params, manager_queue):
     x, t, num_tones = multi_tone_sine_wave(system_params, wave_params, filter_params)
@@ -430,6 +431,28 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
             coef_real,resid,grad,info = spgl1(dictionary,y_sampled)
             #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
             #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
+        case 'decode':
+            # decoder_real = tf.keras.models.load_model('decoder_real.keras')
+            # decoder_imag = tf.keras.models.load_model('decoder_imag.keras')
+            # # test111 = np.real(np.reshape(y_sampled,[]))
+            # y_sampled_real = np.real(y_sampled)
+            # y_sampled_imag = np.imag(y_sampled)
+            # y_sampled_real = y_sampled_real.reshape((1,y_sampled_real.shape[0]))
+            # y_sampled_imag = y_sampled_imag.reshape((1,y_sampled_imag.shape[0]))
+            # coef_real = np.transpose(decoder_real.predict(y_sampled_real))
+            # coef_imag = np.transpose(decoder_imag.predict(y_sampled_imag))
+            
+            decoder_mag = tf.keras.models.load_model('decoder_mag.keras')
+            decoder_ang = tf.keras.models.load_model('decoder_ang.keras')
+            # test111 = np.real(np.reshape(y_sampled,[]))
+            y_sampled_mag = np.abs(y_sampled)
+            y_sampled_ang = np.angle(y_sampled)
+            y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
+            y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
+            coef_mag = np.transpose(decoder_mag.predict(y_sampled_mag))
+            coef_ang = np.transpose(decoder_ang.predict(y_sampled_ang))
+            coef_real = coef_mag
+            pass
         case _:
             print("No recovery performed")
     coef = coef_real + coef_imag*1j
