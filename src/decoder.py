@@ -97,32 +97,32 @@ def create_decoder(dictionary, test_set):
         encoded_test_set[idx,:] = encoded_test_data
         pass
 
-    encoded_complex_input_layer = keras.Input(shape=(enc_dim,))
+    # encoded_complex_input_layer = keras.Input(shape=(enc_dim,))
     encoded_real_input_layer = keras.Input(shape=(enc_dim,))
     encoded_imag_input_layer = keras.Input(shape=(enc_dim,))
-    decoded_complex = layers.Dense(dec_dim, activation='sigmoid')(encoded_real_input_layer)
+    # decoded_complex = layers.Dense(dec_dim, activation='sigmoid')(encoded_real_input_layer)
     # decoded_imag = layers.Dense(dec_dim, activation='sigmoid')(encoded_imag_input_layer)
     # decoded_real = layers.Dense(dec_dim, activation='relu')(encoded_real_input_layer)
     # decoded_imag = layers.Dense(dec_dim, activation='relu')(encoded_imag_input_layer)
     decoded_real = layers.Dense(dec_dim, activation='softmax')(encoded_real_input_layer)
     decoded_imag = layers.Dense(dec_dim, activation='softmax')(encoded_imag_input_layer)
-    decoder_complex = keras.Model(encoded_complex_input_layer, decoded_complex)
+    # decoder_complex = keras.Model(encoded_complex_input_layer, decoded_complex)
     decoder_real = keras.Model(encoded_real_input_layer, decoded_real)
     decoder_imag = keras.Model(encoded_imag_input_layer, decoded_imag)
     # decoder_real.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_imag.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_real.compile(optimizer='adam', loss='mean_squared_error')
     # decoder_imag.compile(optimizer='adam', loss='mean_squared_error')
-    decoder_complex.compile(optimizer='adam', loss='mean_squared_error')
+    # decoder_complex.compile(optimizer='adam', loss='mean_squared_error')
     decoder_real.compile(optimizer='adam', loss='mean_absolute_percentage_error')
     decoder_imag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
     # decoder.fit(np.real(encoded_test_set[:,:,:train_split]), np.real(test_set[:,:,:train_split]),
-    decoder_complex.fit(encoded_test_set[:train_split,:], test_set[:train_split,:],
-                epochs=50,
-                batch_size=256,
-                shuffle=True,
-                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
-                validation_data=(encoded_test_set[train_split:,:], test_set[train_split:,:]))
+    # decoder_complex.fit(encoded_test_set[:train_split,:], test_set[:train_split,:],
+    #             epochs=50,
+    #             batch_size=256,
+    #             shuffle=True,
+    #             # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
+    #             validation_data=(encoded_test_set[train_split:,:], test_set[train_split:,:]))
     decoder_real.fit(np.real(encoded_test_set[:train_split,:]), np.real(test_set[:train_split,:]),
                 epochs=50,
                 batch_size=256,
@@ -135,7 +135,7 @@ def create_decoder(dictionary, test_set):
                 shuffle=True,
                 # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
                 validation_data=(np.imag(encoded_test_set[train_split:,:]), np.imag(test_set[train_split:,:])))
-    decoder_complex.save("decoder_complex.keras", overwrite=True)
+    # decoder_complex.save("decoder_complex.keras", overwrite=True)
     decoder_real.save("decoder_real.keras", overwrite=True)
     decoder_imag.save("decoder_imag.keras", overwrite=True)
 
