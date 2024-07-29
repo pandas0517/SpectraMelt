@@ -85,7 +85,7 @@ def create_decoder(dictionary, test_set):
     enc_dim = (dictionary.shape)[0]
     dec_dim = (dictionary.shape)[1]
     test_set_size = (test_set.shape)[0]
-    train_split = int(0.3 * test_set_size)
+    train_split = int(0.5 * test_set_size)
     # encoded_test_set = np.zeros((enc_dim,1,test_set_size),dtype=np.complex128)
     encoded_test_set = np.zeros((test_set_size,enc_dim),dtype=np.complex128)
     # test_set = test_set[:,:,np.random.permutation(test_set_size)]
@@ -98,24 +98,24 @@ def create_decoder(dictionary, test_set):
         pass
 
     # encoded_complex_input_layer = keras.Input(shape=(enc_dim,))
-    encoded_real_input_layer = keras.Input(shape=(enc_dim,))
-    encoded_imag_input_layer = keras.Input(shape=(enc_dim,))
+    # encoded_real_input_layer = keras.Input(shape=(enc_dim,))
+    # encoded_imag_input_layer = keras.Input(shape=(enc_dim,))
     # decoded_complex = layers.Dense(dec_dim, activation='sigmoid')(encoded_real_input_layer)
     # decoded_imag = layers.Dense(dec_dim, activation='sigmoid')(encoded_imag_input_layer)
     # decoded_real = layers.Dense(dec_dim, activation='relu')(encoded_real_input_layer)
     # decoded_imag = layers.Dense(dec_dim, activation='relu')(encoded_imag_input_layer)
-    decoded_real = layers.Dense(dec_dim, activation='softmax')(encoded_real_input_layer)
-    decoded_imag = layers.Dense(dec_dim, activation='softmax')(encoded_imag_input_layer)
+    # decoded_real = layers.Dense(dec_dim, activation='softmax')(encoded_real_input_layer)
+    # decoded_imag = layers.Dense(dec_dim, activation='softmax')(encoded_imag_input_layer)
     # decoder_complex = keras.Model(encoded_complex_input_layer, decoded_complex)
-    decoder_real = keras.Model(encoded_real_input_layer, decoded_real)
-    decoder_imag = keras.Model(encoded_imag_input_layer, decoded_imag)
+    # decoder_real = keras.Model(encoded_real_input_layer, decoded_real)
+    # decoder_imag = keras.Model(encoded_imag_input_layer, decoded_imag)
     # decoder_real.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_imag.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_real.compile(optimizer='adam', loss='mean_squared_error')
     # decoder_imag.compile(optimizer='adam', loss='mean_squared_error')
     # decoder_complex.compile(optimizer='adam', loss='mean_squared_error')
-    decoder_real.compile(optimizer='adam', loss='mean_absolute_percentage_error')
-    decoder_imag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    # decoder_real.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    # decoder_imag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
     # decoder.fit(np.real(encoded_test_set[:,:,:train_split]), np.real(test_set[:,:,:train_split]),
     # decoder_complex.fit(encoded_test_set[:train_split,:], test_set[:train_split,:],
     #             epochs=50,
@@ -123,48 +123,48 @@ def create_decoder(dictionary, test_set):
     #             shuffle=True,
     #             # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
     #             validation_data=(encoded_test_set[train_split:,:], test_set[train_split:,:]))
-    decoder_real.fit(np.real(encoded_test_set[:train_split,:]), np.real(test_set[:train_split,:]),
-                epochs=50,
-                batch_size=256,
-                shuffle=True,
-                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
-                validation_data=(np.real(encoded_test_set[train_split:,:]), np.real(test_set[train_split:,:])))
-    decoder_imag.fit(np.imag(encoded_test_set[:train_split,:]), np.imag(test_set[:train_split,:]),
-                epochs=50,
-                batch_size=256,
-                shuffle=True,
-                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
-                validation_data=(np.imag(encoded_test_set[train_split:,:]), np.imag(test_set[train_split:,:])))
+    # decoder_real.fit(np.real(encoded_test_set[:train_split,:]), np.real(test_set[:train_split,:]),
+    #             epochs=50,
+    #             batch_size=256,
+    #             shuffle=True,
+    #             # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
+    #             validation_data=(np.real(encoded_test_set[train_split:,:]), np.real(test_set[train_split:,:])))
+    # decoder_imag.fit(np.imag(encoded_test_set[:train_split,:]), np.imag(test_set[:train_split,:]),
+    #             epochs=50,
+    #             batch_size=256,
+    #             shuffle=True,
+    #             # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
+    #             validation_data=(np.imag(encoded_test_set[train_split:,:]), np.imag(test_set[train_split:,:])))
     # decoder_complex.save("decoder_complex.keras", overwrite=True)
-    decoder_real.save("decoder_real.keras", overwrite=True)
-    decoder_imag.save("decoder_imag.keras", overwrite=True)
+    # decoder_real.save("decoder_real.keras", overwrite=True)
+    # decoder_imag.save("decoder_imag.keras", overwrite=True)
 
     encoded_mag_input_layer = keras.Input(shape=(enc_dim,))
     encoded_ang_input_layer = keras.Input(shape=(enc_dim,))
     # decoded_mag = layers.Dense(dec_dim, activation='sigmoid')(encoded_real_input_layer)
     # decoded_ang = layers.Dense(dec_dim, activation='sigmoid')(encoded_imag_input_layer)
-    # decoded_mag = layers.Dense(dec_dim, activation='relu')(encoded_mag_input_layer)
-    # decoded_ang = layers.Dense(dec_dim, activation='relu')(encoded_ang_input_layer)
-    decoded_mag = layers.Dense(dec_dim, activation='softmax')(encoded_mag_input_layer)
-    decoded_ang = layers.Dense(dec_dim, activation='softmax')(encoded_ang_input_layer)
+    decoded_mag = layers.Dense(dec_dim, activation='relu')(encoded_mag_input_layer)
+    decoded_ang = layers.Dense(dec_dim, activation='relu')(encoded_ang_input_layer)
+    # decoded_mag = layers.Dense(dec_dim, activation='softmax')(encoded_mag_input_layer)
+    # decoded_ang = layers.Dense(dec_dim, activation='softmax')(encoded_ang_input_layer)
     decoder_mag = keras.Model(encoded_mag_input_layer, decoded_mag)
     decoder_ang = keras.Model(encoded_ang_input_layer, decoded_ang)
     # decoder_real.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_imag.compile(optimizer='adam', loss='binary_crossentropy')
-    # decoder_mag.compile(optimizer='adam', loss='mean_squared_error')
-    # decoder_ang.compile(optimizer='adam', loss='mean_squared_error')
-    decoder_mag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
-    decoder_ang.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    decoder_mag.compile(optimizer='adam', loss='mean_squared_error')
+    decoder_ang.compile(optimizer='adam', loss='mean_squared_error')
+    # decoder_mag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    # decoder_ang.compile(optimizer='adam', loss='mean_absolute_percentage_error')
     # decoder.fit(np.real(encoded_test_set[:,:,:train_split]), np.real(test_set[:,:,:train_split]),
     decoder_mag.fit(np.abs(encoded_test_set[:train_split,:]), np.abs(test_set[:train_split,:]),
-                epochs=50,
-                batch_size=256,
+                epochs=1500,
+                batch_size=32,
                 shuffle=True,
                 # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
                 validation_data=(np.abs(encoded_test_set[train_split:,:]), np.abs(test_set[train_split:,:])))
     decoder_ang.fit(np.angle(encoded_test_set[:train_split,:]), np.angle(test_set[:train_split,:]),
-                epochs=50,
-                batch_size=256,
+                epochs=200,
+                batch_size=32,
                 shuffle=True,
                 # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
                 validation_data=(np.angle(encoded_test_set[train_split:,:]), np.angle(test_set[train_split:,:])))
