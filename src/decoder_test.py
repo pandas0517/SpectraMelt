@@ -32,17 +32,17 @@ if __name__ == '__main__':
         {'amp': 0,
          'freq': 15,
          'phase': 0},
-        {'amp': 0,
-         'freq': 70,
+        {'amp': 0.1,
+         'freq': 80,
          'phase': 0},
-        {'amp': 1,
-         'freq': 110,
+        {'amp': 0.1,
+         'freq': 115,
          'phase': 0},
-        {'amp': 1,
-         'freq': 185,
+        {'amp': 0.1,
+         'freq': 180,
          'phase': 0},
-        {'amp': 0,
-         'freq': 345,
+        {'amp': 0.1,
+         'freq': 340,
          'phase': 0}]
     #Phase modulated local oscillator (NYFR) parameters
     LO_params = {
@@ -123,16 +123,35 @@ if __name__ == '__main__':
         # y_end = np.where( complex_tf == 1000 )[0][0]
         # test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
         # y_mixed_max = test_y1[y_start:y_end].max()
-    # test_set = create_test_set(dictionary, system_params, wave_params, filter_params)
-    # decoder = create_decoder(dictionary, test_set)
+    # test_set, encoded_test_set, dic_test_set = create_test_set(dictionary, t, system_params, wave_params, filter_params, LO_params)
+    # decoder = create_decoder(dictionary, test_set, dic_test_set)
     # decoder_real = tf.keras.models.load_model('decoder_real.keras')
     # decoder_imag = tf.keras.models.load_model('decoder_imag.keras')
+    # test_set_size = (test_set.shape)[0]
+    # for i in range(0, test_set_size):
+    #     plt.figure()
+    #     plt.subplot(3,1,1)
+    #     plt.plot(complex_tf,np.fft.fftshift(abs(test_set[i])))
+    #     plt.xlim(-500,500)
+    #     plt.subplot(3,1,2)
+    #     plt.plot(tf_sampled,np.fft.fftshift(abs(fft(encoded_test_set[i]))))
+    #     plt.subplot(3,1,3)
+    #     plt.plot(complex_tf,np.fft.fftshift(abs(dic_test_set[i])))
+        # plt.subplot(5,1,4)
+        # pseudo = np.linalg.pinv(dictionary)
+        # # x_pre = np.linalg.inv(np.dot(np.conjugate(dictionary.T),dictionary)).dot(np.conjugate(dictionary.T)).dot(dic_test_set[i])
+        # x_pre = np.dot(pseudo,dic_test_set[i])
+        # plt.plot(complex_tf,np.fft.fftshift(abs(x_pre)))
+        # plt.subplot(5,1,5)
+        # x_pre1 =np.dot(dictionary.T,dic_test_set[i])
+        # plt.plot(complex_tf,np.fft.fftshift(abs(x_pre1)))
+        # plt.show()       
     plt.figure()
     plt.subplot(2,1,1)
     plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
-    # plt.subplot(2,1,2)
-    # plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
     plt.subplot(2,1,2)
-    plt.plot(complex_tf,np.fft.fftshift(np.real(coef)))
+    plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
+    # plt.subplot(2,1,2)
+    # plt.plot(complex_tf,np.fft.fftshift(np.real(coef)))
     plt.show()
     

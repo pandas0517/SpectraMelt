@@ -320,8 +320,8 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
     test_init = filt_freq_down * np.eye(K_band)
     # test_init = test_11 * np.eye(K_band)
     R = np.copy(R_init)
-    dft_matrix = dft(K_band)
-    # dft_matrix = np.matmul(test_init,dft(K_band))
+    # dft_matrix = dft(K_band)
+    dft_matrix = np.matmul(test_init,dft(K_band))
     ## dft_matrix = np.matmul( dft(filt_freq_down ), np.eye(K_band) )
     idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
     # idft_norm = np.transpose(np.conjugate(dft_matrix))/(K_band)
@@ -367,8 +367,8 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
         if ( system_params['sampled_LO'] == 'y' ):
             LO_list = []
             for i in (range(0,Zones)):
-                # LO_list.append(np.flip(LO_mod_sampled))
-                LO_list.append(LO_mod_sampled)
+                LO_list.append(np.flip(LO_mod_sampled))
+                # LO_list.append(LO_mod_sampled)
             LO_mod_concat = np.concatenate(LO_list)
             double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
         elif ( system_params['sampled_LO'] == 't' ):
@@ -442,11 +442,13 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
             # coef_real = np.transpose(decoder_real.predict(y_sampled_real))
             # coef_imag = np.transpose(decoder_imag.predict(y_sampled_imag))
             
-            decoder_mag = tf.keras.models.load_model('decoder_mag.keras')
+            decoder_mag = tf.keras.models.load_model('decoder_mag_model.keras')
             decoder_ang = tf.keras.models.load_model('decoder_ang.keras')
             # test111 = np.real(np.reshape(y_sampled,[]))
-            y_sampled_mag = np.abs(y_sampled)
-            y_sampled_ang = np.angle(y_sampled)
+            pseudo_inv = np.linalg.pinv(dictionary)
+            first_guess = np.dot(pseudo_inv,y_sampled)
+            y_sampled_mag = np.abs(first_guess)
+            y_sampled_ang = np.angle(first_guess)
             y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
             y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
             coef_mag = np.transpose(decoder_mag.predict(y_sampled_mag))
