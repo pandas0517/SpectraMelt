@@ -19,7 +19,7 @@ from scipy.integrate import trapz
 from scipy.fft import fft, ifft
 from scipy.linalg import dft
 import numpy as np
-from numpy import sin, sqrt #,tan
+from numpy import sin, cos, sqrt #,tan
 from math import e, pi, sqrt
 from sklearn.linear_model import orthogonal_mp, OrthogonalMatchingPursuit
 from spgl1 import spg_bp
@@ -118,15 +118,19 @@ def multi_tone_sine_wave(system_params, wave_params, filter_params):
     # print(system_params['spacing'])
     num_time_points = int ( total_time * points_per_second )
     t = np.linspace(start_time, stop_time, num_time_points, endpoint=False)
-    x = []
+    # x = []
     x_input = np.zeros_like(t)
     n_non_zero_amps = 0
     for param in wave_params:
         if ( param['amp'] != 0 ):
             n_non_zero_amps += 1
         new_signal = param['amp']*sin(2*pi*param['freq']*t+param['phase'])
-        x.append(new_signal)
+        # x.append(new_signal)
         x_input = np.add(x_input,new_signal)
+
+    if ( system_params['noise'] != 0 ):
+        noise = np.random.normal(0, system_params['noise'], x_input.size)
+        x_input = x_input + noise
     return x_input, t, n_non_zero_amps
 
 def generate_LO(t, LO_params, system_params):
@@ -442,19 +446,38 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
             # coef_real = np.transpose(decoder_real.predict(y_sampled_real))
             # coef_imag = np.transpose(decoder_imag.predict(y_sampled_imag))
             
-            decoder_mag = tf.keras.models.load_model('decoder_mag_model.keras')
-            decoder_ang = tf.keras.models.load_model('decoder_ang.keras')
+            decoder_mag = tf.keras.models.load_model('decoder_mag_model_l1.keras')
+            decoder_ang = tf.keras.models.load_model('decoder_ang_model_l1.keras')
             # test111 = np.real(np.reshape(y_sampled,[]))
-            pseudo_inv = np.linalg.pinv(dictionary)
-            first_guess = np.dot(pseudo_inv,y_sampled)
-            y_sampled_mag = np.abs(first_guess)
-            y_sampled_ang = np.angle(first_guess)
+            # pseudo_inv = np.linalg.pinv(dictionary)
+            # first_guess = np.dot(pseudo_inv,y_sampled)
+            # y_sampled_mag = np.abs(first_guess)
+            # y_sampled_ang = np.angle(first_guess)
+            y_sampled_mag = np.abs(y_sampled)
+            y_sampled_ang = np.angle(y_sampled)
             y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
             y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
             coef_mag = np.transpose(decoder_mag.predict(y_sampled_mag))
             coef_ang = np.transpose(decoder_ang.predict(y_sampled_ang))
-            coef_real = coef_mag
-            pass
+            coef_real = coef_mag*cos(coef_ang)
+            coef_imag = coef_mag*sin(coef_ang)
+        case 'decode2':
+            decoder_mag = tf.keras.models.load_model('models/decoder_mag_model_rnd_3_sig.keras')
+            decoder_ang = tf.keras.models.load_model('models/decoder_ang_model_rnd_3_sig.keras')
+            refiner_mag = tf.keras.models.load_model('models/refine_mag_model.keras')
+            refiner_ang = tf.keras.models.load_model('models/refine_ang_model.keras')
+            y_sampled_mag = np.abs(y_sampled)
+            y_sampled_ang = np.angle(y_sampled)
+            y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
+            y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
+            coef_mag_init = np.transpose(decoder_mag.predict(y_sampled_mag))
+            coef_ang_init = np.transpose(decoder_ang.predict(y_sampled_ang))
+            coef_mag_init = coef_mag_init.reshape((1,coef_mag_init.shape[0]))
+            coef_ang_init = coef_ang_init.reshape((1,coef_ang_init.shape[0]))
+            coef_mag = np.transpose(refiner_mag.predict(coef_mag_init))
+            coef_ang = np.transpose(refiner_ang.predict(coef_ang_init))          
+            coef_real = coef_mag*cos(coef_ang)
+            coef_imag = coef_mag*sin(coef_ang)
         case _:
             print("No recovery performed")
     coef = coef_real + coef_imag*1j

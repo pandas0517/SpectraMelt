@@ -24,6 +24,8 @@ from keras import layers
 from signals import generate_LO
 from signals import filter_signal
 from signals import downsample
+import tensorflow as tf
+from numpy import sin, cos
 
 def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO_params):
     enc_dim = (dictionary.shape)[0]
@@ -39,12 +41,15 @@ def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO
     pos_bins = list(range(1, wbf_cut_freq))
     # sig_array = np.zeros((signal_dim,1,1))
     test_freq_tot_list = []
+    min_num_of_pos_sig = 1
     # tot_num_freq_combos = 0
-    for total_active_sig in range(1,num_of_pos_sig + 1):
+    for total_active_sig in range(min_num_of_pos_sig,num_of_pos_sig + 1):
         # test_freq_tot_list.append(list(combinations(pos_bins, total_active_sig)))
         test_freq_tot_list += list(combinations(pos_bins, total_active_sig))
         # tot_num_freq_combos += len(test_freq_tot_list[total_active_sig - 1])
     random.shuffle(test_freq_tot_list)
+    # split_list_len = 52801
+    # test_freq_tot_list = test_freq_tot_list[0:split_list_len]
     tot_num_freq_combos = len(test_freq_tot_list)
     test_sig_set = np.zeros((tot_num_freq_combos,signal_dim), dtype='complex128')
 
@@ -66,6 +71,9 @@ def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO
         count += 1
     encoded_test_set = np.zeros((tot_num_freq_combos,enc_dim),dtype=np.complex128)
     dic_test_set = np.zeros((tot_num_freq_combos,signal_dim),dtype=np.complex128)
+    decoder_test_set = np.zeros((tot_num_freq_combos,signal_dim),dtype=np.complex128)
+    decoded_mag_model = tf.keras.models.load_model('models/decoder_mag_model_rnd_3_sig.keras')
+    decoded_ang_model = tf.keras.models.load_model('models/decoder_ang_model_rnd_3_sig.keras')
     pseudo_inv = np.linalg.pinv(dictionary)
     # test_sig_set = test_sig_set[np.random.permutation(tot_num_freq_combos),:]
     for idx, test_data in enumerate(test_sig_set):
@@ -74,11 +82,19 @@ def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO
         y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
         y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
         encoded_test_set[idx,:] = y_sampled
+        y_sampled_mag = np.abs(y_sampled)
+        y_sampled_ang = np.angle(y_sampled)
+        y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
+        y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
+        coef_mag = np.transpose(decoded_mag_model.predict(y_sampled_mag))
+        coef_ang = np.transpose(decoded_ang_model.predict(y_sampled_ang))
         dic_test_data = np.dot(pseudo_inv,y_sampled)
+        decoder_test_data = coef_mag*(cos(coef_ang)+1j*sin(coef_ang))
         # dic_test_data = np.matmul(dictionary,test_data)
         dic_test_set[idx,:] = dic_test_data
+        decoder_test_set[idx,:] = decoder_test_data.reshape((1,decoder_test_data.shape[0]))
         pass
-    return test_sig_set, encoded_test_set, dic_test_set
+    return test_sig_set, encoded_test_set, dic_test_set, decoder_test_set
         # new_freq_list = list(combinations(pos_bins, total_active_sig))
         # test_freq_list = test_freq_list + new_freq_list
         # new_freq_list.clear()
@@ -102,12 +118,73 @@ def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO
     # # sig_array = np.delete(sig_array,0,2)
     # return sig_array
 
-def create_decoder(dictionary, test_set, dic_test_set):
+def create_decoder(dictionary, test_set, dic_test_set, encoded_test_set):
     # This is the size of our encoded representations
     enc_dim = (dictionary.shape)[0]
     dec_dim = (dictionary.shape)[1]
     test_set_size = (test_set.shape)[0]
     train_split = int(0.5 * test_set_size)
+
+    decoded_mag_model = keras.Sequential()
+    decoded_mag_model.add(keras.Input(shape=(enc_dim,)))
+    decoded_mag_model.add(layers.Dense(int(dec_dim/4), name="decoded_mag_model_layer1"))
+    decoded_mag_model.add(layers.Dense(int(dec_dim/2), name="decoded_mag_model_layer2"))
+    decoded_mag_model.add(layers.Dense(int(3*dec_dim/4), name="decoded_mag_model_layer3"))
+    decoded_mag_model.add(layers.Dense(dec_dim, name="decoded_mag_model_out"))
+    # decoded_mag_model.add(keras.Input(shape=(dec_dim,)))
+    # decoded_mag_model.add(layers.Dense(int(dec_dim), name="decoded_mag_model_layer1"))
+    # decoded_mag_model.add(layers.Dense(dec_dim, name="decoded_mag_model_out"))
+    decoded_mag_model.summary()
+
+    decoded_ang_model = keras.Sequential()
+    decoded_ang_model.add(keras.Input(shape=(enc_dim,)))
+    decoded_ang_model.add(layers.Dense(int(dec_dim/4), name="decoded_ang_model_layer1"))
+    decoded_ang_model.add(layers.Dense(int(dec_dim/2), name="decoded_ang_model_layer2"))
+    decoded_ang_model.add(layers.Dense(int(3*dec_dim/4), name="decoded_ang_model_layer3"))
+    decoded_ang_model.add(layers.Dense(int(dec_dim), name="decoded_ang_model_out"))
+    # decoded_ang_model.add(keras.Input(shape=(dec_dim,)))
+    # decoded_ang_model.add(layers.Dense(int(dec_dim), name="decoded_ang_model_layer1"))
+    # decoded_ang_model.add(layers.Dense(int(dec_dim), name="decoded_ang_model_out"))
+    decoded_ang_model.summary() 
+
+    mag_opt = keras.optimizers.Adam(learning_rate=0.001)
+    ang_opt = keras.optimizers.Adam(learning_rate=0.001)
+    decoded_mag_model.compile(optimizer=mag_opt, loss='mean_absolute_error')
+    decoded_ang_model.compile(optimizer=ang_opt, loss='mean_absolute_error')
+    # decoder_mag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    # decoder_ang.compile(optimizer='adam', loss='mean_absolute_percentage_error')
+    # decoder.fit(np.real(encoded_test_set[:,:,:train_split]), np.real(test_set[:,:,:train_split]),
+    # decoded_mag_model.fit(np.abs(encoded_test_set[:train_split,:]), np.abs(test_set[:train_split,:]),
+    # decoded_mag_model.fit(np.abs(dic_test_set), np.abs(test_set),
+    decoded_mag_model.fit(np.abs(encoded_test_set), np.abs(test_set),
+                epochs=10,
+                batch_size=64,
+                shuffle=True,
+                validation_data=(np.abs(encoded_test_set), np.abs(test_set)))
+    # decoded_mag_model.fit(np.abs(dic_test_set), np.abs(test_set),
+    #             epochs=20,
+    #             batch_size=256,
+    #             shuffle=True,
+                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
+                # validation_data=(np.abs(encoded_test_set[train_split:,:]), np.abs(test_set[train_split:,:])))
+                # validation_data=(np.abs(dic_test_set), np.abs(test_set)))
+    decoded_ang_model.fit(np.angle(encoded_test_set), np.angle(test_set),
+    # decoded_ang_model.fit(np.angle(dic_test_set), np.angle(test_set),
+                epochs=10,
+                batch_size=64,
+                shuffle=True,
+                validation_data=(np.angle(encoded_test_set), np.angle(test_set)))
+    # decoder_ang.fit(np.angle(dic_test_set[:train_split,:]), np.angle(test_set[:train_split,:]),
+    #             epochs=20,
+    #             batch_size=256,
+    #             shuffle=True,
+                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
+                # validation_data=(np.angle(dic_test_set[train_split:,:]), np.angle(test_set[train_split:,:])))
+    # decoded_mag_model.save("refine_mag_model.keras", overwrite=True)
+    decoded_mag_model.save("decoder_mag_model_l1.keras", overwrite=True)
+    # decoded_ang_model.save("refine_ang_model.keras", overwrite=True)
+    decoded_ang_model.save("decoder_ang_model_l1.keras", overwrite=True)
+    pass
     # # encoded_test_set = np.zeros((enc_dim,1,test_set_size),dtype=np.complex128)
     # encoded_test_set = np.zeros((test_set_size,enc_dim),dtype=np.complex128)
     # # test_set = test_set[:,:,np.random.permutation(test_set_size)]
@@ -162,49 +239,20 @@ def create_decoder(dictionary, test_set, dic_test_set):
     # decoder_real.save("decoder_real.keras", overwrite=True)
     # decoder_imag.save("decoder_imag.keras", overwrite=True)
 
-    encoded_mag_input_layer = keras.Input(shape=(enc_dim,))
-    encoded_ang_input_layer = keras.Input(shape=(dec_dim,))
+    # encoded_mag_input_layer = keras.Input(shape=(enc_dim,))
+    # encoded_ang_input_layer = keras.Input(shape=(dec_dim,))
     # decoded_mag = layers.Dense(dec_dim, activation='sigmoid')(encoded_real_input_layer)
     # decoded_ang = layers.Dense(dec_dim, activation='sigmoid')(encoded_imag_input_layer)
     # decoded_mag = layers.Dense(dec_dim, activation='relu')(encoded_mag_input_layer)
     # decoded_ang = layers.Dense(dec_dim, activation='relu')(encoded_ang_input_layer)
-    decoded_mag_model = keras.Sequential()
-    # decoded_mag_model.add(keras.Input(shape=(enc_dim,)))
-    decoded_mag_model.add(keras.Input(shape=(dec_dim,)))
+
     # decoded_mag_model.add(layers.Dense(int(dec_dim/5), name="layer1", kernel_initializer=keras.initializers.Zeros()))
-    decoded_mag_model.add(layers.Dense(int(dec_dim), name="layer1"))
     # decoded_mag_model.add(layers.Dense(int(dec_dim), name="layer2"))
     # decoded_mag_model.add(layers.Dense(int(dec_dim), name="layer5", kernel_initializer=keras.initializers.Zeros()))
-    decoded_mag_model.add(layers.Dense(dec_dim, name="decoded_mag_model_out"))
-    decoded_mag_model.summary()
     # decoded_mag = layers.Dense(dec_dim, activation='softmax')(encoded_mag_input_layer)
-    decoded_ang = layers.Dense(dec_dim)(encoded_ang_input_layer)
+    # decoded_ang = layers.Dense(dec_dim)(encoded_ang_input_layer)
     # decoder_mag = keras.Model(encoded_mag_input_layer, decoded_mag)
     # decoder_mag = keras.Model(inputs=decoded_mag_model.inputs, outputs=decoded_mag_model.outputs)
-    decoder_ang = keras.Model(encoded_ang_input_layer, decoded_ang)
+    # decoder_ang = keras.Model(encoded_ang_input_layer, decoded_ang)
     # decoder_real.compile(optimizer='adam', loss='binary_crossentropy')
     # decoder_imag.compile(optimizer='adam', loss='binary_crossentropy')
-    opt = keras.optimizers.Adam(learning_rate=0.01)
-    decoded_mag_model.compile(optimizer=opt, loss='mean_squared_error')
-    decoder_ang.compile(optimizer='adam', loss='mean_squared_error')
-    # decoder_mag.compile(optimizer='adam', loss='mean_absolute_percentage_error')
-    # decoder_ang.compile(optimizer='adam', loss='mean_absolute_percentage_error')
-    # decoder.fit(np.real(encoded_test_set[:,:,:train_split]), np.real(test_set[:,:,:train_split]),
-    # decoded_mag_model.fit(np.abs(encoded_test_set[:train_split,:]), np.abs(test_set[:train_split,:]),
-    decoded_mag_model.fit(np.abs(dic_test_set), np.abs(test_set),
-                epochs=20,
-                batch_size=256,
-                shuffle=True,
-                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
-                # validation_data=(np.abs(encoded_test_set[train_split:,:]), np.abs(test_set[train_split:,:])))
-                validation_data=(np.abs(dic_test_set), np.abs(test_set)))
-    decoder_ang.fit(np.angle(dic_test_set[:train_split,:]), np.angle(test_set[:train_split,:]),
-                epochs=20,
-                batch_size=256,
-                shuffle=True,
-                # validation_data=(np.real(encoded_test_set[:,:,train_split:]), np.real(test_set[:,:,train_split:])))
-                validation_data=(np.angle(dic_test_set[train_split:,:]), np.angle(test_set[train_split:,:])))
-    decoded_mag_model.save("decoder_mag_model.keras", overwrite=True)
-    # decoder_mag.save("decoder_mag.keras", overwrite=True)
-    decoder_ang.save("decoder_ang.keras", overwrite=True)
-    pass

@@ -26,23 +26,24 @@ if __name__ == '__main__':
         'stop': 2,
         'spacing': 0.001,
         'wbf_cut_mod': 4,
-        'recovery': 'decode'}
+        'recovery': 'none',
+        'noise': 0.1 }
     #Input signal parameters
     wave_params = [
         {'amp': 0,
-         'freq': 15,
+         'freq': 25,
+         'phase': 0},
+        {'amp': 0,
+         'freq': 85,
+         'phase': 0},
+        {'amp': 0,
+         'freq': 140,
          'phase': 0},
         {'amp': 0.1,
-         'freq': 80,
+         'freq': 255,
          'phase': 0},
         {'amp': 0.1,
-         'freq': 115,
-         'phase': 0},
-        {'amp': 0.1,
-         'freq': 180,
-         'phase': 0},
-        {'amp': 0.1,
-         'freq': 340,
+         'freq': 395,
          'phase': 0}]
     #Phase modulated local oscillator (NYFR) parameters
     LO_params = {
@@ -123,8 +124,17 @@ if __name__ == '__main__':
         # y_end = np.where( complex_tf == 1000 )[0][0]
         # test_y1 = np.copy(np.fft.fftshift(abs(y_mixed)))
         # y_mixed_max = test_y1[y_start:y_end].max()
-    # test_set, encoded_test_set, dic_test_set = create_test_set(dictionary, t, system_params, wave_params, filter_params, LO_params)
-    # decoder = create_decoder(dictionary, test_set, dic_test_set)
+    # test_set, encoded_test_set, dic_test_set, decoder_test_set = create_test_set(dictionary, t, system_params, wave_params, filter_params, LO_params)
+    # np.save("dictionary.npy", dictionary)
+    # np.save("test_set.npy", test_set)
+    # np.save("encoded_test_set.npy", encoded_test_set)
+    # np.save("dic_test_set.npy", dic_test_set)
+    # np.save("decoder_test_set.npy", decoder_test_set)
+    # tdictionary = np.load("dictionary.npy")
+    # ttest_set = np.load("test_set.npy")
+    # tencoded_test_set = np.load("encoded_test_set.npy")
+    # tdic_test_set = np.load("dic_test_set.npy")
+    # decoder = create_decoder(tdictionary, ttest_set, tdic_test_set, tencoded_test_set)
     # decoder_real = tf.keras.models.load_model('decoder_real.keras')
     # decoder_imag = tf.keras.models.load_model('decoder_imag.keras')
     # test_set_size = (test_set.shape)[0]
@@ -148,9 +158,14 @@ if __name__ == '__main__':
         # plt.show()       
     plt.figure()
     plt.subplot(2,1,1)
+    plt.title("ADC frequency: " + str(adc_freq) + "Hz | LO frequency (f_s1): " + str(LO_freq) + \
+            "Hz\nModulation Frequency (f_mod): " + str(LO_params['phase_freq']) + "Hz | Modulation Deviation (f_delta): " + \
+            str(LO_params['phase_delta']) + "\nOriginal Frequency Domain Magnitude Signal\nTones at:" + str(wave_params[0]["freq"]) + "Hz, " + str(wave_params[2]["freq"]) + "Hz, " + str(wave_params[3]["freq"]) + "Hz, and " + str(wave_params[4]["freq"]) +"Hz")
     plt.plot(complex_tf,np.fft.fftshift(abs(xf)))
     plt.subplot(2,1,2)
-    plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
+    plt.title("Recovered Magnitude Signal")
+    # plt.plot(complex_tf,np.fft.fftshift(abs(coef)))
+    plt.plot(t,x)
     # plt.subplot(2,1,2)
     # plt.plot(complex_tf,np.fft.fftshift(np.real(coef)))
     plt.show()
