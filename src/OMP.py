@@ -49,7 +49,7 @@ def OMP(A,y,stop=np.inf,r_thresh=0.01):
     '''
     r = y
     # x_pre = np.zeros(N)
-    x_pre = np.zeros(A.shape[1])
+    x_pre = np.zeros(A.shape[1], dtype=A.dtype)
     Lambdas = []
     i = 0
     # Control stop interation with norm thresh or sparsity

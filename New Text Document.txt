@@ -1,0 +1,18 @@
+Y:\School_Stuff\System_Config_1_PreMultiply\enhanced\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\1_2_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\enhanced\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\3_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\enhanced\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\4_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\enhanced\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\5_tone_sigs.npy
+
+Y:\School_Stuff\System_Config_1_PreMultiply\original\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\1_2_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\original\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\3_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\original\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\4_tone_sigs.npy
+Y:\School_Stuff\System_Config_1_PreMultiply\original\no_noise\high_phase_shift\f_mod_0_2\f_delta_0_8\5_tone_sigs.npy
+
+test_sets\System_Config_1_Outputs\no_noise\high_phase_shift\f_mod_0_1\f_delta_0_1\1_2_tone_sigs.npy
+test_sets\System_Config_1_Outputs\no_noise\high_phase_shift\f_mod_0_1\f_delta_0_1\3_tone_sigs.npy
+test_sets\System_Config_1_Outputs\no_noise\high_phase_shift\f_mod_0_1\f_delta_0_1\4_tone_sigs.npy
+test_sets\System_Config_1_Outputs\no_noise\high_phase_shift\f_mod_0_1\f_delta_0_1\5_tone_sigs.npy
+mlp1 average recovery time 3.45 seconds
+
+Preferences: Open User Settings (JSON)
+ "python.pythonPath": ".venv\\Scripts\\python.exe" 

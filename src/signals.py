@@ -15,7 +15,7 @@ Created on Jul 17, 2023
 #         Constructor
 #         '''
 from scipy.signal import butter, sosfilt, sosfreqz #,lfilter
-from scipy.integrate import trapz
+from scipy.integrate import trapezoid
 from scipy.fft import fft, ifft
 from scipy.linalg import dft
 import numpy as np
@@ -27,6 +27,10 @@ from spgl1 import spgl1
 from scipy import linalg
 from OMP import OMP
 import tensorflow as tf
+from keras import losses
+
+def root_mean_squared_error(y_true, y_pred):
+    return tf.math.sqrt(losses.mean_squared_error(y_true, y_pred))
 
 def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filter_params, manager_queue):
     x, t, num_tones = multi_tone_sine_wave(system_params, wave_params, filter_params)
@@ -59,7 +63,8 @@ def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filt
     # test_model = np.matmul(np.real(dictionary),np.real(xf))
     test_model = np.matmul(dictionary,xf)
     #Recover signal
-    coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
+    # coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
+    coef = recover_signal(dictionary, y_sampled, system_params)
     # coef = xf
     # coef1 = np.multiply(test,fft(test_model))
     matching_tones = np.multiply(xf,coef)
@@ -124,7 +129,7 @@ def multi_tone_sine_wave(system_params, wave_params, filter_params):
     for param in wave_params:
         if ( param['amp'] != 0 ):
             n_non_zero_amps += 1
-        new_signal = param['amp']*sin(2*pi*param['freq']*t+param['phase'])
+        new_signal = param['amp']*sin(2*pi*param['freq']*(t+param['phase']))
         # x.append(new_signal)
         x_input = np.add(x_input,new_signal)
 
@@ -269,7 +274,7 @@ def filter_signal(data, t, filter_params, system_params):
         for i in range(t.size):
             t_window = np.copy(t[i:i+filter_params['window_size']])
             data_window = np.copy(data_int[i:i+filter_params['window_size']])
-            integral = trapz(data_window, t_window)
+            integral = trapezoid(data_window, t_window)
             y_int[i] = integral
     # iFrFT = e**(((1/2)*t**2*1j)*(1/tan(filter_params['angle'])))
     # y = np.real(np.multiply(iFrFT, y_int))
@@ -302,6 +307,7 @@ def downsample(data, LO_modulation, t, system_params, rising_zero_crossings, fil
 def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params, tf_sampled):
     # K_band = t.size*(system_params['spacing']*system_params['adc_clock_freq'])
     # K_band = ceil(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
+    adc_freq = system_params['adc_clock_freq']
     K_band = round(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
     Zones = int(t.size/K_band)
     filt_freq_down = fft(filt_down)
@@ -324,11 +330,11 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
     test_init = filt_freq_down * np.eye(K_band)
     # test_init = test_11 * np.eye(K_band)
     R = np.copy(R_init)
-    # dft_matrix = dft(K_band)
-    dft_matrix = np.matmul(test_init,dft(K_band))
+    dft_matrix = dft(K_band)
+    # dft_matrix = np.matmul(test_init,dft(K_band))
     ## dft_matrix = np.matmul( dft(filt_freq_down ), np.eye(K_band) )
-    idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
-    # idft_norm = np.transpose(np.conjugate(dft_matrix))/(K_band)
+    # idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
+    idft_norm = np.transpose(np.conjugate(dft_matrix))/(2*Zones*K_band)
     if (system_params['dictionary'] == 'complex'):
         for i in (range(Zones-1)):
             R = np.hstack((R,R_init))
@@ -371,8 +377,8 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
         if ( system_params['sampled_LO'] == 'y' ):
             LO_list = []
             for i in (range(0,Zones)):
-                LO_list.append(np.flip(LO_mod_sampled))
-                # LO_list.append(LO_mod_sampled)
+                # LO_list.append(np.flip(LO_mod_sampled))
+                LO_list.append(LO_mod_sampled)
             LO_mod_concat = np.concatenate(LO_list)
             double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
         elif ( system_params['sampled_LO'] == 't' ):
@@ -403,8 +409,10 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
     dictionary = np.matmul(np.matmul(R,S),PSI)
     return dictionary
     # return R, S, PSI
-def recover_signal(dictionary, y_sampled, system_params, num_tones):
+def recover_signal(dictionary, y_sampled, system_params, mode=None, mlp_model_file_name=None, mlp_model_file_name_aux=None):
+    y_sampled = np.abs(y_sampled)
     y_sampled_norm = np.linalg.norm(y_sampled)
+    num_tones = 2
     coef_real = 0
     coef_imag = 0
     match system_params['recovery']:
@@ -412,17 +420,22 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
         case 'omp':
             # coef_real = OMP(dictionary, y_sampled/y_sampled_norm)
             omp_real = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
-            omp_imag = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
-            # omp_real.fit(np.real(dictionary), y_sampled/y_sampled_norm)
+            # omp_imag = OrthogonalMatchingPursuit(n_nonzero_coefs=num_tones)
+            # omp_real = OrthogonalMatchingPursuit()
+            # omp_imag = OrthogonalMatchingPursuit()
+            omp_real.fit(np.abs(dictionary), y_sampled/y_sampled_norm)
             # omp_imag.fit(np.imag(dictionary), y_sampled/y_sampled_norm)
-            omp_real.fit(np.real(dictionary), y_sampled)
-            omp_imag.fit(np.imag(dictionary), y_sampled)
-            coef_imag = omp_imag.coef_
+            # omp_real.fit(np.real(dictionary), y_sampled)
+            # omp_imag.fit(np.imag(dictionary), y_sampled)
+            # coef_imag = omp_imag.coef_
             coef_real = omp_real.coef_
     # elif ( system_params['recovery'] == 'o_mp' ):
         case 'o_omp':
-            coef_real = orthogonal_mp(np.real(dictionary),y_sampled/y_sampled_norm)
-            coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
+            coef_real = orthogonal_mp(np.abs(dictionary),y_sampled/y_sampled_norm)
+            # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
+        case 'c_omp':
+            coef_real = OMP(dictionary,y_sampled/y_sampled_norm)[0]
+            # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
     # elif ( system_params['recovery'] == 'spg_bp' ):
         case 'spg_bp':
             # coef_real,resid,grad,info = spg_bp(dictionary,y_sampled/y_sampled_norm)
@@ -432,7 +445,7 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
     # elif ( system_params['recovery'] == 'spgl1' ):
         case 'spgl1':
             # coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm)
-            coef_real,resid,grad,info = spgl1(dictionary,y_sampled)
+            coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm,sigma=0.01)
             #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
             #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
         case 'decode':
@@ -478,6 +491,45 @@ def recover_signal(dictionary, y_sampled, system_params, num_tones):
             coef_ang = np.transpose(refiner_ang.predict(coef_ang_init))          
             coef_real = coef_mag*cos(coef_ang)
             coef_imag = coef_mag*sin(coef_ang)
+
+        case 'mlp1':
+            pseudo = np.linalg.pinv(0.01*dictionary)
+            x_pre = np.dot(pseudo,y_sampled)
+            mlp_model = tf.keras.models.load_model(mlp_model_file_name, custom_objects={'root_mean_squared_error': root_mean_squared_error})
+            if ( mode == 'complex' ):
+                x_pre_real = np.real(x_pre)
+                x_pre_imag = np.imag(x_pre)
+                x_pre_flattened = np.concatenate((x_pre_real, x_pre_imag))
+                coef_predict = mlp_model.predict(x_pre_flattened.reshape(1, x_pre_flattened.shape[0]))
+                coef_flattened = coef_predict.reshape(-1)
+                coef_split = np.split(coef_flattened, 2)
+                coef_real = coef_split[0]
+                coef_imag = coef_split[1]
+            else:
+                # mlp_model_aux = tf.keras.models.load_model(mlp_model_file_name_aux)
+                pass
+                if ( mode == 'real_imag' ):
+                    x_pre_real = np.real(x_pre)
+                    x_pre_imag = np.imag(x_pre)
+                    x_pre_real_reshape = x_pre_real.reshape((1,x_pre_real.shape[0]))
+                    x_pre_imag_reshape = x_pre_imag.reshape((1,x_pre_imag.shape[0]))
+                    coef_predict_real = mlp_model.predict(x_pre_real_reshape)
+                    coef_predict_imag = mlp_model_aux.predict(x_pre_imag_reshape)
+                    coef_real = coef_predict_real.reshape(-1)
+                    coef_imag = coef_predict_imag.reshape(-1)
+                    pass
+                elif ( mode == 'mag_ang' ):
+                    x_pre_mag = np.abs(x_pre)
+                    # x_pre_ang = np.angle(x_pre)
+                    x_pre_mag_reshape = x_pre_mag.reshape((1,x_pre_mag.shape[0]))
+                    # x_pre_ang_reshape = x_pre_ang.reshape((1,x_pre_ang.shape[0]))
+                    coef_predict_mag = mlp_model.predict(x_pre_mag_reshape)
+                    # coef_predict_ang = mlp_model_aux.predict(x_pre_ang_reshape)
+                    coef_predict_ang = 0
+                    coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
+                    # coef_real = coef_predict_mag.reshape(-1)
+                    coef_imag = (coef_predict_mag*sin(coef_predict_ang)).reshape(-1)
+            pass
         case _:
             print("No recovery performed")
     coef = coef_real + coef_imag*1j
