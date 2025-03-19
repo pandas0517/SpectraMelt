@@ -1,0 +1,81 @@
+{
+    "system_name": "System_Config_1",
+    "files": {
+        "recovery":{
+            "name": "recovery_list.txt",
+            "mag_ang": {
+                "mag": {
+                    "bedroom": "recovery_list_bedroom_mag.txt",
+                    "daddo": "recovery_list_daddo_mag.txt"
+                },
+                "ang": {
+                    "bedroom": "recovery_list_bedroom_ang.txt",
+                    "daddo": "recovery_list_daddo_ang.txt"
+                }
+            }
+        },
+        "time": {
+            "name": "time.npy",
+            "fft": "complex_tf.npy",
+            "sampled": "complex_tf_sampled.npy"
+        },
+        "mlp_models": {
+            "name" : "mlp_model_file.keras",
+            "log": {
+                "name": "input_list.txt",
+                "bedroom": "input_list_Bedroom.txt",
+                "daddo": "input_list_Daddo.txt"
+            }
+        },
+        "dictionary": {
+            "name": "dictionary.npy"
+        }
+    },
+    "directories": {
+        "time": "test_sets\\System_Config_1\\Internal\\System\\Not_Sampled\\",
+        "time_sampled": "test_sets\\System_Config_1\\Internal\\System\\Sampled\\",
+        "input": "test_sets\\System_Config_1\\Inputs\\",
+        "output": "test_sets\\System_Config_1\\Outputs\\",
+        "train": "test_sets\\System_Config_1\\Model_Inputs\\train\\",
+        "test": "test_sets\\System_Config_1\\Model_Inputs\\test\\",
+        "fft": "test_sets\\System_Config_1\\Model_Inputs\\FFT\\",
+        "dictionary": {
+            "enhanced": "test_sets\\System_Config_1\\Internal\\Dictionary\\enhanced\\",
+            "original": "test_sets\\System_Config_1\\Internal\\Dictionary\\original\\"
+        },
+        "recovery": {
+            "enhanced": {
+                "c_omp": "test_sets\\System_Config_1\\Recovery\\OMP_Custom\\enhanced\\",
+                "o_omp": "test_sets\\System_Config_1\\Recovery\\OMP\\enhanced\\",
+                "mlp1": "test_sets\\System_Config_1\\Recovery\\MLP1\\enhanced\\",
+                "spgl1": "test_sets\\System_Config_1\\Recovery\\SPGL\\enhanced\\"
+            },
+            "original": {
+                "c_omp": "test_sets\\System_Config_1\\Recovery\\OMP_Custom\\original\\",
+                "o_omp": "test_sets\\System_Config_1\\Recovery\\OMP\\original\\",
+                "mlp1": "test_sets\\System_Config_1\\Recovery\\MLP1\\original\\",
+                "spgl1": "test_sets\\System_Config_1\\Recovery\\SPGL\\original\\"
+            }
+        },
+        "mlp_models": {
+            "enhanced": {
+                "real": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\real\\",
+                "imag": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\imag\\",
+                "mag": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\mag\\",
+                "ang": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\ang\\",
+                "complex": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\complex\\"
+            },
+            "original": {
+                "real": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\real\\",
+                "imag": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\imag\\",
+                "mag": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\mag\\",
+                "ang": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\ang\\",
+                "complex": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\complex\\"
+            }
+        },
+        "premultiply": {
+            "enhanced": "Y:\\School_Stuff\\test_sets\\System_Config_1\\PreMultiply\\enhanced\\",
+            "original": "Y:\\School_Stuff\\test_test\\System_Config_1\\PreMultiply\\original\\"
+        }
+    }
+}
