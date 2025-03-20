@@ -1,22 +1,28 @@
 {
     "system_name": "System_Config_1",
-    "system_params": {
-        "filter": {
-            "type": "butter",
-            "order": 6,
-            "cutoff_freq": 50,
-            "angle": 45,
-            "window_size": 150
-        },
-        "adc_clock_freq": 100,
-        "start": -2,
-        "stop": 2,
-        "spacing": 0.001,
-        "noise": 0,
-        "processing_systems": [
-            "bedroom",
-            "daddo"
-        ]
+    "filter": {
+        "type": "butter",
+        "order": 6,
+        "cutoff_freq": 50,
+        "angle": 45,
+        "window_size": 150
+    },
+    "adc_clock_freq": 100,
+    "start": -2,
+    "stop": 2,
+    "spacing": 0.001,
+    "noise": 0,
+    "processing_systems": [
+        "bedroom",
+        "daddo"
+    ],
+    "LO_params": {
+        "amp":1,
+        "freq":100,
+        "phase":0,
+        "phase_delta": 0.4,
+        "phase_freq": 0.5,
+        "phase_offset": 0
     },
     "recovery": {
         "type": "mlp1",
@@ -39,22 +45,7 @@
         "batch_sz": 128,
         "pre_omp": false
     },
-    "LO_params": {
-        "amp":1,
-        "freq":100,
-        "phase":0,
-        "phase_delta": 0.4,
-        "phase_freq": 0.5,
-        "phase_offset": 0
-    },
-    "psi_params": {
-        "amp": 0.5,
-        "freq": 20,
-        "width": 0.001,
-        "shift": 0,
-        "angle": 90
-    },
-    "unused": {
+    "backup": {
         "wbf_cut_mod": 4,
         "wave_freq": [
             10,
@@ -80,6 +71,13 @@
             {"amp": 0.1,
              "freq": 395,
              "phase": 0}
-        ]
+        ],
+        "psi_params": {
+            "amp": 0.5,
+            "freq": 20,
+            "width": 0.001,
+            "shift": 0,
+            "angle": 90
+        }
     }
 }
