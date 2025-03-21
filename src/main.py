@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    with open(Path(os.getenv('FILEPATH_CONF')), 'r') as file:
-        filepath_conf = json.load(file)
-    nyfr = NYFR(Path(os.getenv('SYSTEM_CONF')))
+    nyfr = NYFR(file_path=Path(os.getenv('SYSTEM_CONF')))
+    nyfr.initialize()
+    output = nyfr.simulate_system(file_path=Path(os.getenv('SYSTEM_CONF')))
     pass

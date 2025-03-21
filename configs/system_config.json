@@ -1,21 +1,25 @@
 {
-    "system_name": "System_Config_1",
-    "filter": {
+    "system_config_name": "System_Config_1",
+    "filter_params": {
         "type": "butter",
         "order": 6,
         "cutoff_freq": 50,
         "angle": 45,
         "window_size": 150
     },
-    "adc_clock_freq": 100,
-    "start": -2,
-    "stop": 2,
-    "spacing": 0.001,
-    "noise": 0,
-    "processing_systems": [
-        "bedroom",
-        "daddo"
-    ],
+    "system_params": {
+        "adc_clock_freq": 100,
+        "processing_systems": [
+            "bedroom",
+            "daddo"
+        ],
+        "system_noise_level": 0
+    },
+    "time_params": {
+        "start": -2,
+        "stop": 2,
+        "spacing": 0.001
+    },
     "LO_params": {
         "amp":1,
         "freq":100,
@@ -30,7 +34,7 @@
             "mag_ang"
         ]
     },
-    "dictionary":{
+    "dictionary_params":{
         "type": "real",
         "version": "original"
     },
@@ -45,6 +49,23 @@
         "batch_sz": 128,
         "pre_omp": false
     },
+    "wave_params": [
+        {"amp": 1,
+         "freq": 25,
+         "phase": 0},
+        {"amp": 0,
+         "freq": 85,
+         "phase": 0},
+        {"amp": 0,
+         "freq": 140,
+         "phase": 0},
+        {"amp": 0.1,
+         "freq": 255,
+         "phase": 0},
+        {"amp": 0.1,
+         "freq": 395,
+         "phase": 0}
+    ],
     "backup": {
         "wbf_cut_mod": 4,
         "wave_freq": [
@@ -55,23 +76,6 @@
         "wavelets": "n",
         "rand_demod": "n",
         "rd_clock_freq": 4,
-        "wave_params": [
-            {"amp": 1,
-             "freq": 25,
-             "phase": 0},
-            {"amp": 0,
-             "freq": 85,
-             "phase": 0},
-            {"amp": 0,
-             "freq": 140,
-             "phase": 0},
-            {"amp": 0.1,
-             "freq": 255,
-             "phase": 0},
-            {"amp": 0.1,
-             "freq": 395,
-             "phase": 0}
-        ],
         "psi_params": {
             "amp": 0.5,
             "freq": 20,

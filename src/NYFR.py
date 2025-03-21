@@ -1,20 +1,19 @@
 from utility import load_settings
 import numpy as np
 from numpy import sin
-from math import pi
+from math import e, pi
 from scipy.signal import butter, sosfilt, sosfreqz
 from scipy.integrate import trapezoid
-from scipy.fftpack import fft, ifft, dft
+from scipy.fftpack import fft
+from scipy.linalg import dft
 
 class NYFR:
-    def __init__(self, system_name='System_Config_1', 
-                 filter=None,
-                 adc_clock_freq=100, 
-                 start=-1, 
-                 stop=1, 
-                 spacing=0.001, 
-                 noise=0,
-                 processing_systems=None, 
+    def __init__(self, 
+                 filter_params=None,
+                 system_params=None,
+                 time_params=None,
+                 system_config_name=None,
+                 dictionary_params=None, 
                  LO_params=None, 
                  wave_params=None,
                  file_path=None, ) -> None:
@@ -22,60 +21,71 @@ class NYFR:
         if file_path is not None:
             print("Loading Settings from file: {}", file_path)
             system_config = load_settings(file_path)
-
-            self.system_name = system_config['system_name']
-            self.filter = system_config['filter']
-            self.adc_clock_freq = system_config['adc_clock_freq']
-            self.start = system_config['start']
-            self.stop = system_config['stop']
-            self.spacing = system_config['spacing']
-            self.noise = system_config['noise']
-            self.processing_systems = system_config['processing_systems']
+            self.system_config_name = system_config['system_config_name']
+            self.system_params = system_config['system_params']
+            self.time_params = system_config['time_params']
+            self.filter_params = system_config['filter_params']
             self.LO_params = system_config['LO_params']
+            self.dictionary_params = system_config['dictionary_params']
         
         else:
-            self.system_name = system_name
-            self.filter = filter
-            self.adc_clock_freq = adc_clock_freq
-            self.start = start
-            self.stop = stop
-            self.spacing = spacing
-            self.noise = noise
-            self.processing_systems = processing_systems
+            self.system_config_name = system_config_name
+            self.system_params = system_params
+            self.time_params = time_params
+            self.filter_params = filter_params
             self.LO_params = LO_params
             self.wave_params = wave_params
+            self.dictionary_params = dictionary_params
 
+        self.points_per_second = 0
+        self.adj_spacing = 0
+        self.num_time_points = 0
+        self.adc_clock_ticks = 0
+        self.K_band = 0
+        self.Zones = 0
+        self.t = None
+        self.tf = None
         self.sampled_t = None
         self.sampled_tf = None
         self.LO = None
+        self.LO_sampled = None
         self.LO_modulation = None
-        self.__create_real_time()
+        self.LO_modulation_sampled = None
+        self.rising_zero_crossings = None
+        self.sos = None
 
-    def __create_real_time(self):
-        if ( self.filter == 'integrate' ):
-            self.start = self.start - self.filter['window_size'] * self.spacing
-        total_time = abs( self.start - self.stop )
-        points_per_second = round(1/self.spacing)
+    def set_real_time(self, time_params=None):
+        if time_params is not None or self.time_params is None:
+            if self.time_params is None:
+                print("No time parameters provided during initialization. Adding new time parameters")
+            else:
+                print("Adding new time parameters")
+            self.set_time_params(time_params)
+
+        if ( self.filter_params['type'] == 'integrate' ):
+            self.time_params['start'] = self.time_params['start'] - self.filter_params['window_size'] * self.time_params['spacing']
+        total_time = abs( self.time_params['start'] - self.time_params['stop'] )
+        points_per_second = round(1/self.time_params['spacing'])
 
         #adjusting points_per_second to be evenly divisible by adc_clock_freq
-        band = int( points_per_second / self.adc_clock_freq )
-        band_remainder = int(points_per_second % self.adc_clock_freq)
+        band = int( points_per_second / self.system_params['adc_clock_freq'] )
+        band_remainder = int(points_per_second % self.system_params['adc_clock_freq'])
         if ( band_remainder != 0 ):
             points_per_second -= band_remainder
         # K_band must be an even number
         if ( band % 2 != 0 ):
-            points_per_second += int( self.adc_clock_freq )
+            points_per_second += int( self.self.system_params['adc_clock_freq'] )
+
         self.points_per_second = points_per_second
         self.adj_spacing = 1/points_per_second
-
-        self.num_time_points = int ( total_time * points_per_second )
-        self.t = np.linspace(self.start, self.stop, self.num_time_points, endpoint=False)
+        self.num_time_points = int ( total_time * self.points_per_second )
+        self.t = np.linspace(self.time_params['start'], self.time_params['stop'], self.num_time_points, endpoint=False)
         self.tf = np.linspace(-1/(2*self.adj_spacing), 1/(2*self.adj_spacing), int(self.t.size), endpoint=False)
-        self.adc_clock_ticks = int(points_per_second / self.adc_clock_freq)
-        self.K_band = round( self.num_time_points*self.adj_spacing*self.adc_clock_freq )
+        self.adc_clock_ticks = int(points_per_second / self.system_params['adc_clock_freq'])
+        self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
         self.Zones = int( self.num_time_points/self.K_band )
 
-    def generate_LO(self):
+    def set_LO(self):
         if self.LO_params is None:
             self.set_LO_params()
 
@@ -86,7 +96,7 @@ class NYFR:
     
     def generate_rising_zero_crossings(self):
         if self.LO is None:
-            self.generate_LO()
+            self.set_LO()
         #zero-crossing pulse generator 
         zero_crossings = np.where(np.diff(np.signbit(self.LO)))[0] + 1
         rising_zero_crossings = np.zeros_like(self.t)
@@ -107,6 +117,55 @@ class NYFR:
                 rising_zero_crossings[i] = 1
 
         return rising_zero_crossings
+
+    def sample_signals(self, data=None, update_sampled_time=False):
+        sampled_data_list = []
+        sampled_time_list = []
+        for i in range(0, self.t.size, self.adc_clock_ticks):
+            if data is not None:
+                sampled_data_list.append(data[i])
+            sampled_time_list.append(self.t[i])
+        if update_sampled_time:
+            self.sampled_t = np.array(sampled_time_list)
+            self.sampled_tf = np.linspace(-1/(2*self.adj_spacing*self.adc_clock_ticks),
+                                        1/(2*self.adj_spacing*self.adc_clock_ticks),
+                                        len(sampled_time_list),
+                                        endpoint=False)
+        sampled_data = np.array(sampled_data_list)
+
+        return sampled_data
+    
+    def initialize(self, system_params=None):
+        if system_params is not None:
+            self.set_system_params(system_params)
+        self.set_real_time()
+        self.set_LO()
+        self.rising_zero_crossings = self.generate_rising_zero_crossings()
+        self.LO_sampled = self.sample_signals(self.LO, update_sampled_time=True)
+        self.LO_modulation_sampled = self.sample_signals(self.LO_modulation)
+    
+    def simulate_system(self, input_signal=None, wave_params=None, file_path=None):
+        if input_signal is None:
+            print("No input signal provided. Creating Input Signal")
+            if wave_params is None and file_path is None:
+                print("No wave parameters provided. Adding new wave parameters")
+                add_wave_param = True
+                wave_params = []
+                while add_wave_param:
+                    amp = float(input("Enter amplitude: "))
+                    freq = float(input("Enter frequency: "))
+                    phase = float(input("Enter phase: "))
+                    wave_params.append({"amp": amp, "freq": freq, "phase": phase})
+                    add_wave_param = input("Add another wave parameter? (y/n): ").lower() == 'y'
+            if file_path is not None:
+                input_signal, _ = self.create_input_signal(file_path=file_path)
+            else:
+                input_signal, _ = self.create_input_signal(wave_params=wave_params)
+
+        mixed_input = np.copy(input_signal*self.rising_zero_crossings)
+        mixed_input_filtered = self.filter_signal(mixed_input)
+        output = self.sample_signals(mixed_input_filtered)
+        return output
 
     def create_input_signal(self, wave_params=None, file_path=None):
         if ( file_path is not None ):
@@ -132,54 +191,77 @@ class NYFR:
             new_signal = param['amp']*sin(2*pi*param['freq']*(self.t+param['phase']))
             x_input = np.add(x_input,new_signal)
 
-        if ( self.noise != 0 ):
+        if ( self.system_params['system_noise_level'] != 0 ):
             noise = np.random.normal(0, self.noise, x_input.size)
             x_input = x_input + noise
 
         return [ x_input, n_non_zero_amps ]
 
-    def filter_signal(self, data):
-        if self.filter_params == None:
+    def filter_signal(self, data, filter_params=None):
+        if self.filter_params is None and filter_params is None:
             print("No filter parameters provided.")
             self.set_filter_params()
-        if (self.filter == 'butter'):
+        if (self.filter_params['type'] == 'butter'):
             system_nyquist_rate = 1/self.adj_spacing
-            sos = butter(self.filter_params['order'], self.filter_params['cutoff_freq'], fs=system_nyquist_rate, btype='lowpass', analog=False, output='sos')
-            w, filt_freq = sosfreqz(sos, worN=self.t.size, whole=True)
-            filt_freq_down = np.concatenate((filt_freq[:self.adc_clock_ticks],filt_freq[-self.adc_clock_ticks:]))
-            filtered_data = sosfilt(sos, data)
-        else:
+            self.sos = butter(self.filter_params['order'],
+                         self.filter_params['cutoff_freq'],
+                         fs=system_nyquist_rate, btype='lowpass',
+                         analog=False,
+                         output='sos')
+            filtered_data = sosfilt(self.sos, data)
+        elif (self.filter_params['type'] == 'integrate'):
             filtered_data = np.zeros_like(self.t, dtype=np.complex_)
             for i in range(self.t.size):
                 t_window = np.copy(self.t[i:i+self.filter_params['window_size']])
                 data_window = np.copy(data[i:i+self.filter_params['window_size']])
                 filtered_data = trapezoid(data_window, t_window)
-            filt_freq_down = None
+        else:
+            print("Unsupported Filter Type")
+            filtered_data = None
 
-        return [ filtered_data, filt_freq_down ]
-    
-    def sample_signals(self, data=None):
-        sampled_data_list = []
-        sampled_time_list = []
-        for i in range(0, self.t.size, self.adc_clock_ticks):
-            if data is not None:
-                sampled_data.append(data[i])
-            sampled_time_list.append(self.t[i])
+        return filtered_data
 
-        self.sampled_t = np.array(sampled_time_list)
-        self.sampled_tf = np.linspace(-1/(2*self.adj_spacing*self.adc_clock_ticks), 1/(2*self.adj_spacing*self.adc_clock_ticks), len(sampled_time_list), endpoint=False)
-        sampled_data = np.array(sampled_data_list)
+    def create_dict(self, filt_down=None, dictionary_params=None):
+        if self.dictionary_params is None:
+            self.set_dictionary_params(dictionary_params=dictionary_params)
+        
+        dft = dft(self.K_band)
+        if self.dictionary_params['version'] == 'enhanced':
+            if filt_down is not None:
+                filt_freq_down = fft(filt_down)
+            else:
+                if self.filter_params['type'] == 'butter':
+                    _, filt_freq_down = self.get_filter_frequency()
+                else:
+                    filt_freq_down = np.ones_like(self.sampled_t)
+            dft_matrix = np.matmul(filt_freq_down * R_init, dft)
 
-        return sampled_data
-    
-    def create_dict(self, filt_down=None):
+        elif self.dictionary_params['version'] == 'original':
+            dft_matrix = np.copy(dft)
+        else:
+            print("Unknown dictionary version")
+            dictionary = None
+            return dictionary
+
+        M_index = self.__create_M_pattern()
         R_init = np.eye(self.K_band)
-        dft_matrix = dft(self.K_band)
-        idft_norm = np.transpose(np.conjugate(dft_matrix))/(self.num_time_points)
-        if filt_down is not None:
-            filt_freq_down = fft(filt_down)
-            dft_matrix_adj = np.matmul(filt_freq_down * R_init, dft_matrix)
 
+        if self.dictionary_params['type'] == 'complex':
+            R, S, PSI = self.__create_complex_dict(R_init=R_init,
+                                                    M_index=M_index,
+                                                    dft_matrix=dft_matrix)
+        elif self.dictionary_params['type'] == 'real':
+            R, S, PSI = self.__create_real_dict(R_init=R_init,
+                                                M_index=M_index,
+                                                dft_matrix=dft_matrix)
+        else:
+            print("Unknown dictionary type")
+            dictionary = None
+
+        dictionary = np.matmul(np.matmul(R,S),PSI)
+        return dictionary
+    
+    def __create_M_pattern(self):
         M_index = []
         M_temp = [0,0]
         M_pattern = [0, 1]
@@ -187,259 +269,39 @@ class NYFR:
             M_temp[0] = M_pattern[0] + i
             M_temp[1] = -( M_pattern[1] + i )
             M_index = M_index + M_temp
-    
-        R_init = np.eye(self.K_band)
+        
+        return M_index
+
+    def __create_complex_dict(self, R_init=None, M_index=None, dft_matrix=None):
+        idft_norm = np.transpose(np.conjugate(dft_matrix))/(self.Zones*self.K_band)
         R = np.copy(R_init)
-
-        if (system_params['dictionary'] == 'complex'):
-            for i in (range(Zones-1)):
-                R = np.hstack((R,R_init))
-            R_row, R_col = R.shape 
-            S = np.zeros((R_col,R_col),dtype='complex')
-            PSI = np.zeros_like(S)
-            index = 0 
-            for i in range(0, R_col - K_band, K_band):
-                # if (index == 0):
-                #     LO_mod = LO_modulation[index*clock_ticks]
-                # else:
-                #     LO_mod = LO_modulation[index*clock_ticks-1]
-                if M_index[index] == 0:
-                    S[i:i+R_row,i:i+R_row] = np.copy(R_init)
-                else:
-                    S[i:i+R_row,i:i+R_row] = np.copy(e**(M_index[index]*LO_modulation[index]*1j)*R_init)
-                PSI[i:i+R_row,i:i+R_row] = np.copy(idft_norm)
-                index += 1
-        elif (system_params['dictionary'] == 'real'):
-            for i in (range(2*Zones-1)):
-                R = np.hstack((R,R_init))
-            # R_filt = fft(filt_freq_down) * np.eye(K_band)
-            R_row, R_col = R.shape 
-            S = np.zeros((R_col,R_col),dtype='complex')
-            PSI = np.zeros((R_col, int(R_col/2)),dtype='complex')
-            PSI_1 = np.zeros((R_col, int(R_col/2)),dtype='complex')
-            idft_split = np.hsplit(idft_norm,2)
-            zero_fill = np.zeros_like(idft_split[0])
-            U_idft = np.hstack((idft_split[0], zero_fill))
-            U_idft_test = np.hstack((zero_fill, idft_split[0]))
-            L_idft_test = np.hstack((idft_split[1], zero_fill))
-            L_idft = np.hstack((zero_fill, idft_split[1]))
-            UL_idft = np.vstack((U_idft,L_idft))
-            UL_idft_1 = np.vstack((U_idft, U_idft_test))
-            UL_idft_2 = np.vstack((L_idft_test, L_idft))
-            M_index_reverse = [i * -1 for i in M_index]
-            M_index_reverse.reverse()
-            double_M_index = (M_index + M_index_reverse).copy()
-            # double_M_index = (M_index_reverse + M_index).copy()
-            if ( system_params['sampled_LO'] == 'y' ):
-                LO_list = []
-                for i in (range(0,Zones)):
-                    LO_list.append(LO_mod_sampled)
-                LO_mod_concat = np.concatenate(LO_list)
-                double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
-            elif ( system_params['sampled_LO'] == 't' ):
-                LO_list = []
-                for LO_sampled in LO_mod_sampled:
-                    LO_samp = np.empty(Zones)
-                    LO_samp.fill(LO_sampled)
-                    LO_list.append(LO_samp)
-                LO_mod_concat = np.concatenate(LO_list)
-                double_LO_modulation = np.concatenate((LO_mod_concat,np.flip(LO_mod_concat)))
-            else:
-                double_LO_modulation = np.concatenate((LO_modulation,np.flip(LO_modulation)))
-            pass
-            for index,i in enumerate(range(0, R_col, K_band)):
-                LO_mod = double_LO_modulation[i:i+R_row]
-                S[i:i+R_row,i:i+R_row] = np.diag(e**(double_M_index[index]*LO_mod*1j))
-                # S[i:i+R_row,i:i+R_row] = np.matmul(R_filt,np.diag(e**(double_M_index[index]*LO_mod*1j)))
-            for i in range (0, R_col, 2*K_band):
-                PSI[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft)
-                if ( i >= int(R_col/2) ):
-                    PSI_1[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft_2)
-                else:
-                    PSI_1[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft_1)
-        # test = abs(filt_freq_down)*abs(filt_freq_down)
-        # R_filt = ifft(test)*np.eye(filt_freq_down.size)
-        # R_filt_2 = np.matmul(R_filt, R_filt)
-        # dictionary = np.matmul(R_filt, np.matmul(np.matmul(R,S),PSI))
-        dictionary = np.matmul(np.matmul(R,S),PSI)
-        return dictionary
-
-    
-    def set_LO_params(self):
-        amp = float(input("Enter LO amplitude: "))
-        freq = float(input("Enter LO frequency: "))
-        phase = float(input("Enter LO phase: "))
-        phase_delta = float(input("Enter LO phase delta: "))
-        phase_freq = float(input("Enter LO phase frequency: "))
-        phase_offset = float(input("Enter LO phase offset: "))
-        self.LO_params = {
-            "amp": amp,
-            "freq": freq,
-            "phase": phase,
-            "phase_delta": phase_delta,
-            "phase_freq": phase_freq,
-            "phase_offset": phase_offset
-        }
-
-    def set_filter_params(self):
-        type = input("Enter filter type (butter/integrate): ")
-        order = int(input("Enter filter order: "))
-        cutoff_freq = float(input("Enter cutoff frequency: "))
-        angle = float(input("Enter filter angle: "))
-        window_size = int(input("Enter filter window size: "))
-        self.filter_params = {
-            "type": type,
-            "order": order,
-            "cutoff_freq": cutoff_freq,
-            "angle": angle,
-            "window_size": window_size
-        }
-
-    def get_system_name(self):
-        return self.system_name
-    def get_filter(self):
-        return self.filter
-    def get_adc_clock_freq(self):
-        return self.adc_clock_freq
-    def get_start(self):
-        return self.start
-    def get_ringing_zero_crossings(self):
-        return self.rising_zero_crossings
-    def get_real_time(self):
-        return self.t
-    def get_points_per_second(self):
-        return self.points_per_second
-    def get_adjusted_spacing(self):
-        return self.adj_spacing
-    def get_K_band(self):
-        return self.K_band
-    def get_num_time_points(self):
-        return self.num_time_points
-
-
-def simulate_system(wave_params, eps, LO_params, system_params, psi_params, filter_params, manager_queue):
-    x, t, num_tones = multi_tone_sine_wave(system_params, wave_params, filter_params)
-    xf = fft(x)
-    # Create Phase Modulated Local Oscillator
-    LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t, LO_params, system_params)
-    if ( system_params['wavelets'] == 'y' ):
-        #Create wavelet train
-        first_modulation, no_shift_wavelet, wavelet_test = generate_wavelet_train(system_params, psi_params, rising_zero_crossings, sample_train, t)
-    else:
-        first_modulation = rising_zero_crossings
-        no_shift_wavelet = 0
-    #Mix wavelet train with input signal
-    y_mixed = np.copy(x*rising_zero_crossings)
-    # y_mixed = np.copy(x*first_modulation)
-    #Random Demodulation
-    y_demod = random_demodulation(y_mixed, system_params)
-    #Filter demodulated signal
-    y_filtered, filt_freq, filt_freq_down = filter_signal(y_demod, t, filter_params, system_params)
-    # x_filtered, filt_freq = filter_signal(x, t, filter_params, system_params)
-    #Downsample with ADC
-    y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
-    #Create NYFR Dictionary for signal reconstruction
-    dictionary = create_nyfr_dict(t, LO_mod, LO_mod_sampled, filt_sampled, system_params, tf_sampled)
-    # dictionary = create_nyfr_dict(t, LO_mod, system_params)
-    # test_model = np.matmul(abs(filt_freq_down)*np.eye(filt_freq_down.size),np.matmul(dictionary,xf))
-    # test_model = np.matmul(np.real(dictionary),np.real(xf)) + np.matmul(np.imag(dictionary),np.imag(xf))*1j
-    # test_model = np.matmul(np.imag(dictionary),np.imag(xf))*1j
-    # test_model = np.matmul(np.real(dictionary),np.real(xf))
-    test_model = np.matmul(dictionary,xf)
-    #Recover signal
-    # coef = recover_signal(dictionary, y_sampled, system_params, num_tones)
-    coef = recover_signal(dictionary, y_sampled, system_params)
-    # coef = xf
-    # coef1 = np.multiply(test,fft(test_model))
-    matching_tones = np.multiply(xf,coef)
-    # matching_tones = np.multiply(np.abs(xf),np.abs(coef))
-    matching_tones[ matching_tones < eps ] = 0
-    non_zero_matches = np.count_nonzero(matching_tones)
-    current_run = []
-    current_run.append(LO_params['freq'])
-    current_run.append(system_params['adc_clock_freq'])
-    current_run.append(complex_tf)
-    current_run.append(xf)
-    current_run.append(coef)
-    current_run.append(non_zero_matches)
-    current_run.append(rising_zero_crossings)
-    current_run.append(y_mixed)
-    current_run.append(y_filtered)
-    current_run.append(t)
-    current_run.append(t_sampled)
-    current_run.append(tf_sampled)
-    current_run.append(y_sampled)
-    current_run.append(test_model)
-    current_run.append(filt_freq)
-    current_run.append(filt_freq_down)
-    current_run.append(fft(y_mixed))
-    current_run.append(LO)
-    current_run.append(x)
-    current_run.append(first_modulation)
-    current_run.append(no_shift_wavelet)
-    current_run.append(fft(filt_sampled))
-    current_run.append(downsample_train)
-    current_run.append(dictionary)
-    # current_run = [ LO_params['freq'], system_params['adc_clock_freq'], complex_tf, xf, coef, matching_tones ]
-    manager_queue.put(current_run)
-
-def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params, tf_sampled):
-    # K_band = t.size*(system_params['spacing']*system_params['adc_clock_freq'])
-    # K_band = ceil(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
-    adc_freq = system_params['adc_clock_freq']
-    K_band = round(t.size*(system_params['spacing']*system_params['adc_clock_freq']))
-    Zones = int(t.size/K_band)
-    filt_freq_down = fft(filt_down)
-    M_index = []
-    M_temp = [0,0]
-    # M_temp = [-2,1]
-    M_pattern = [0, 1]
-    for i in range(0,int(Zones/2)):
-        M_temp[0] = M_pattern[0] + i
-        M_temp[1] = -( M_pattern[1] + i )
-        # M_temp[0] = M_temp[0] + 2
-        # M_temp[1] = M_temp[1] - 2
-        M_index = M_index + M_temp
- 
-    R_init = np.eye(K_band)
-    # test_init = (abs(filt_freq_down)*abs(filt_freq_down)) * np.eye(K_band)
-    # test_init = abs(filt_freq_down) * np.eye(K_band)
-    # test_11 = 1/ ( 0.001*np.power(tf_sampled,2) - 2.1 )
-    # test_11 = -5e-8*np.power(tf_sampled,4) + 2e-12*np.power(tf_sampled,3) - 5e-6*np.power(tf_sampled,2) + 4e-9*tf_sampled + 0.9988
-    test_init = filt_freq_down * np.eye(K_band)
-    # test_init = test_11 * np.eye(K_band)
-    R = np.copy(R_init)
-    dft_matrix = dft(K_band)
-    # dft_matrix = np.matmul(test_init,dft(K_band))
-    ## dft_matrix = np.matmul( dft(filt_freq_down ), np.eye(K_band) )
-    # idft_norm = np.transpose(np.conjugate(dft_matrix))/(100*K_band)
-    idft_norm = np.transpose(np.conjugate(dft_matrix))/(2*Zones*K_band)
-    if (system_params['dictionary'] == 'complex'):
-        for i in (range(Zones-1)):
+        for i in (range(self.Zones-1)):
             R = np.hstack((R,R_init))
         R_row, R_col = R.shape 
         S = np.zeros((R_col,R_col),dtype='complex')
         PSI = np.zeros_like(S)
         index = 0 
-        for i in range(0, R_col - K_band, K_band):
-            # if (index == 0):
-            #     LO_mod = LO_modulation[index*clock_ticks]
-            # else:
-            #     LO_mod = LO_modulation[index*clock_ticks-1]
+        for i in range(0, R_col - self.K_band, self.K_band):
             if M_index[index] == 0:
                 S[i:i+R_row,i:i+R_row] = np.copy(R_init)
             else:
-                S[i:i+R_row,i:i+R_row] = np.copy(e**(M_index[index]*LO_modulation[index]*1j)*R_init)
+                S[i:i+R_row,i:i+R_row] = np.copy(e**(M_index[index]*self.LO_modulation[index]*1j)*R_init)
             PSI[i:i+R_row,i:i+R_row] = np.copy(idft_norm)
-            index += 1
-    elif (system_params['dictionary'] == 'real'):
-        for i in (range(2*Zones-1)):
+            index += 1 
+        return R, S, PSI
+    
+    def __create_real_dict(self, R_init=None, M_index=None, dft_matrix=None):
+        idft_norm = np.transpose(np.conjugate(dft_matrix))/(2*self.Zones*self.K_band)
+
+        R = np.copy(R_init)
+        for i in (range(2*self.Zones-1)):
             R = np.hstack((R,R_init))
-        # R_filt = fft(filt_freq_down) * np.eye(K_band)
-        R_row, R_col = R.shape 
+        R_row, R_col = R.shape
+
         S = np.zeros((R_col,R_col),dtype='complex')
         PSI = np.zeros((R_col, int(R_col/2)),dtype='complex')
         PSI_1 = np.zeros((R_col, int(R_col/2)),dtype='complex')
+        
         idft_split = np.hsplit(idft_norm,2)
         zero_fill = np.zeros_like(idft_split[0])
         U_idft = np.hstack((idft_split[0], zero_fill))
@@ -449,42 +311,183 @@ def create_nyfr_dict(t, LO_modulation, LO_mod_sampled, filt_down, system_params,
         UL_idft = np.vstack((U_idft,L_idft))
         UL_idft_1 = np.vstack((U_idft, U_idft_test))
         UL_idft_2 = np.vstack((L_idft_test, L_idft))
+
         M_index_reverse = [i * -1 for i in M_index]
         M_index_reverse.reverse()
         double_M_index = (M_index + M_index_reverse).copy()
-        # double_M_index = (M_index_reverse + M_index).copy()
-        if ( system_params['sampled_LO'] == 'y' ):
-            LO_list = []
-            for i in (range(0,Zones)):
-                # LO_list.append(np.flip(LO_mod_sampled))
-                LO_list.append(LO_mod_sampled)
-            LO_mod_concat = np.concatenate(LO_list)
-            double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
-        elif ( system_params['sampled_LO'] == 't' ):
-            LO_list = []
-            for LO_sampled in LO_mod_sampled:
-                LO_samp = np.empty(Zones)
-                LO_samp.fill(LO_sampled)
-                LO_list.append(LO_samp)
-            LO_mod_concat = np.concatenate(LO_list)
-            double_LO_modulation = np.concatenate((LO_mod_concat,np.flip(LO_mod_concat)))
-        else:
-            double_LO_modulation = np.concatenate((LO_modulation,np.flip(LO_modulation)))
-        pass
-        for index,i in enumerate(range(0, R_col, K_band)):
+
+        LO_list = []
+        for _ in (range(0,self.Zones)):
+            LO_list.append(self.LO_modulation_sampled)
+        LO_mod_concat = np.concatenate(LO_list)
+        double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
+
+        for index,i in enumerate(range(0, R_col, self.K_band)):
             LO_mod = double_LO_modulation[i:i+R_row]
             S[i:i+R_row,i:i+R_row] = np.diag(e**(double_M_index[index]*LO_mod*1j))
-            # S[i:i+R_row,i:i+R_row] = np.matmul(R_filt,np.diag(e**(double_M_index[index]*LO_mod*1j)))
-        for i in range (0, R_col, 2*K_band):
-            PSI[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft)
+
+        for i in range (0, R_col, 2*self.K_band):
+            PSI[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft)
             if ( i >= int(R_col/2) ):
-                PSI_1[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft_2)
+                PSI_1[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft_2)
             else:
-                PSI_1[i:i+2*K_band,int(i/2):int(i/2)+K_band] = np.copy(UL_idft_1)
-    # test = abs(filt_freq_down)*abs(filt_freq_down)
-    # R_filt = ifft(test)*np.eye(filt_freq_down.size)
-    # R_filt_2 = np.matmul(R_filt, R_filt)
-    # dictionary = np.matmul(R_filt, np.matmul(np.matmul(R,S),PSI))
-    dictionary = np.matmul(np.matmul(R,S),PSI)
-    return dictionary
-    # return R, S, PSI
+                PSI_1[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft_1)
+
+        return R, S, PSI
+
+    def set_system_params(self, system_params=None):
+        if system_params is None:
+            print("No system parameters provided. Adding new system parameters")
+            adc_clock_freq = int(input("Enter ADC clock frequency: "))
+            system_noise_level = float(input("Enter system noise level: "))
+            add_processing_systems = True
+            processing_systems = []
+            while add_processing_systems:
+                processing_systems.append(input("Enter processing systems: "))
+                add_processing_systems = input("Add another processing system? (y/n): ").lower() == 'y'
+            self.system_params = {
+                "adc_clock_freq": adc_clock_freq,
+                "processing_systems": processing_systems,
+                "system_noise_level": system_noise_level,
+            }
+        else:
+            self.system_params = system_params
+
+    def set_time_params(self, time_params=None):
+        if time_params is None:
+            print("No time parameters provided. Adding new time parameters")
+            start = float(input("Enter start time: "))
+            stop = float(input("Enter stop time: "))
+            spacing = float(input("Enter time spacing: "))
+            self.time_params = {
+                "start": start,
+                "stop": stop,
+                "spacing": spacing,
+            }
+        else:
+            self.time_params = time_params
+
+    def set_system_config_name(self, system_config_name=None):
+        if system_config_name is None:
+            print("No system configuration name provided. Adding new name")
+            self.system_config_name = input("Enter system configuration name: ")
+        else:
+            self.system_config_name = system_config_name
+
+    def set_LO_params(self, LO_params=None):
+        if LO_params is None:
+            print("No LO_params provided. Adding new LO parameters")
+            amp = float(input("Enter LO amplitude: "))
+            freq = float(input("Enter LO frequency: "))
+            phase = float(input("Enter LO phase: "))
+            phase_delta = float(input("Enter LO phase delta: "))
+            phase_freq = float(input("Enter LO phase frequency: "))
+            phase_offset = float(input("Enter LO phase offset: "))
+            self.LO_params = {
+                "amp": amp,
+                "freq": freq,
+                "phase": phase,
+                "phase_delta": phase_delta,
+                "phase_freq": phase_freq,
+                "phase_offset": phase_offset
+            }
+        else:
+            self.LO_params = LO_params
+
+    def set_filter_params(self, filter_params=None):
+        if filter_params is None:
+            print("No filter parameters provided. Adding new filter parameters")
+            type = input("Enter filter type (butter/integrate): ")
+            order = int(input("Enter filter order: "))
+            cutoff_freq = float(input("Enter cutoff frequency: "))
+            angle = float(input("Enter filter angle: "))
+            window_size = int(input("Enter filter window size: "))
+            self.filter_params = {
+                "type": type,
+                "order": order,
+                "cutoff_freq": cutoff_freq,
+                "angle": angle,
+                "window_size": window_size
+            }
+        else:
+            self.filter_params = filter_params
+
+    def set_dictionary_params(self, dictionary_params=None):
+        if dictionary_params is None:
+            print("No dictionary parameters provided. Adding new dictionary parameters")
+            type = input("Enter dictionary type (real/complex): ")
+            version = int(input("Enter dictionary version: "))
+            self.dictionary_params = {
+                "type": type,
+                "version": version,
+            }
+        else:
+            self.filter_params = dictionary_params
+
+    def get_filter_frequency(self):
+        if self.sos is not None:
+            _, filt_freq = sosfreqz(self.sos, worN=self.t.size, whole=True)
+            filt_freq_down = np.concatenate((filt_freq[:self.adc_clock_ticks],filt_freq[-self.adc_clock_ticks:]))
+        else:
+            if self.t is None:
+                filt_freq = None
+            else:
+                filt_freq = np.zeros_like(self.t)
+
+            if self.sampled_t is None:
+                filt_freq_down = None
+            else:
+                filt_freq_down = np.zeros_like(self.sampled_t)
+
+        return filt_freq, filt_freq_down
+    
+    def get_system_config_name(self):
+        return self.system_config_name
+    
+    def get_filter_params(self):
+        return self.filter
+    
+    def get_system_params(self):
+        return self.system_params
+    
+    def get_time_params(self):
+        return self.time_params
+    
+    def get_LO_params(self):
+        return self.LO_params
+    
+    def get_ringing_zero_crossings(self):
+        return self.rising_zero_crossings
+    
+    def get_real_time(self):
+        return self.t
+    
+    def get_frequncy_bins(self):
+        return self.tf
+    
+    def get_sampled_time(self):
+        return self.sampled_t
+    
+    def get_sampled_freq_bins(self):
+        return self.sampled_tf
+    
+    def get_points_per_second(self):
+        return self.points_per_second
+    
+    def get_adjusted_spacing(self):
+        return self.adj_spacing
+    
+    def get_K_band(self):
+        return self.K_band
+    
+    def get_num_time_points(self):
+        return self.num_time_points
+    
+    def get_LO(self):
+        return self.LO
+    
+    def get_LO_modulation(self):
+        return self.LO_modulation
+    
+    def get_sampled_LO(self):
+        return self.LO_sampled

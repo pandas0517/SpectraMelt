@@ -1,7 +1,7 @@
 import json
 import sys
 
-def load_settings(self, file_path):
+def load_settings(file_path):
     print("Loading Settings from file: {}", file_path)
     try:
         with open(file_path, 'r') as file:
