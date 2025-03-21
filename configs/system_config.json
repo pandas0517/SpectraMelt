@@ -28,17 +28,17 @@
         "phase_freq": 0.5,
         "phase_offset": 0
     },
-    "recovery": {
+    "dictionary_params":{
+        "type": "real",
+        "version": "original"
+    },
+    "recovery_params": {
         "type": "mlp1",
         "modes": [
             "mag_ang"
         ]
     },
-    "dictionary_params":{
-        "type": "real",
-        "version": "original"
-    },
-    "training": {
+    "training_params": {
         "modes": [
             "mag"
         ],
@@ -48,40 +48,5 @@
         "num_epochs": 200,
         "batch_sz": 128,
         "pre_omp": false
-    },
-    "wave_params": [
-        {"amp": 1,
-         "freq": 25,
-         "phase": 0},
-        {"amp": 0,
-         "freq": 85,
-         "phase": 0},
-        {"amp": 0,
-         "freq": 140,
-         "phase": 0},
-        {"amp": 0.1,
-         "freq": 255,
-         "phase": 0},
-        {"amp": 0.1,
-         "freq": 395,
-         "phase": 0}
-    ],
-    "backup": {
-        "wbf_cut_mod": 4,
-        "wave_freq": [
-            10,
-            20
-        ],
-        "sampled_LO": "y",
-        "wavelets": "n",
-        "rand_demod": "n",
-        "rd_clock_freq": 4,
-        "psi_params": {
-            "amp": 0.5,
-            "freq": 20,
-            "width": 0.001,
-            "shift": 0,
-            "angle": 90
-        }
     }
 }

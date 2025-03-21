@@ -1,0 +1,31 @@
+{
+    "recovery":{
+        "name": "recovery_list.txt",
+        "mag_ang": {
+            "mag": {
+                "bedroom": "recovery_list_bedroom_mag.txt",
+                "daddo": "recovery_list_daddo_mag.txt"
+            },
+            "ang": {
+                "bedroom": "recovery_list_bedroom_ang.txt",
+                "daddo": "recovery_list_daddo_ang.txt"
+            }
+        }
+    },
+    "time": {
+        "name": "time.npy",
+        "fft": "complex_tf.npy",
+        "sampled": "complex_tf_sampled.npy"
+    },
+    "mlp_models": {
+        "name" : "mlp_model_file.keras",
+        "log": {
+            "name": "input_list.txt",
+            "bedroom": "input_list_Bedroom.txt",
+            "daddo": "input_list_Daddo.txt"
+        }
+    },
+    "dictionary": {
+        "name": "dictionary.npy"
+    }
+}

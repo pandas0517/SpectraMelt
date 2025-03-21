@@ -19,7 +19,7 @@ class NYFR:
                  file_path=None, ) -> None:
         
         if file_path is not None:
-            print("Loading Settings from file: {}", file_path)
+            print("Loading Initial Settings from file: ", file_path)
             system_config = load_settings(file_path)
             self.system_config_name = system_config['system_config_name']
             self.system_params = system_config['system_params']
@@ -64,9 +64,20 @@ class NYFR:
 
         if ( self.filter_params['type'] == 'integrate' ):
             self.time_params['start'] = self.time_params['start'] - self.filter_params['window_size'] * self.time_params['spacing']
-        total_time = abs( self.time_params['start'] - self.time_params['stop'] )
-        points_per_second = round(1/self.time_params['spacing'])
 
+        self.__set_points_per_second()
+
+        self.adj_spacing = 1/self.points_per_second
+        total_time = abs( self.time_params['start'] - self.time_params['stop'] )
+        self.num_time_points = int ( total_time * self.points_per_second )
+        self.t = np.linspace(self.time_params['start'], self.time_params['stop'], self.num_time_points, endpoint=False)
+        self.tf = np.linspace(-1/(2*self.adj_spacing), 1/(2*self.adj_spacing), int(self.t.size), endpoint=False)
+        self.adc_clock_ticks = int(self.points_per_second / self.system_params['adc_clock_freq'])
+        self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
+        self.Zones = int( self.num_time_points/self.K_band )
+
+    def __set_points_per_second(self):
+        points_per_second = round(1/self.time_params['spacing'])
         #adjusting points_per_second to be evenly divisible by adc_clock_freq
         band = int( points_per_second / self.system_params['adc_clock_freq'] )
         band_remainder = int(points_per_second % self.system_params['adc_clock_freq'])
@@ -74,16 +85,9 @@ class NYFR:
             points_per_second -= band_remainder
         # K_band must be an even number
         if ( band % 2 != 0 ):
-            points_per_second += int( self.self.system_params['adc_clock_freq'] )
+            points_per_second += int( self.system_params['adc_clock_freq'] )
 
         self.points_per_second = points_per_second
-        self.adj_spacing = 1/points_per_second
-        self.num_time_points = int ( total_time * self.points_per_second )
-        self.t = np.linspace(self.time_params['start'], self.time_params['stop'], self.num_time_points, endpoint=False)
-        self.tf = np.linspace(-1/(2*self.adj_spacing), 1/(2*self.adj_spacing), int(self.t.size), endpoint=False)
-        self.adc_clock_ticks = int(points_per_second / self.system_params['adc_clock_freq'])
-        self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
-        self.Zones = int( self.num_time_points/self.K_band )
 
     def set_LO(self):
         if self.LO_params is None:
@@ -169,7 +173,7 @@ class NYFR:
 
     def create_input_signal(self, wave_params=None, file_path=None):
         if ( file_path is not None ):
-            print("Loading Settings from file: {}", file_path)
+            print("Loading Wave Settings from file: ", file_path)
             system_config = load_settings(file_path)
             wave_params = system_config['wave_params']
         elif ( wave_params is None ):
@@ -225,7 +229,7 @@ class NYFR:
         if self.dictionary_params is None:
             self.set_dictionary_params(dictionary_params=dictionary_params)
         
-        dft = dft(self.K_band)
+        dft_init = dft(self.K_band)
         if self.dictionary_params['version'] == 'enhanced':
             if filt_down is not None:
                 filt_freq_down = fft(filt_down)
@@ -234,10 +238,10 @@ class NYFR:
                     _, filt_freq_down = self.get_filter_frequency()
                 else:
                     filt_freq_down = np.ones_like(self.sampled_t)
-            dft_matrix = np.matmul(filt_freq_down * R_init, dft)
+            dft_matrix = np.matmul(filt_freq_down * R_init, dft_init)
 
         elif self.dictionary_params['version'] == 'original':
-            dft_matrix = np.copy(dft)
+            dft_matrix = np.copy(dft_init)
         else:
             print("Unknown dictionary version")
             dictionary = None
