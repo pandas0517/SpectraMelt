@@ -14,8 +14,8 @@
     },
     "time": {
         "name": "time.npy",
-        "fft": "complex_tf.npy",
-        "sampled": "complex_tf_sampled.npy"
+        "frequency": "complex_tf.npy",
+        "sampled_freq": "complex_tf_sampled.npy"
     },
     "mlp_models": {
         "name" : "mlp_model_file.keras",

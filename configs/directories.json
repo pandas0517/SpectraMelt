@@ -1,5 +1,5 @@
 {
-    "system_name": "System_Config_1",
+    "system_config_name": "System_Config_1",
     "time": "test_sets\\System_Config_1\\Internal\\System\\Not_Sampled\\",
     "time_sampled": "test_sets\\System_Config_1\\Internal\\System\\Sampled\\",
     "input": "test_sets\\System_Config_1\\Inputs\\",
