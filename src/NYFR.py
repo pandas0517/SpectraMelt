@@ -21,21 +21,19 @@ class NYFR:
         if file_path is not None:
             print("Loading Initial Settings from file: ", file_path)
             system_config = load_settings(file_path)
-            self.system_config_name = system_config['system_config_name']
-            self.system_params = system_config['system_params']
-            self.time_params = system_config['time_params']
-            self.filter_params = system_config['filter_params']
-            self.LO_params = system_config['LO_params']
-            self.dictionary_params = system_config['dictionary_params']
-        
-        else:
-            self.system_config_name = system_config_name
-            self.system_params = system_params
-            self.time_params = time_params
-            self.filter_params = filter_params
-            self.LO_params = LO_params
-            self.wave_params = wave_params
-            self.dictionary_params = dictionary_params
+            system_config_name = system_config['system_config_name']
+            system_params = system_config['system_params']
+            time_params = system_config['time_params']
+            filter_params = system_config['filter_params']
+            LO_params = system_config['LO_params']
+            dictionary_params = system_config['dictionary_params']
+
+        self.set_dictionary_params(dictionary_params=dictionary_params)
+        self.set_filter_params(filter_params=filter_params)
+        self.set_LO_params(LO_params=LO_params)
+        self.set_system_config_name(system_config_name=system_config_name)
+        self.set_time_params(time_params=time_params)
+        self.set_system_params(system_params=system_params)
 
         self.points_per_second = 0
         self.adj_spacing = 0

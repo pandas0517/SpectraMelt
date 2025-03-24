@@ -10,36 +10,21 @@ class NYFR_Test_Harness:
                  filenames_json=None,
                  directories_json=None) -> None:
         if filenames_json is not None:
-            filename_config = load_settings(filenames_json)
-            self.dictionary_file = filename_config['dictionary']
-            self.time_file = filename_config['time']
-            self.recovery_file = filename_config['recovery']
-        else:
-            self.dictionary_file = filenames['dictionary']
-            self.time_file = filenames['time']
-            self.recovery_file = filenames['recovery']          
+            filenames = load_settings(filenames_json)         
         
         if directories_json is not None:
-            directory_config = load_settings(directories_json)
-            self.input_dir = directory_config['input']
-            self.output_dir = directory_config['ouput']
-            self.fft_dir = directory_config['fft']
-            self.recovery_dir = directory_config['recovery']
-            self.system_config_name = directory_config['system_config_name']
-            self.time_dir = directory_config['time']
-            self.time_sampled_dir = directory_config['time_sampled']
-        else:
-            self.input_dir = directories['input']
-            self.output_dir = directories['output']
-            self.fft_dir = directories['fft']
-            self.recovery_dir = directories['recovery']
-            self.system_config_name = directories['system_config_name']
-            self.time_dir = directories['time']
-            self.time_sampled_dir = directories['time_sampled']
+            directories = load_settings(directories_json)
+
+        self.set_filenames(filenames=filenames)
+        self.set_directories(directories=directories)
 
     def set_filenames(self, filenames=None):
         if filenames is None:
             print("No file names provided. Adding new file names")
+            dictionary_base_name = input("Enter dictionary file base name: ")
+            time_base_name = input("Enter time file base name: ")
+            frequency_base_name = input("Enter frequency file base name: ")
+            sampled_frequency_base_name = input("Enter sampled frequency file base name: ")
             recovery_base_name = input("Enter recovery file base name: ")
             add_recovery_mode = True
             recovery_modes = []
@@ -55,11 +40,6 @@ class NYFR_Test_Harness:
                 processing_systems.append(input("Enter processing systems: "))
                 add_processing_systems = input("Add another processing system? (y/n): ").lower() == 'y'
 
-            dictionary_base_name = input("Enter dictionary file base name: ")
-            time_base_name = input("Enter time file base name: ")
-            frequency_base_name = input("Enter frequency file base name: ")
-            sampled_frequency_base_name = input("Enter sampled frequency file base name: ")
-            
             recovery_file = {
                 "name": recovery_base_name
             }
@@ -95,6 +75,45 @@ class NYFR_Test_Harness:
             self.recovery_file = filenames['recovery']
 
     def set_directories(self, directories=None):
+        if directories is None:
+            print("No directory names provided.  Adding new directory names")
+            system_config_name = input("Enter system configuration name: ")
+            input_dir = input("Enter input directory: ")
+            output_dir = input("Enter output directory: ")
+            fft_dir = input("Enter frequency file base name: ")
+            time_dir = input("Enter time directory: ")
+            time_sampled_dir = input("Enter sampled time directory: ")
+            
+            dictionary_versions = []
+            total_dictionary_versions = 0
+            add_dictionary_version = True
+            while add_dictionary_version and total_dictionary_versions < 2:
+                dictionary_versions.append(input("Add dictionary version (enhanced/original): "))
+                add_dictionary_version = input("Add another dictionary version? (y/n): ").lower() == 'y'
+                total_recovery_modes += 1
+            dictionary_versions = []
+
+            total_recovery_types = 0
+            add_recovery_types = True
+            while add_recovery_types and total_recovery_types < 4:
+                dictionary_versions.append(input("Add recovery type (c_omp/o_omp/mlp1/spgl1): "))
+                add_recovery_types = input("Add another dictionary version? (y/n): ").lower() == 'y'
+                total_recovery_types += 1
+
+            self.system_config_name = system_config_name
+            self.input_dir = input_dir
+            self.output_dir = output_dir
+            self.fft_dir = fft_dir
+            self.time_dir = time_dir
+            self.time_sampled_dir = time_sampled_dir
+        else:
+            self.system_config_name = directories['system_config_name']
+            self.input_dir = directories['input']
+            self.output_dir = directories['output']
+            self.fft_dir = directories['fft']
+            self.time_dir = directories['time']
+            self.time_sampled_dir = directories['time_sampled']
+            self.dictionary_dir = directories['dictionary']
 
     def get_filenames(self):
 
