@@ -92,11 +92,12 @@ class NYFR_Test_Harness:
                 add_dictionary_version = input("Add another dictionary version? (y/n): ").lower() == 'y'
                 total_recovery_modes += 1
             dictionary_versions = []
-
+            
+            recovery_types = []
             total_recovery_types = 0
             add_recovery_types = True
             while add_recovery_types and total_recovery_types < 4:
-                dictionary_versions.append(input("Add recovery type (c_omp/o_omp/mlp1/spgl1): "))
+                recovery_types.append(input("Add recovery type (OMP_Custom/OMP/MLP1/SPGL1): "))
                 add_recovery_types = input("Add another dictionary version? (y/n): ").lower() == 'y'
                 total_recovery_types += 1
 
@@ -106,6 +107,17 @@ class NYFR_Test_Harness:
             self.fft_dir = fft_dir
             self.time_dir = time_dir
             self.time_sampled_dir = time_sampled_dir
+            
+            recovery = {}
+            dictionary = {}
+            for dictionary_version in dictionary_versions:
+                dictionary[dictionary_version] = "test_sets\\" + self.system_config_name + "\\Internal\\" + dictionary_version + "\\Dictionary\\"
+                for recovery_type in recovery_types:
+                    recovery[dictionary_version][recovery_type] = "test_sets\\" + self.system_config_name + "\\Recovery\\" + dictionary_version + "\\" + recovery_type + "\\"
+            
+            self.dictionary_dir = dictionary
+            self.recovery_dir = recovery
+
         else:
             self.system_config_name = directories['system_config_name']
             self.input_dir = directories['input']
@@ -114,29 +126,31 @@ class NYFR_Test_Harness:
             self.time_dir = directories['time']
             self.time_sampled_dir = directories['time_sampled']
             self.dictionary_dir = directories['dictionary']
+            self.recovery_dir = directories['recovery']
 
     def get_filenames(self):
-
+        filenames = {}
+        filenames['dictionary'] = self.dictionary_file
+        filenames['time'] = self.time_file
+        filenames['recovery'] = self.recovery_file
+        return filenames
+    
     def get_directories(self):
+        directories = {}
+        directories['system_config_name'] = self.system_config_name
+        directories['input'] = self.input_dir
+        directories['output'] = self.output_dir
+        directories['fft'] = self.fft_dir
+        directories['time'] = self.time_dir
+        directories['time_sampled'] = self.time_sampled_dir
+        directories['dictionary'] = self.dictionary_dir
+        directories['recovery'] = self.recovery_dir
+        return directories
 
     def create_dictionaries(self, nyfr):
-        if filenames_json is None:
-            filenames_json = input("Enter file path for filename configuration: ")
-        if directories_json is None:
-            directories_json = input("Enter file path for directory configuration: ")
-
-        input_directory = "test_sets\\System_Config_1_Inputs\\"
-        # lo_directory = "test_sets\\System_Config_1_Internal\\LocalOscillator\\"
-        dictionary_file_name = "dictionary.npy"
-        system_directory = "test_sets\\System_Config_1_Internal\\System\\Not_Sampled\\"
-        dictionary_directory = "test_sets\\System_Config_1_Internal\\Dictionary\\"
         f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
         f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
-        recovery_dict = 'original'
-        all_file_paths = get_all_file_paths(input_directory)
-        # LO_file_paths = get_all_file_paths(lo_directory)
-        # filt_freq_file_path = os.path.join(system_directory, "filt_freq.npy")  
-        # filt_sampled_file_path = os.path.join(system_directory, "filt_sampled.npy") 
+        all_file_paths = get_all_file_paths(self.input_dir) 
         t_test = np.load(os.path.join(system_directory, "time.npy"))
         test_sig_set = np.load(all_file_paths[0])
         test_data = test_sig_set[0]
@@ -146,8 +160,6 @@ class NYFR_Test_Harness:
             for f_delta in f_delta_list:
                 LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
                 delta_dir = f_delta[1]
-                # LO_mod_output_file_path = os.path.join(lo_directory, file_name_ext_list[num_delta + num_mod_adj] + "_LO_mod.npy")  
-                # LO_mod_sampled_output_file_path = os.path.join(lo_directory, file_name_ext_list[num_delta + num_mod_adj] + "_LO_mod_sampled.npy")
                 dictionary_base_path = dictionary_directory + recovery_dict + "\\" + mod_dir + "\\" + delta_dir + "\\"
                 dictionary_file_path = os.path.join(dictionary_base_path, dictionary_file_name)
                 LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t_test, LO_params, system_params)
@@ -155,10 +167,6 @@ class NYFR_Test_Harness:
                 y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t_test, filter_params, system_params)
                 y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t_test, system_params, rising_zero_crossings, filt_freq)
                 dictionary = create_nyfr_dict(t_test, LO_mod, LO_mod_sampled, filt_sampled, system_params, tf_sampled)
-                # np.save(filt_freq_file_path, filt_freq)
-                # np.save(filt_sampled_file_path, filt_sampled)
-                # np.save(LO_mod_output_file_path, LO_mod)
-                # np.save(LO_mod_sampled_output_file_path, LO_mod_sampled)
                 np.save(dictionary_file_path, dictionary)
 
     def analyze_dfs(system_params):
