@@ -13,10 +13,6 @@
     },
     "recovery": {
         "enhanced": {
-            "c_omp": "test_sets\\System_Config_1\\Recovery\\OMP_Custom\\enhanced\\",
-            "o_omp": "test_sets\\System_Config_1\\Recovery\\OMP\\enhanced\\",
-            "mlp1": "test_sets\\System_Config_1\\Recovery\\MLP1\\enhanced\\",
-            "spgl1": "test_sets\\System_Config_1\\Recovery\\SPGL\\enhanced\\"
         },
         "original": {
             "c_omp": "test_sets\\System_Config_1\\Recovery\\OMP_Custom\\original\\",
