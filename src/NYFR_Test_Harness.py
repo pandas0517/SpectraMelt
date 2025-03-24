@@ -1,7 +1,11 @@
-from utility import load_settings, get_all_file_paths
+from utility import get_all_file_paths, get_all_sub_dirs
+from utility import load_settings, get_file_sub_dirs
 import numpy as np
+import pandas as pd
 from numpy import sin
 from scipy.fftpack import fft
+import os
+
 
 class NYFR_Test_Harness:
     def __init__(self,
@@ -57,16 +61,15 @@ class NYFR_Test_Harness:
                 else:
                     for sub_mode in sub_modes:
                         recovery_file[recovery_mode][sub_mode][processing_system] = "recovery_list_" + processing_system + "_" + sub_mode + ".txt"
-            time_file = {
-                "name": time_base_name
-            }
-            time_file['frequency'] = frequency_base_name
-            time_file['sampled_freq'] = sampled_frequency_base_name
-            dictionary_file = {
+
+            self.dictionary_file = {
                 "name": dictionary_base_name
             }
-            self.dictionary_file = dictionary_file
-            self.time_file = time_file
+            self.time_file = {
+                "name": time_base_name,
+                "frequency": frequency_base_name,
+                "sample_freq": sampled_frequency_base_name
+            }
             self.recovery_file = recovery_file           
 
         else:
@@ -148,225 +151,196 @@ class NYFR_Test_Harness:
         return directories
 
     def create_dictionaries(self, nyfr):
-        f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
-        f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
-        all_file_paths = get_all_file_paths(self.input_dir) 
-        t_test = np.load(os.path.join(system_directory, "time.npy"))
-        test_sig_set = np.load(all_file_paths[0])
-        test_data = test_sig_set[0]
-        for f_mod in f_mod_list:
-            LO_params['phase_freq'] = f_mod[0]
-            mod_dir = f_mod[1]
-            for f_delta in f_delta_list:
-                LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
-                delta_dir = f_delta[1]
-                dictionary_base_path = dictionary_directory + recovery_dict + "\\" + mod_dir + "\\" + delta_dir + "\\"
-                dictionary_file_path = os.path.join(dictionary_base_path, dictionary_file_name)
-                LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t_test, LO_params, system_params)
-                y_mixed = np.copy(test_data*rising_zero_crossings)
-                y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t_test, filter_params, system_params)
-                y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t_test, system_params, rising_zero_crossings, filt_freq)
-                dictionary = create_nyfr_dict(t_test, LO_mod, LO_mod_sampled, filt_sampled, system_params, tf_sampled)
-                np.save(dictionary_file_path, dictionary)
+        LO_params = nyfr.get_LO_params()
+        dictionary_params = nyfr.get_dictionary_params()
+        if LO_params == None or nyfr.get_K_band() == None or dictionary_params == None:
+            print("NYFR not initialized.  Please re-initialize object")
+        else:
+            f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
+            f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
+            for f_mod in f_mod_list:
+                LO_params['phase_freq'] = f_mod[0]
+                mod_dir = f_mod[1]
+                for f_delta in f_delta_list:
+                    LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
+                    nyfr.set_LO_params(LO_params=LO_params)
+                    delta_dir = f_delta[1]
+                    dictionary_base_path = self.dictionary_dir[dictionary_params['version']] + "\\" + mod_dir + "\\" + delta_dir + "\\"
+                    dictionary_file_path = os.path.join(dictionary_base_path, self.dictionary_file['name'])
+                    dictionary = nyfr.create_dict()
+                    np.save(dictionary_file_path, dictionary)
 
-    def analyze_dfs(system_params):
-        recovery_dict = 'original'
-        # recovery_dict = 'enhanced'
-        recovery_info = {
-            'input_dir': "test_sets\\System_Config_1_Inputs\\",
-            'enhanced': {
-                'dict_base': "test_sets\\System_Config_1_Internal\\Dictionary\\enhanced\\",
-                'rec_base': {
-                    'c_omp': 'test_sets\\System_Config_1_Enhanced_Recovery\\System_Config_1_OMP_Custom_Recovery\\',
-                    'o_omp': 'test_sets\\System_Config_1_Enhanced_Recovery\\System_Config_1_OMP_Recovery\\',
-                    'mlp1': 'test_sets\\System_Config_1_Enhanced_Recovery\\System_Config_1_MLP1_Recovery\\',
-                    'spgl1': 'test_sets\\System_Config_1_Enhanced_Recovery\\System_Config_1_SPGL_Recovery\\'
-                    }
-                },        
-            'original': {
-                'dict_base': "test_sets\\System_Config_1_Internal\\Dictionary\\original\\",
-                'rec_base': {
-                    'c_omp': 'test_sets\\System_Config_1_Original_Recovery\\System_Config_1_OMP_Custom_Recovery\\',
-                    'o_omp': 'test_sets\\System_Config_1_Original_Recovery\\System_Config_1_OMP_Recovery\\',
-                    'mlp1': 'test_sets\\System_Config_1_Original_Recovery\\System_Config_1_MLP1_Recovery\\',
-                    'spgl1': 'test_sets\\System_Config_1_Original_Recovery\\System_Config_1_SPGL_Recovery\\'
-                    }
+    def __update_df_for_analysis(recovery_df,
+                                  recovery_sig_set,
+                                  input_sig_set,
+                                  input_tone_thresh,
+                                  recovery_mag_thresh,
+                                  current_recovery_row):
+        for idx,rec_sig in enumerate(recovery_sig_set):
+            meta_data = {
+                'num_rec_freq': {
+                    'col_name': "num_rec_freq_" + str(idx),
+                    'value': 0
                 },
-        }
-        # input_df_filename = "test_sets\\input_df.pkl"
-        # input_df = pd.read_pickle(input_df_filename)
-        # del input_df['num_tones']
-        # del input_df['tone_frequencies']
-        # tone_freqs = np.zeros((input_df.shape[0],2), dtype='int')
-        # tone_freq = tone_freqs.tolist()
-        recovery_df_filename = "test_sets\\recovery_df.pkl"
-        recovery_df = pd.read_pickle(recovery_df_filename)
-        # rec_sub_df = recovery_df[ recovery_df['recovery_method'] == "c_omp" ]
-        # rec_sub_df['recovery_method'] = "mlp1"
-        # new_df = pd.concat([recovery_df, rec_sub_df], axis=0, ignore_index=True)
-        # new_df.to_pickle(recovery_df_filename)
-        add_columns = 0
-        recovery_sig_set_size = 0
-        input_tone_thresh = 600
-        recovery_mag_thresh = 2
-        recovery_base_path = recovery_info[recovery_dict]['rec_base'][system_params['recovery']]
-        input_file_paths = get_all_file_paths(recovery_info['input_dir'])
-        for input_set_file in input_file_paths:
-            input_path = Path(input_set_file)
-            input_path_len = len(input_path.parts)
-            input_file_name = input_path.parts[input_path_len - 1]
-            input_phase_shift = input_path.parts[input_path_len - 2]
-            input_noise_level = input_path.parts[input_path_len - 3]
-            recovery_sub_path = recovery_base_path + input_noise_level + "\\" + input_phase_shift + "\\"
-            input_sig_set = np.load(input_set_file)
-            recovery_file_sub_dirs = get_all_sub_dirs(recovery_sub_path)
-            for sub_dir in recovery_file_sub_dirs:
-                recovery_file_path = os.path.join(sub_dir, input_file_name)
-                recovery_sig_set = np.load(recovery_file_path)
-                if ( add_columns == 1 ):
-                    recovery_sig_set_size = recovery_sig_set.shape[0]
-                    add_columns = 0
-                    for stats in range(recovery_sig_set_size):
-                        min_spur_mag = "min_spur_mag_" + str(stats)
-                        recovery_df[min_spur_mag] = 0.0
-                        min_rec_mag = "min_rec_mag_" + str(stats)
-                        recovery_df[min_rec_mag] = 0.0
-                        pass
-                    recovery_df.to_pickle(recovery_df_filename)
-                    
-                recovery_path = Path(recovery_file_path)
+                'num_spur_freq': {
+                    'col_name': "num_spur_freq_" + str(idx),
+                    'value': 0
+                },
+                'ave_rec_mag_err': {
+                    'col_name': "ave_rec_mag_err_" + str(idx),
+                    'value': 0
+                },
+                'total_input_tones': {
+                    'col_name': "total_input_tones_" + str(idx),
+                    'value': 0
+                },
+                'rec_tone_thresh': {
+                    'col_name': "rec_tone_thresh_" + str(idx),
+                    'value': 0
+                },
+                'ave_rec_mag': {
+                    'col_name': "ave_rec_mag_" + str(idx),
+                    'value': 0
+                },
+                'max_rec_mag': {
+                    'col_name': "max_rec_mag_" + str(idx),
+                    'value': 0
+                },
+                'min_rec_mag': {
+                    'col_name': "min_rec_mag_" + str(idx),
+                    'value': 0
+                },
+                'ave_spur_mag': {
+                    'col_name': "ave_spur_mag_" + str(idx),
+                    'value': 0
+                },
+                'max_spur_mag': {
+                    'col_name': "max_spur_mag_" + str(idx),
+                    'value': 0
+                },
+                'min_spur_mag': {
+                    'col_name': "min_spur_mag_" + str(idx),
+                    'value': 0
+                }
+            }
+            input_sig_xf = fft(input_sig_set[idx])
+            input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
+            input_tone_mag = abs(input_sig_xf[input_sig_tones])
+            rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_thresh)[0]
+            mask = np.isin(rec_sig_tones,input_sig_tones)
+            recovered_freq = np.where(mask)[0]
+            spur_freq = np.where(~mask)[0]
+            recovered_tones = rec_sig_tones[recovered_freq]
+            spur_tones = rec_sig_tones[spur_freq]
+            rec_mag = abs(rec_sig[recovered_tones])
+            spur_mag = abs(rec_sig[spur_tones])
+            meta_data['num_rec_freq']['value'] = recovered_freq.size
+            meta_data['num_spur_freq']['value'] = spur_freq.size
+            meta_data['total_input_tones']['value'] = input_sig_tones.size
+            meta_data['rec_tone_thresh']['value'] = recovery_mag_thresh
+            if ( recovered_freq.size == 0 ):
+                meta_data['ave_rec_mag_err']['value'] = -1
+                meta_data['ave_rec_mag']['value'] = -1
+                meta_data['max_rec_mag']['value'] = -1
+                meta_data['min_rec_mag']['value'] = -1
+            else:
+                meta_data['ave_rec_mag_err']['value'] = abs( np.average(input_tone_mag) - np.average(rec_mag) )
+                meta_data['ave_rec_mag']['value'] = np.average(rec_mag)
+                meta_data['max_rec_mag']['value'] = np.max(rec_mag)
+                meta_data['min_rec_mag']['value'] = np.min(rec_mag)
+            if ( spur_freq.size == 0 ):
+                meta_data['ave_spur_mag']['value'] = -1
+                meta_data['max_spur_mag']['value'] = -1
+                meta_data['min_spur_mag']['value'] = -1
+            else:
+                meta_data['ave_spur_mag']['value'] = np.average(spur_mag)
+                meta_data['max_spur_mag']['value'] = np.max(spur_mag)
+                meta_data['min_spur_mag']['value'] = np.min(spur_mag)
+            pass
+            for data in meta_data:
+                recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
+            
+            return recovery_df
+            
+    def analyze_dfs(self, nyfr, filenames=None, directories=None):
+        need_init = False
+        if self.recovery_file is None:
+            if filenames is not None:
+                self.set_filenames(filenames=filenames)
+            else:
+                print("File names need to be initialized")
+                need_init = True
 
-                match recovery_path.parts[5]:
-                    case 'f_mod_0_1':
-                        f_mod = 0.1
-                    case 'f_mod_0_2':
-                        f_mod = 0.2
-                    case 'f_mod_0_25':
-                        f_mod = 0.25
-                    case 'f_mod_0_5':
-                        f_mod = 0.5
-                    case _:
-                        f_mod = 0
-                match recovery_path.parts[6]:
-                    case 'f_delta_0_1':
-                        f_delta = 0.1
-                    case 'f_delta_0_8':
-                        f_delta = 0.8
-                    case 'f_delta_1_2':
-                        f_delta = 1.2
-                    case 'f_delta_9_9':
-                        f_delta = 10
-                    case _:
-                        f_delta = 0
-                pass
-                current_recovery_row = recovery_df.index[(recovery_df['file_name']==input_file_name) &
-                            (recovery_df['noise_level']==input_noise_level) &
-                            (recovery_df['phase_shift']==input_phase_shift) &
-                            (recovery_df['f_mod']==f_mod) &
-                            (recovery_df['f_delta']==f_delta) &
-                            (recovery_df['dictionary_type']==recovery_dict) &
-                            (recovery_df['recovery_method']==system_params['recovery'])]
-                
-                for idx,rec_sig in enumerate(recovery_sig_set):
-                    meta_data = {
-                        'num_rec_freq': {
-                            'col_name': "num_rec_freq_" + str(idx),
-                            'value': 0
-                        },
-                        'num_spur_freq': {
-                            'col_name': "num_spur_freq_" + str(idx),
-                            'value': 0
-                        },
-                        'ave_rec_mag_err': {
-                            'col_name': "ave_rec_mag_err_" + str(idx),
-                            'value': 0
-                        },
-                        'total_input_tones': {
-                            'col_name': "total_input_tones_" + str(idx),
-                            'value': 0
-                        },
-                        'rec_tone_thresh': {
-                            'col_name': "rec_tone_thresh_" + str(idx),
-                            'value': 0
-                        },
-                        'ave_rec_mag': {
-                            'col_name': "ave_rec_mag_" + str(idx),
-                            'value': 0
-                        },
-                        'max_rec_mag': {
-                            'col_name': "max_rec_mag_" + str(idx),
-                            'value': 0
-                        },
-                        'min_rec_mag': {
-                            'col_name': "min_rec_mag_" + str(idx),
-                            'value': 0
-                        },
-                        'ave_spur_mag': {
-                            'col_name': "ave_spur_mag_" + str(idx),
-                            'value': 0
-                        },
-                        'max_spur_mag': {
-                            'col_name': "max_spur_mag_" + str(idx),
-                            'value': 0
-                        },
-                        'min_spur_mag': {
-                            'col_name': "min_spur_mag_" + str(idx),
-                            'value': 0
-                        }
-                    }
-                    input_sig_xf = fft(input_sig_set[idx])
-                    input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
-                    input_tone_mag = abs(input_sig_xf[input_sig_tones])
-                    rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_thresh)[0]
-                    # rec_tone_mag = abs(rec_sig[rec_sig_tones])
-                    mask = np.in1d(rec_sig_tones,input_sig_tones)
-                    recovered_freq = np.where(mask)[0]
-                    spur_freq = np.where(~mask)[0]
-                    recovered_tones = rec_sig_tones[recovered_freq]
-                    spur_tones = rec_sig_tones[spur_freq]
-                    rec_mag = abs(rec_sig[recovered_tones])
-                    spur_mag = abs(rec_sig[spur_tones])
-                    meta_data['num_rec_freq']['value'] = recovered_freq.size
-                    meta_data['num_spur_freq']['value'] = spur_freq.size
-                    meta_data['total_input_tones']['value'] = input_sig_tones.size
-                    meta_data['rec_tone_thresh']['value'] = recovery_mag_thresh
-                    if ( recovered_freq.size == 0 ):
-                        meta_data['ave_rec_mag_err']['value'] = -1
-                        meta_data['ave_rec_mag']['value'] = -1
-                        meta_data['max_rec_mag']['value'] = -1
-                        meta_data['min_rec_mag']['value'] = -1
-                    else:
-                        meta_data['ave_rec_mag_err']['value'] = abs( np.average(input_tone_mag) - np.average(rec_mag) )
-                        meta_data['ave_rec_mag']['value'] = np.average(rec_mag)
-                        meta_data['max_rec_mag']['value'] = np.max(rec_mag)
-                        meta_data['min_rec_mag']['value'] = np.min(rec_mag)
-                    if ( spur_freq.size == 0 ):
-                        meta_data['ave_spur_mag']['value'] = -1
-                        meta_data['max_spur_mag']['value'] = -1
-                        meta_data['min_spur_mag']['value'] = -1
-                    else:
-                        meta_data['ave_spur_mag']['value'] = np.average(spur_mag)
-                        meta_data['max_spur_mag']['value'] = np.max(spur_mag)
-                        meta_data['min_spur_mag']['value'] = np.min(spur_mag)
-                    pass
-                    for data in meta_data:
-                        recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
-                pass
-        recovery_df.to_pickle(recovery_df_filename)
-        #     for idx, input_sig in enumerate(input_sig_set):
-        #         signal_number = "tones_signal_" + str(idx)
-        #         input_sig_xf = fft(input_sig)
-        #         input_sig_xf_shifted = np.fft.fftshift(abs(input_sig_xf))
-        #         indices = np.where(input_sig_xf_shifted>600)
-        #         indices_shifted = indices[0] - (input_sig.size/2)
-        #         tone_frequencies = (((indices_shifted[indices_shifted>0])/4).astype('int')).tolist()
-        #         if (index == 0):
-        #             input_df[signal_number] = tone_freq
-        #             pass
-        #         input_df.at[current_input_df[0], signal_number] = tone_frequencies
-        #         pass
-        #     pass
-        # input_df.to_pickle(input_df_filename)
+        if self.recovery_dir is None:
+            if directories is not None:
+                self.set_directories(directories=directories)
+            else:
+                print("File names need to be initialized")
+                need_init = True
+
+        dictionary_params = nyfr.get_dictionary_params()
+        if dictionary_params is None:
+            print("NYFR dictionary not initialized")
+            need_init = True
+
+        recovery_params = nyfr.get_recovery_params()
+        if recovery_params is None:
+            print("NYFR dictionary parameters not initialized")
+            need_init = True
+
+        if not need_init:
+            mod_delta_table = {
+                "f_mod_0_1": 0.1,
+                "f_mod_0_2": 0.2,
+                "f_mod_0_25": 0.25,
+                "f_mod_0_5": 0.5,
+                "f_delta_0_1": 0.1,
+                "f_delta_0_8": 0.8,
+                "f_delta_1_2": 1.2,
+                "f_delta_9_9": 10,                        
+            }
+            add_columns = 0
+            recovery_sig_set_size = 0
+            input_tone_thresh = 600
+            recovery_mag_thresh = 2
+            recovery_df_path = os.path.join(self.recovery_dir['df'], self.recovery_file['df'])
+            if os.path.exists(recovery_df_path):
+                recovery_df = pd.read_pickle(recovery_df_path)
+                input_file_paths = get_all_file_paths(self.input_dir)
+                for input_file_path in input_file_paths:
+                    file_name, noise_level, phase_shift = get_file_sub_dirs(input_file_path)
+                    recovery_sub_path = self.recovery_dir[dictionary_params['version']] + noise_level + "\\" + phase_shift + "\\"
+                    input_sig_set = np.load(input_file_path)
+                    recovery_file_sub_dirs = get_all_sub_dirs(recovery_sub_path)
+                    for sub_dir in recovery_file_sub_dirs:
+                        recovery_file_path = os.path.join(sub_dir, file_name)
+                        _, f_mod, f_delta = get_file_sub_dirs(recovery_file_path)
+                        recovery_sig_set = np.load(recovery_file_path)
+                        if ( add_columns == 1 ):
+                            recovery_sig_set_size = recovery_sig_set.shape[0]
+                            add_columns = 0
+                            for stats in range(recovery_sig_set_size):
+                                min_spur_mag = "min_spur_mag_" + str(stats)
+                                recovery_df[min_spur_mag] = 0.0
+                                min_rec_mag = "min_rec_mag_" + str(stats)
+                                recovery_df[min_rec_mag] = 0.0
+                                pass
+                            recovery_df.to_pickle(recovery_df_path)
+
+                        current_recovery_row = recovery_df.index[(recovery_df['file_name']==file_name) &
+                                    (recovery_df['noise_level']==noise_level) &
+                                    (recovery_df['phase_shift']==phase_shift) &
+                                    (recovery_df['f_mod']==mod_delta_table[f_mod]) &
+                                    (recovery_df['f_delta']==mod_delta_table[f_delta]) &
+                                    (recovery_df['dictionary_type']==dictionary_params['type']) &
+                                    (recovery_df['recovery_method']==recovery_params['type'])]
+                        recovery_df = self.__update_df_for_analysis(recovery_df,                         
+                                                                    recovery_sig_set,
+                                                                    input_sig_set,
+                                                                    input_tone_thresh,
+                                                                    recovery_mag_thresh,
+                                                                    current_recovery_row)     
+            recovery_df.to_pickle(recovery_df_path)
 
     def meta_input_output(system_params):
         input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),

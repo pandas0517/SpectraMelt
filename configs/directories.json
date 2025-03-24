@@ -12,6 +12,7 @@
         "original": "test_sets\\System_Config_1\\Internal\\original\\Dictionary\\"
     },
     "recovery": {
+        "df": "test_sets\\",
         "enhanced": {
         },
         "original": {

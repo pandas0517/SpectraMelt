@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+from pathlib import Path
 
 def load_settings(file_path):
     try:
@@ -37,3 +38,11 @@ def get_all_sub_dirs(directory):
         if not dirnames:
             deepest_sub_dirs.append(root)
     return deepest_sub_dirs
+
+def get_file_sub_dirs(input_file_path):
+    file_path = Path(input_file_path)
+    file_path_len = len(file_path.parts)
+    file_name = file_path.parts[file_path_len - 1]
+    phase_delta = file_path.parts[file_path_len - 2]
+    noise_mod = file_path.parts[file_path_len - 3]
+    return [noise_mod, phase_delta, file_name]

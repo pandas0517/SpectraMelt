@@ -15,7 +15,7 @@ class NYFR:
                  system_config_name=None,
                  dictionary_params=None, 
                  LO_params=None, 
-                 wave_params=None,
+                 recovery_params=None,
                  file_path=None, ) -> None:
         
         if file_path is not None:
@@ -27,6 +27,7 @@ class NYFR:
             filter_params = system_config['filter_params']
             LO_params = system_config['LO_params']
             dictionary_params = system_config['dictionary_params']
+            recovery_params = system_config['recovery_params']
 
         self.set_dictionary_params(dictionary_params=dictionary_params)
         self.set_filter_params(filter_params=filter_params)
@@ -34,6 +35,7 @@ class NYFR:
         self.set_system_config_name(system_config_name=system_config_name)
         self.set_time_params(time_params=time_params)
         self.set_system_params(system_params=system_params)
+        self.set_recovery_params(recovery_params=recovery_params)
 
         self.points_per_second = 0
         self.adj_spacing = 0
@@ -73,6 +75,8 @@ class NYFR:
         self.adc_clock_ticks = int(self.points_per_second / self.system_params['adc_clock_freq'])
         self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
         self.Zones = int( self.num_time_points/self.K_band )
+        if self.dictionary_params['type'] == 'real':
+            self.Zones *= 2
 
     def __set_points_per_second(self):
         points_per_second = round(1/self.time_params['spacing'])
@@ -274,7 +278,7 @@ class NYFR:
         
         return M_index
 
-    def __create_complex_dict(self, R_init=None, M_index=None, dft_matrix=None):
+    def __create_complex_dict(self, R_init, M_index, dft_matrix):
         idft_norm = np.transpose(np.conjugate(dft_matrix))/(self.Zones*self.K_band)
         R = np.copy(R_init)
         for i in (range(self.Zones-1)):
@@ -292,27 +296,22 @@ class NYFR:
             index += 1 
         return R, S, PSI
     
-    def __create_real_dict(self, R_init=None, M_index=None, dft_matrix=None):
+    def __create_real_dict(self, R_init, M_index, dft_matrix):
         idft_norm = np.transpose(np.conjugate(dft_matrix))/(2*self.Zones*self.K_band)
 
         R = np.copy(R_init)
-        for i in (range(2*self.Zones-1)):
+        for i in (range(self.Zones-1)):
             R = np.hstack((R,R_init))
         R_row, R_col = R.shape
 
         S = np.zeros((R_col,R_col),dtype='complex')
         PSI = np.zeros((R_col, int(R_col/2)),dtype='complex')
-        PSI_1 = np.zeros((R_col, int(R_col/2)),dtype='complex')
         
         idft_split = np.hsplit(idft_norm,2)
         zero_fill = np.zeros_like(idft_split[0])
         U_idft = np.hstack((idft_split[0], zero_fill))
-        U_idft_test = np.hstack((zero_fill, idft_split[0]))
-        L_idft_test = np.hstack((idft_split[1], zero_fill))
         L_idft = np.hstack((zero_fill, idft_split[1]))
         UL_idft = np.vstack((U_idft,L_idft))
-        UL_idft_1 = np.vstack((U_idft, U_idft_test))
-        UL_idft_2 = np.vstack((L_idft_test, L_idft))
 
         M_index_reverse = [i * -1 for i in M_index]
         M_index_reverse.reverse()
@@ -322,18 +321,13 @@ class NYFR:
         for _ in (range(0,self.Zones)):
             LO_list.append(self.LO_modulation_sampled)
         LO_mod_concat = np.concatenate(LO_list)
-        double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
 
         for index,i in enumerate(range(0, R_col, self.K_band)):
-            LO_mod = double_LO_modulation[i:i+R_row]
+            LO_mod = LO_mod_concat[i:i+R_row]
             S[i:i+R_row,i:i+R_row] = np.diag(e**(double_M_index[index]*LO_mod*1j))
 
         for i in range (0, R_col, 2*self.K_band):
             PSI[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft)
-            if ( i >= int(R_col/2) ):
-                PSI_1[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft_2)
-            else:
-                PSI_1[i:i+2*self.K_band,int(i/2):int(i/2)+self.K_band] = np.copy(UL_idft_1)
 
         return R, S, PSI
 
@@ -375,6 +369,24 @@ class NYFR:
             self.system_config_name = input("Enter system configuration name: ")
         else:
             self.system_config_name = system_config_name
+
+    def set_recovery_params(self, recovery_params=None):
+        if recovery_params is None:
+            print("No Recovery parameters provided. Adding new recovery parameters")
+            recovery_type = float(input("Enter recovery type: "))
+            add_recovery_mode = True
+            recovery_modes = []
+            total_recovery_modes = 0
+            while add_recovery_mode and total_recovery_modes < 3:
+                recovery_modes.append(input("Enter recovery mode (mag_ang, real_imag, complex): "))
+                add_recovery_mode = input("Add another recovery mode? (y/n): ").lower() == 'y'
+                total_recovery_modes += 1
+            self.recovery_params = {
+                "type": recovery_type,
+                "modes": recovery_modes
+            }
+        else:
+            self.recovery_params = recovery_params           
 
     def set_LO_params(self, LO_params=None):
         if LO_params is None:

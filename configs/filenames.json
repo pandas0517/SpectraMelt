@@ -1,5 +1,6 @@
 {
     "recovery":{
+        "df": "recovery_df.pkl",
         "name": "recovery_list.txt",
         "mag_ang": {
             "mag": {
