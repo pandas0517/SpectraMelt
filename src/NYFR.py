@@ -6,6 +6,10 @@ from scipy.signal import butter, sosfilt, sosfreqz
 from scipy.integrate import trapezoid
 from scipy.fftpack import fft
 from scipy.linalg import dft
+from NYFR_ML_Models import model_prediction
+from sklearn.linear_model import orthogonal_mp
+from OMP import OMP
+from spgl1 import spgl1
 
 class NYFR:
     def __init__(self, 
@@ -331,6 +335,37 @@ class NYFR:
 
         return R, S, PSI
 
+    def recover_signal(self, dictionary, output,
+                       file_path=None,
+                       aux_file_path=None, 
+                       num_tones=0, 
+                       sigma=0.01, 
+                       mode="mag_ang",
+                       mlp_inv_mod=0.01):
+        output_norm = np.linalg.norm(output)
+        coef_real = 0
+        coef_imag = 0
+        match self.recovery_params['type']:
+            case 'OMP':
+                coef_real = orthogonal_mp(np.abs(dictionary),output/output_norm)
+                # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
+            case 'OMP_Custom':
+                coef_real = OMP(dictionary,output/output_norm)[0]
+                # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
+            case 'SPGL1':
+                # coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm)
+                coef_real,_,_,_ = spgl1(dictionary,output/output_norm,sigma=sigma)
+                #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
+                #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
+            case 'MLP1':
+                pseudo = np.linalg.pinv(mlp_inv_mod*dictionary)
+                init_guess = np.dot(pseudo,output)
+                coef_real, coef_imag = model_prediction(init_guess, file_path, aux_file_path, mode)
+            case _:
+                print("No recovery performed")
+        coef = coef_real + coef_imag*1j
+        return coef
+    
     def set_system_params(self, system_params=None):
         if system_params is None:
             print("No system parameters provided. Adding new system parameters")
@@ -373,7 +408,7 @@ class NYFR:
     def set_recovery_params(self, recovery_params=None):
         if recovery_params is None:
             print("No Recovery parameters provided. Adding new recovery parameters")
-            recovery_type = float(input("Enter recovery type: "))
+            recovery_type = float(input("Enter recovery type (OMP/OMP_Custom/SPGL1/MLP1): "))
             add_recovery_mode = True
             recovery_modes = []
             total_recovery_modes = 0

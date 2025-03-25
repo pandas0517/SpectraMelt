@@ -46,3 +46,18 @@ def get_file_sub_dirs(input_file_path):
     phase_delta = file_path.parts[file_path_len - 2]
     noise_mod = file_path.parts[file_path_len - 3]
     return [noise_mod, phase_delta, file_name]
+
+def delete_lines_with_string(file_path, target_string):
+    try:
+        # Read the file and store lines that do not contain the target string
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        
+        # Write back only the lines that do not contain the target string
+        with open(file_path, 'w') as file:
+            for line in lines:
+                if target_string not in line:
+                    file.write(line)
+        print(f"Lines containing '{target_string}' have been deleted.")
+    except Exception as e:
+        print(f"An error occurred: {e}")

@@ -8,6 +8,7 @@
         "window_size": 150
     },
     "system_params": {
+        "wbf_cut_mod": 4,
         "adc_clock_freq": 100,
         "processing_systems": [
             "bedroom",
@@ -33,7 +34,7 @@
         "version": "original"
     },
     "recovery_params": {
-        "type": "mlp1",
+        "type": "MLP1",
         "modes": [
             "mag_ang"
         ]

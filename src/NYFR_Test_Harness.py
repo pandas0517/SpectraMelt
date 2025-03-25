@@ -1,11 +1,13 @@
 from utility import get_all_file_paths, get_all_sub_dirs
-from utility import load_settings, get_file_sub_dirs
+from utility import load_settings, get_file_sub_dirs, delete_lines_with_string
 import numpy as np
 import pandas as pd
 from numpy import sin
 from scipy.fftpack import fft
 import os
-
+import time
+import random
+from itertools import combinations
 
 class NYFR_Test_Harness:
     def __init__(self,
@@ -25,11 +27,16 @@ class NYFR_Test_Harness:
     def set_filenames(self, filenames=None):
         if filenames is None:
             print("No file names provided. Adding new file names")
+            input_df_filename = input("Enter input data frame file name: ")
+            output_df_filename = input("Enter output data frame file name: ")
+            recovery_df_filename = input("Enter recovery data frame file name: ")
             dictionary_base_name = input("Enter dictionary file base name: ")
             time_base_name = input("Enter time file base name: ")
             frequency_base_name = input("Enter frequency file base name: ")
             sampled_frequency_base_name = input("Enter sampled frequency file base name: ")
             recovery_base_name = input("Enter recovery file base name: ")
+            mlp_model_file_name = input("Enter MLP model file name: ")
+            mlp_log_file_name = input("Enter MLP log file name: ")
             add_recovery_mode = True
             recovery_modes = []
             total_recovery_modes = 0
@@ -44,7 +51,19 @@ class NYFR_Test_Harness:
                 processing_systems.append(input("Enter processing systems: "))
                 add_processing_systems = input("Add another processing system? (y/n): ").lower() == 'y'
 
+            mlp_log_name = os.path.splitext(mlp_log_file_name)[0]
+            mlp_log_extension = os.path.splitext(mlp_log_file_name)[1]
+            mlp_models = {
+                "name": mlp_model_file_name,
+                "log": {
+                    "name": mlp_log_file_name
+                }
+            }
+            for processing_system in processing_systems:
+                mlp_models["log"][processing_system] = mlp_log_name + "_" + processing_system + mlp_log_extension
+
             recovery_file = {
+                "df": recovery_df_filename,
                 "name": recovery_base_name
             }
             for recovery_mode in recovery_modes:
@@ -71,11 +90,16 @@ class NYFR_Test_Harness:
                 "sample_freq": sampled_frequency_base_name
             }
             self.recovery_file = recovery_file           
-
+            self.input_df_file = input_df_filename
+            self.output_df_file = output_df_filename
+            self.mlp_models_file = mlp_models
         else:
             self.dictionary_file = filenames['dictionary']
             self.time_file = filenames['time']
             self.recovery_file = filenames['recovery']
+            self.input_df_file = filenames['input_df']
+            self.output_df_file = filenames['output_df']
+            self.mlp_models_file = filenames['mlp_models']
 
     def set_directories(self, directories=None):
         if directories is None:
@@ -86,7 +110,8 @@ class NYFR_Test_Harness:
             fft_dir = input("Enter frequency file base name: ")
             time_dir = input("Enter time directory: ")
             time_sampled_dir = input("Enter sampled time directory: ")
-            
+            df_dir = input("Enter data frame directory: ")
+
             dictionary_versions = []
             total_dictionary_versions = 0
             add_dictionary_version = True
@@ -94,7 +119,6 @@ class NYFR_Test_Harness:
                 dictionary_versions.append(input("Add dictionary version (enhanced/original): "))
                 add_dictionary_version = input("Add another dictionary version? (y/n): ").lower() == 'y'
                 total_recovery_modes += 1
-            dictionary_versions = []
             
             recovery_types = []
             total_recovery_types = 0
@@ -104,23 +128,29 @@ class NYFR_Test_Harness:
                 add_recovery_types = input("Add another dictionary version? (y/n): ").lower() == 'y'
                 total_recovery_types += 1
 
+            mlp_model_types = [ "real", "imag", "mag", "ang", "complex"]
             self.system_config_name = system_config_name
             self.input_dir = input_dir
             self.output_dir = output_dir
             self.fft_dir = fft_dir
             self.time_dir = time_dir
             self.time_sampled_dir = time_sampled_dir
-            
+            self.df_dir = df_dir
             recovery = {}
             dictionary = {}
+            mlp_models = {}
             for dictionary_version in dictionary_versions:
-                dictionary[dictionary_version] = "test_sets\\" + self.system_config_name + "\\Internal\\" + dictionary_version + "\\Dictionary\\"
+                dictionary[dictionary_version] = "test_sets\\" \
+                    + self.system_config_name + "\\Internal\\" + dictionary_version + "\\Dictionary\\"
+                for mlp_model_type in mlp_model_types:
+                    mlp_models[dictionary_version][mlp_model_type] = "F:\\test_sets" \
+                        + self.system_config_name + "\\MLP_Models\\" + dictionary_version + "\\" + mlp_model_type + "\\"
                 for recovery_type in recovery_types:
-                    recovery[dictionary_version][recovery_type] = "test_sets\\" + self.system_config_name + "\\Recovery\\" + dictionary_version + "\\" + recovery_type + "\\"
-            
+                    recovery[dictionary_version][recovery_type] = "test_sets\\" \
+                        + self.system_config_name + "\\Recovery\\" + dictionary_version + "\\" + recovery_type + "\\"
+            self.mlp_models_dir = mlp_models
             self.dictionary_dir = dictionary
             self.recovery_dir = recovery
-
         else:
             self.system_config_name = directories['system_config_name']
             self.input_dir = directories['input']
@@ -130,6 +160,8 @@ class NYFR_Test_Harness:
             self.time_sampled_dir = directories['time_sampled']
             self.dictionary_dir = directories['dictionary']
             self.recovery_dir = directories['recovery']
+            self.df_dir = directories['df']
+            self.mlp_models_dir = directories['mlp_models']
 
     def get_filenames(self):
         filenames = {}
@@ -170,7 +202,7 @@ class NYFR_Test_Harness:
                     dictionary = nyfr.create_dict()
                     np.save(dictionary_file_path, dictionary)
 
-    def __update_df_for_analysis(recovery_df,
+    def __update_recovery_df(recovery_df,
                                   recovery_sig_set,
                                   input_sig_set,
                                   input_tone_thresh,
@@ -261,8 +293,9 @@ class NYFR_Test_Harness:
                 recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
             
             return recovery_df
-            
-    def analyze_dfs(self, nyfr, filenames=None, directories=None):
+
+    def __set_init(self, nyfr, filenames, directories):
+        mod_delta_table = None
         need_init = False
         if self.recovery_file is None:
             if filenames is not None:
@@ -287,7 +320,6 @@ class NYFR_Test_Harness:
         if recovery_params is None:
             print("NYFR dictionary parameters not initialized")
             need_init = True
-
         if not need_init:
             mod_delta_table = {
                 "f_mod_0_1": 0.1,
@@ -299,6 +331,11 @@ class NYFR_Test_Harness:
                 "f_delta_1_2": 1.2,
                 "f_delta_9_9": 10,                        
             }
+        return mod_delta_table, dictionary_params, recovery_params
+              
+    def set_recovery_df(self, nyfr, filenames=None, directories=None):
+        mod_delta_table, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+        if mod_delta_table is not None:
             add_columns = 0
             recovery_sig_set_size = 0
             input_tone_thresh = 600
@@ -334,7 +371,7 @@ class NYFR_Test_Harness:
                                     (recovery_df['f_delta']==mod_delta_table[f_delta]) &
                                     (recovery_df['dictionary_type']==dictionary_params['type']) &
                                     (recovery_df['recovery_method']==recovery_params['type'])]
-                        recovery_df = self.__update_df_for_analysis(recovery_df,                         
+                        recovery_df = self.__update_recovery_df(recovery_df,                         
                                                                     recovery_sig_set,
                                                                     input_sig_set,
                                                                     input_tone_thresh,
@@ -342,336 +379,186 @@ class NYFR_Test_Harness:
                                                                     current_recovery_row)     
             recovery_df.to_pickle(recovery_df_path)
 
-    def meta_input_output(system_params):
-        input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                    'noise_level': pd.Series(dtype='str'),
-                    'phase_shift': pd.Series(dtype='str'),
-                    'num_tones': pd.Series(dtype='int'),
-                    'tone_frequencies': pd.Series(dtype='int')})
-        output_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                    'noise_level': pd.Series(dtype='str'),
-                    'phase_shift': pd.Series(dtype='str'),
-                    'f_mod': pd.Series(dtype='float'),
-                    'f_delta': pd.Series(dtype='float')})
-        recovery_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                    'noise_level': pd.Series(dtype='str'),
-                    'phase_shift': pd.Series(dtype='str'),
-                    'f_mod': pd.Series(dtype='float'),
-                    'f_delta': pd.Series(dtype='float')})
-        input_df_filename = "test_sets\\input_df.pkl"
-        output_df_filename = "test_sets\\output_df.pkl"
-        recovery_df_filename = "test_sets\\recovery_df.pkl"
-        # pickle_1 = pd.read_pickle(recovery_df_filename)
-        # pickle_2 = pickle_1.copy()
-        # pickle_1['dictionary_type'] = "original"
-        # pickle_2['dictionary_type'] = "enhanced"
-        # pickle_3 = pd.concat([pickle_1, pickle_2], ignore_index=True)
-        # pickle_4 = pickle_3.copy()
-        # pickle_3['recovery_method'] = "c_omp"
-        # pickle_4['recovery_method'] = "spgl1"
-        # pickle_5 = pd.concat([pickle_3, pickle_4], ignore_index=True)
-        # pickle_5.to_pickle(recovery_df_filename)
-        # system_params['recovery'] = 'omp'
-        input_directory = "test_sets\\System_Config_1_Inputs\\"
-        input_file_paths = get_all_file_paths(input_directory)
-        output_base_directory_name = "System_Config_1_Outputs"
-        recovery_base_directory_names = {
-            'c_omp': 'System_Config_1_OMP_Custom_Recovery',
-            'o_omp': 'System_Config_1_OMP_Recovery',
-            'mlp1': 'System_Config_1_MLP1_Recovery',
-            'spgl1': 'System_Config_1_SPGL_Recovery'
-        }
-        dictionary_base_directory = "test_sets\\System_Config_1_Internal\\Dictionary\\original\\"
-        # dictionary_base_directory = "test_sets\\System_Config_1_Internal\\Dictionary\\"
-        dictionary_file_list = get_all_file_paths(dictionary_base_directory)
-        recovery_set_size = 100
-        for input_set_file in input_file_paths:
-            input_path = Path(input_set_file)
-            input_path_len = len(input_path.parts)
-            input_file_name = input_path.parts[input_path_len - 1]
-            input_phase_shift = input_path.parts[input_path_len - 2]
-            input_noise_level = input_path.parts[input_path_len - 3]
-            match input_path.parts[4]:
-                case '1_2_tone_sigs.npy':
-                    num_tones = [1,2]
-                case '3_tone_sigs.npy':
-                    num_tones = [3]
-                case '4_tone_sigs.npy':
-                    num_tones = [4]
-                case '5_tone_sigs.npy':
-                    num_tones = [5]
-                case _:
-                    num_tones = []
-            input_df.loc[len(input_df)] = [input_file_name, input_noise_level, input_phase_shift, num_tones, 0]
-            input_path_list = input_set_file.split("\\")
-            output_file_name = input_path_list.pop()
-            output_base_path_list = input_path_list.copy()
-            recovery_base_path_list = input_path_list.copy()
-            output_base_path_list[1] = output_base_directory_name
-            recovery_base_path_list[1] = recovery_base_directory_names[system_params['recovery']]
-            output_base_dir = os.path.join(*output_base_path_list)
-            output_file_sub_dirs = get_all_sub_dirs(output_base_dir)
-            recovery_base_dir = "E:\\" + os.path.join(*recovery_base_path_list)
-            recovery_file_sub_dirs = get_all_sub_dirs(recovery_base_dir)
-            for index, sub_dir in enumerate(recovery_file_sub_dirs):
-                output_file_path = os.path.join(output_file_sub_dirs[index % len(output_file_sub_dirs)], output_file_name)
-                #output_sig_set = np.load(output_file_path)
-                dictionary_file_name =  dictionary_file_list[index]
-                #dictionary = np.load(dictionary_file_name)
-                recovery_file_path = os.path.join(sub_dir, output_file_name)
-                
-                output_path = Path(output_file_path)
-                output_file_name = output_path.parts[6]
-                output_noise_level = output_path.parts[2]
-                output_phase_shift = output_path.parts[3]
-            
-                match output_path.parts[4]:
-                    case 'f_mod_0_1':
-                        f_mod = 0.1
-                    case 'f_mod_0_2':
-                        f_mod = 0.2
-                    case 'f_mod_0_25':
-                        f_mod = 0.25
-                    case 'f_mod_0_5':
-                        f_mod = 0.5
+    def create_dfs(self, nyfr, filenames=None, directories=None):
+        mod_delta_table, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+        if mod_delta_table is not None:
+            input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                        'noise_level': pd.Series(dtype='str'),
+                        'phase_shift': pd.Series(dtype='str'),
+                        'num_tones': pd.Series(dtype='int'),
+                        'tone_frequencies': pd.Series(dtype='int')})
+            output_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                        'noise_level': pd.Series(dtype='str'),
+                        'phase_shift': pd.Series(dtype='str'),
+                        'f_mod': pd.Series(dtype='float'),
+                        'f_delta': pd.Series(dtype='float')})
+            recovery_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                        'noise_level': pd.Series(dtype='str'),
+                        'phase_shift': pd.Series(dtype='str'),
+                        'f_mod': pd.Series(dtype='float'),
+                        'f_delta': pd.Series(dtype='float')})
+            input_file_paths = get_all_file_paths(self.input_dir)
+            for input_file_path in input_file_paths:
+                noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
+                match file_name:
+                    case '1_2_tone_sigs.npy':
+                        num_tones = [1,2]
+                    case '3_tone_sigs.npy':
+                        num_tones = [3]
+                    case '4_tone_sigs.npy':
+                        num_tones = [4]
+                    case '5_tone_sigs.npy':
+                        num_tones = [5]
                     case _:
-                        f_mod = 0
+                        num_tones = []
+                input_df.loc[len(input_df)] = [file_name, noise_level, phase_shift, num_tones, 0]
+                output_base_dir = self.output_dir + noise_level + "\\" + phase_shift + "\\"
+                recovery_base_dir = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + noise_level + "\\" + phase_shift + "\\"
+                output_file_sub_dirs = get_all_sub_dirs(output_base_dir)
+                for sub_dir in output_file_sub_dirs:
+                    output_file_path = os.path.join(sub_dir, file_name)
+                    f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
+                    recovery_dir = recovery_base_dir + f_mod + "\\" + f_delta + "\\"
+                    recovery_file_path = os.path.join(recovery_dir, file_name)
+                    output_df.loc[len(output_df)] = [output_file_path, noise_level, phase_shift, mod_delta_table[f_mod], mod_delta_table[f_delta]]
+                    recovery_df.loc[len(recovery_df)] = [recovery_file_path, noise_level, phase_shift, mod_delta_table[f_mod], mod_delta_table[f_delta]]
+                    pass
+            input_df.to_pickle(self.input_df_file)
+            output_df.to_pickle(self.output_df_file)
+            recovery_df.to_pickle(self.recovery_file['df'])
 
-                match output_path.parts[5]:
-                    case 'f_delta_0_1':
-                        f_delta = 0.1
-                    case 'f_delta_0_8':
-                        f_delta = 0.8
-                    case 'f_delta_1_2':
-                        f_delta = 1.2
-                    case 'f_delta_9_9':
-                        f_delta = 10
-                    case _:
-                        f_delta = 0
+    def create_output_sets(self, nyfr, filenames=None, directories=None):
+        mod_delta_table, _, _ = self.__set_init(nyfr, filenames, directories)
+        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
+        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
+        input_file_paths = get_all_file_paths(self.input_dir)
+        time_file_path = os.path.join(self.time_dir, self.time_file)
+        LO_params = nyfr.get_LO_params()
+        output_list = []
+        t = np.load(time_file_path)
+        for input_file_path in input_file_paths:
+            input_set = np.load(input_file_path)
+            noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
+            output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
+            for f_mod in f_mod_list:
+                LO_params['phase_freq'] = mod_delta_table[f_mod]
+                for f_delta in f_delta_list:
+                    LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
+                    nyfr.set_LO_params(LO_params=LO_params)
+                    output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
+                    output_file_path = (os.path.join(output_sub_dir, file_name))
+                    if ( os.path.isfile(output_file_path) ):
+                        os.remove( output_file_path )
+                    for input in input_set:
+                        output_list.append( nyfr.simulate_system(input_signal=input) )
 
-                output_df.loc[len(output_df)] = [output_file_name, output_noise_level, output_phase_shift, f_mod, f_delta]
-                recovery_df.loc[len(recovery_df)] = [output_file_name, output_noise_level, output_phase_shift, f_mod, f_delta]
-                pass
-        input_df.to_pickle(input_df_filename)
-        output_df.to_pickle(output_df_filename)
-        recovery_df.to_pickle(recovery_df_filename)
+                    output_set = np.array(output_list)
+                    np.save(output_file_path, output_set)
+                    output_list.clear()
+    
+    def batch_recover(self, nyfr, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
+        _, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+        system_params = nyfr.get_system_params()
 
-    def batch_recover(system_params):
-        # modes = [ 'real_imag', 'mag_ang', 'complex' ]
-        modes = [ 'mag_ang' ]
-        # processing_systems = [ 'daddo' ]
-        processing_systems = [ 'bedroom' ]
-        # mlp_model_file_name = "input_list.txt"
-        recovery_log_file_name = {
-            'mag_ang': {
-                'mag':{
-                    'bedroom': "recovery_list_bedroom_mag.txt",
-                    'daddo': "recovery_list_daddo_mag.txt"
-                },
-                'ang':{
-                    'bedroom': "recovery_list_bedroom_ang.txt",
-                    'daddo': "recovery_list_daddo_ang.txt"
-                },
-            }
-        }
-        # recovery_log_file_name = "recovery_list_Bedroom_PC.txt"
-        recovery_dic_type = 'original'
-        directory_list = {
-            'input': "test_sets\\System_Config_1_Inputs\\",
-            'fft': "test_sets\\System_Config_1_Model_Inputs\\FFT\\",
-            'train': "test_sets\\System_Config_1_Model_Inputs\\train\\",
-            'test': "test_sets\\System_Config_1_Model_Inputs\\test\\",
-            'output': "test_sets\\System_Config_1_Outputs\\",
-            'mlp_models': {
-                'file_name' : "mlp_model_file.keras",
-                'enhanced': {
-                    'real': "F:\\test_sets\\System_Config_1_MLP_Models\\enhanced\\real\\",
-                    'imag': "F:\\test_sets\\System_Config_1_MLP_Models\\enhanced\\imag\\",
-                    'mag': "F:\\test_sets\\System_Config_1_MLP_Models\\enhanced\\mag\\",
-                    'ang': "F:\\test_sets\\System_Config_1_MLP_Models\\enhanced\\ang\\",
-                    'complex': "F:\\test_sets\\System_Config_1_MLP_Models\\enhanced\\complex\\"
-                },
-                'original': {
-                    'real': "F:\\test_sets\\System_Config_1_MLP_Models\\original\\real\\",
-                    'imag': "F:\\test_sets\\System_Config_1_MLP_Models\\original\\imag\\",
-                    'mag': "F:\\test_sets\\System_Config_1_MLP_Models\\original\\mag\\",
-                    'ang': "F:\\test_sets\\System_Config_1_MLP_Models\\original\\ang\\",
-                    'complex': "F:\\test_sets\\System_Config_1_MLP_Models\\original\\complex\\"
-                }
-            },
-            'dictionary': {
-                'enhanced': "test_sets\\System_Config_1_Internal\\Dictionary\\enhanced\\",
-                'original': "test_sets\\System_Config_1_Internal\\Dictionary\\original\\"
-            },
-            'recovery': {
-                'enhanced': {
-                    'c_omp': "test_sets\\System_Config_1_Recovery\\OMP_Custom\\enhanced\\",
-                    'o_omp': "test_sets\\System_Config_1_Recovery\\OMP\\enhanced\\",
-                    'mlp1': "test_sets\\System_Config_1_Recovery\\MLP1\\enhanced\\",
-                    'spgl1': "test_sets\\System_Config_1_Recovery\\SPGL\\enhanced\\"
-                },
-                'original': {
-                    'c_omp': "test_sets\\System_Config_1_Recovery\\OMP_Custom\\original\\",
-                    'o_omp': "test_sets\\System_Config_1_Recovery\\OMP\\original\\",
-                    'mlp1': "test_sets\\System_Config_1_Recovery\\MLP1\\original\\",
-                    'spgl1': "test_sets\\System_Config_1_Recovery\\SPGL\\original\\"
-                }
-            }
-        }
-        input_file_paths = get_all_file_paths(directory_list['input'])
-        dictionary_file_list = get_all_file_paths(directory_list['dictionary'][recovery_dic_type])
-        test_sig_set = np.load(input_file_paths[0])
-        recovery_set_size = 100
-        recovery_sig_set = np.zeros((recovery_set_size,test_sig_set.shape[1]), dtype=np.complex128)
-        use_complex = False
-        for mode in modes:
-            recovery_base_path = directory_list['recovery'][recovery_dic_type][system_params['recovery']]
-            if ( system_params['recovery'] == 'mlp1' ):
+        input_file_paths = get_all_file_paths(self.input_dir)
+        recovery_set = np.zeros((recovery_set_size, nyfr.get_num_time_points()), dtype=np.complex128)
+        for mode in recovery_params['modes']:
+            recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
+            if ( recovery_params['type'] == 'MLP1' ):
                 recovery_base_path = recovery_base_path + mode + "\\"
 
             if ( mode == 'real_imag' ):
-                mlp_models_base_path = directory_list['mlp_models'][recovery_dic_type]['real']
-                mlp_models_base_path_aux = directory_list['mlp_models'][recovery_dic_type]['imag']
+                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['real']
+                mlp_models_base_path_aux = self.mlp_models[dictionary_params['version']]['imag']
             elif ( mode == 'mag_ang' ):
-                mlp_models_base_path = directory_list['mlp_models'][recovery_dic_type]['mag']
-                mlp_models_base_path_aux = directory_list['mlp_models'][recovery_dic_type]['ang']
+                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['mag']
+                mlp_models_base_path_aux = self.mlp_models[dictionary_params['version']]['ang']
             elif ( mode == 'complex' ):
-                mlp_models_base_path = directory_list['mlp_models'][recovery_dic_type]['complex']
-                use_complex = True
+                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['complex']
+                mlp_models_base_path_aux = None
             
-            for input_set_file in input_file_paths:
-                input_path = Path(input_set_file)
-                input_path_len = len(input_path.parts)
-                input_file_name = input_path.parts[input_path_len - 1]
-                input_phase_shift = input_path.parts[input_path_len - 2]
-                input_noise_level = input_path.parts[input_path_len - 3]
-                output_sub_path = directory_list['output'] + input_noise_level + "\\" + input_phase_shift + "\\"
-                recovery_sub_path = recovery_base_path + input_noise_level + "\\" + input_phase_shift + "\\"
-                mlp_models_sub_path = mlp_models_base_path + input_noise_level + "\\" + input_phase_shift + "\\"
-                if ( not use_complex ):
-                    mlp_models_sub_path_aux = mlp_models_base_path_aux + input_noise_level + "\\" + input_phase_shift + "\\"
-                # input_sig_set = np.load(input_set_file)
-                # test_sig_set = np.load(input_set_file)
-                # recovery_sig_set = np.zeros_like(test_sig_set)
-                # input_path_list = input_set_file.split("\\")
-                # output_file_name = input_path_list.pop()
-                # output_base_path_list = input_path_list.copy()
-                # recovery_base_path_list = input_path_list.copy()
-                # output_base_path_list[1] = output_base_directory_name
-                # recovery_base_path_list[1] = recovery_base_directory_names[system_params['recovery']]
-                # output_base_dir = os.path.join(*output_base_path_list)
-                # output_file_sub_dirs = get_all_sub_dirs(output_base_dir)
-                # recovery_base_dir = "E:\\" + os.path.join(*recovery_base_path_list)
+            for input_file_path in input_file_paths:
+                noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
+                output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
+                recovery_sub_path = recovery_base_path + noise_level + "\\" + phase_shift + "\\"
+                mlp_models_sub_path = mlp_models_base_path + noise_level + "\\" + phase_shift + "\\"
+                if mlp_models_base_path_aux is not None:
+                    mlp_models_sub_path_aux = mlp_models_base_path_aux + noise_level + "\\" + phase_shift + "\\"
                 output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
-                recovery_file_sub_dirs = get_all_sub_dirs(recovery_sub_path)
-                mlp_models_sub_dirs = get_all_sub_dirs(mlp_models_sub_path)
-                for proc in processing_systems:
-                    recovery_log_file_path_mag = directory_list['recovery'][recovery_dic_type][system_params['recovery']] \
-                        + mode + "\\" + recovery_log_file_name[mode]['mag'][proc]
-                    recovery_log_file_path_ang = directory_list['recovery'][recovery_dic_type][system_params['recovery']] \
-                        + mode + "\\" + recovery_log_file_name[mode]['ang'][proc]
-                    if ( not use_complex ):
-                        mlp_models_sub_dirs_aux = get_all_sub_dirs(mlp_models_sub_path_aux)
+                for processing_system in system_params['processing_systems']:
+                    if ( mode == 'real_imag' ):
+                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['real']
+                        recovery_log_file_path_aux = self.recovery_dir + self.recovery_file[mode]['imag']
+                    elif ( mode == 'mag_ang' ):
+                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['mag']
+                        recovery_log_file_path_aux = self.recovery_dir + self.recovery_file[mode]['ang']
+                    elif ( mode == 'complex' ):
+                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['complex']
+                        recovery_log_file_path_aux = None
 
-                    for index, sub_dir in enumerate(recovery_file_sub_dirs):
-                        output_file_path = os.path.join(output_file_sub_dirs[index], input_file_name)
-                        mlp_model_file_path = os.path.join(mlp_models_sub_dirs[index], directory_list['mlp_models']['file_name'])
-                        found_string_in_file_mag = False
-                        found_string_in_file_ang = False
-                        with open(recovery_log_file_path_mag, "r") as recovery_log:
+                    for sub_dir in output_file_sub_dirs:
+                        output_file_path = os.path.join(sub_dir, file_name)
+                        f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
+                        mlp_model_dir = mlp_models_sub_path + f_mod + "\\" + f_delta + "\\"
+                        if mlp_models_base_path_aux is not None:
+                            mlp_model_aux_dir = mlp_models_sub_path_aux + f_mod + "\\" + f_delta + "\\"
+                        recovery_dir = recovery_sub_path + f_mod + "\\" + f_delta + "\\"
+                        mlp_model_file_path = os.path.join(mlp_model_dir, self.mlp_models_file['name'])
+                        if mlp_models_base_path_aux is not None:
+                            mlp_model_aux_file_path = os.path.join(mlp_model_aux_dir, self.mlp_models_file['name'])
+                        else:
+                            mlp_model_aux_file_path = None
+
+                        dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']], self.dictionary_file['name'])
+                        recovery_file_path = os.path.join(recovery_dir, file_name)
+                        found_string_in_file = False
+                        found_string_in_file_aux = False
+                        with open(recovery_log_file_path, "r") as recovery_log:
                             for line in recovery_log:
                                 if output_file_path in line:
-                                    found_string_in_file_mag = True
+                                    found_string_in_file = True
                                     break
-                        with open(recovery_log_file_path_ang, "r") as recovery_log:
+                        with open(recovery_log_file_path_aux, "r") as recovery_log:
                             for line in recovery_log:
                                 if output_file_path in line:
-                                    found_string_in_file_ang = True
+                                    found_string_in_file_aux = True
                                     break                    
-                        # if ( os.path.isfile(mlp_model_file_path) ):
-                        # if ( found_string_in_file_mag and found_string_in_file_ang ):
-                        if ( found_string_in_file_mag ):
-                            if ( not use_complex ):
-                                mlp_model_file_path_aux = os.path.join(mlp_models_sub_dirs_aux[index], directory_list['mlp_models']['file_name'])
-                            output_sig_set = np.load(output_file_path)
-                            dictionary_file_name =  dictionary_file_list[index]
-                            dictionary = np.load(dictionary_file_name)
-                            recovery_file_path = os.path.join(sub_dir, input_file_name)
+                        if ( found_string_in_file ):
+                            output_set = np.load(output_file_path)
+                            dictionary = np.load(dictionary_file_path)
                             if ( not os.path.isfile(recovery_file_path )):
-                            # if ( os.path.isfile(recovery_file_path )):
-                                # for idx, output_sig in enumerate(output_sig_set):
-                                # start_time = time.perf_counter()
+                                if get_recovery_time:
+                                    ave_recovery_time = 0
+                                    start_time = time.perf_counter()
                                 for idx in range(recovery_set_size):
-                                    if ( use_complex ):
-                                        recovered_signal = recover_signal(dictionary, output_sig_set[idx], system_params, mode, mlp_model_file_path)
-                                    else:
-                                        recovered_signal = recover_signal(dictionary, output_sig_set[idx], system_params, mode, mlp_model_file_path, mlp_model_file_path_aux)
-                                    recovery_sig_set[idx] = recovered_signal
-                                # end_time = time.perf_counter()
-                                # ave_recovery_time = ( end_time - start_time ) / recovery_set_size
-                                np.save(recovery_file_path, recovery_sig_set)
-                                recovery_sig_set.fill(0)
-                        #else:
-                            #os.remove( recovery_file_path )
-                    pass
-    def create_nyfr_output(system_params, filter_params, LO_params):
-        input_directory = "test_sets\\System_Config_1_Inputs\\"
-        output_base_dir = "test_sets\\System_Config_1_Outputs\\"
-        f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
-        f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
-        all_file_paths = get_all_file_paths(input_directory)
-        time_file_path = "test_sets\\System_Config_1_Internal\\System\\Not_Sampled\\time.npy"
-        encoded_test_list = []
-        t = np.load(time_file_path)
-        for input_set_file in all_file_paths:
-            test_sig_set = np.load(input_set_file)
-            input_path = Path(input_set_file)
-            input_path_len = len(input_path.parts)
-            input_file_name = input_path.parts[input_path_len - 1]
-            input_phase_shift = input_path.parts[input_path_len - 2]
-            input_noise_level = input_path.parts[input_path_len - 3]
-            output_sub_path = output_base_dir + input_noise_level + "\\" + input_phase_shift + "\\"
-            for f_mod in f_mod_list:
-                LO_params['phase_freq'] = f_mod[0]
-                for f_delta in f_delta_list:
-                    LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
-                    output_file_dir = output_sub_path + f_mod[1] + "\\" + f_delta[1] + "\\"
-                    output_file_path = (os.path.join(output_file_dir, input_file_name))
-                    if ( os.path.isfile(output_file_path) ):
-                        os.remove( output_file_path )
-                    for test_data in test_sig_set:
-                        LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t, LO_params, system_params)
-                        y_mixed = np.copy(test_data*rising_zero_crossings)
-                        y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
-                        y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
-                        encoded_test_list.append( y_sampled )
-                    encoded_test_set = np.array(encoded_test_list)
-                    np.save(output_file_path, encoded_test_set)
-                    encoded_test_list.clear()
-    
-    def create_test_set(dictionary, t, system_params, wave_params, filter_params, LO_params):
-        enc_dim = (dictionary.shape)[0]
-        signal_dim = (dictionary.shape)[1]
+                                    recovered_signal = nyfr.recover_signal(dictionary,
+                                                                           output_set[idx],
+                                                                           file_path=mlp_model_file_path,
+                                                                           aux_file_path=mlp_model_aux_file_path
+                                                                           mode=mode)
+                                    recovery_set[idx] = recovered_signal
+                                if get_recovery_time:
+                                    end_time = time.perf_counter()
+                                    ave_recovery_time = ( end_time - start_time ) / recovery_set_size
+                                np.save(recovery_file_path, recovery_set)
+                                recovery_set.fill(0)
+                            delete_lines_with_string(recovery_log_file_path, output_file_path)
+
+    def create_input_sets(self, nyfr, filenames=None, directories=None):
+        _, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+        tone_sigs_file_list = [ "1_2_tone_sigs.npy", "3_tone_sigs.npy", "4_tone_sigs.npy", "5_tone_sigs.npy"]
+        input_sub_dirs = get_all_sub_dirs(self.input_dir)
+        system_params = nyfr.get_system_params()
         wbf_cut_freq = system_params['adc_clock_freq'] * system_params['wbf_cut_mod']
-        # num_of_pos_bins = int(signal_dim / 2)
-        # num_of_sig = 2
-        num_of_pos_sig = 1
-        # for wave_param in wave_params:
-        #     if wave_param['amp']!= 0:
-        #         num_of_pos_sig += 1
-        # num_of_tot_sig = int(num_of_pos_sig * 2)
         pos_bins = list(range(1, wbf_cut_freq))
-        # sig_array = np.zeros((signal_dim,1,1))
+        num_of_pos_sig = 1
         test_freq_tot_list = []
         min_num_of_pos_sig = 1
-
-        # tot_num_freq_combos = 0
-        for total_active_sig in range(min_num_of_pos_sig,num_of_pos_sig + 1):
-            pass
-            # test_freq_tot_list.append(list(combinations(pos_bins, total_active_sig)))
-            test_freq_tot_list += list(combinations(pos_bins, total_active_sig))
-            # tot_num_freq_combos += len(test_freq_tot_list[total_active_sig - 1])
-        random.shuffle(test_freq_tot_list)
+        for tone_sigs_file in tone_sigs_file_list:
+            if tone_sigs_file == "1_2_tone_sigs.npy":
+                for total_active_sig in range(1,2):
+                    test_freq_tot_list += list(combinations(pos_bins, total_active_sig))
+                    random.shuffle(test_freq_tot_list)
 
         split_list_len = 79800
         # test_freq_tot_list = test_freq_tot_list[0:split_list_len]
@@ -710,78 +597,3 @@ class NYFR_Test_Harness:
             count += 1
         # np.save("test_sets/System_Config_1_Inputs/time.npy", t_test)
         # np.save("test_sets/System_Config_1_Inputs/high_noise/no_phase_shift/5_tone_sigs.npy", test_sig_set_time)
-
-        encoded_test_set = np.zeros((tot_num_freq_combos,enc_dim),dtype=np.complex128)
-        # LO_mod_test_set = np.zeros((tot_num_freq_combos,signal_dim),dtype=np.float64)
-        # dic_test_set = np.zeros((tot_num_freq_combos,signal_dim),dtype=np.complex128)
-        # decoder_test_set = np.zeros((tot_num_freq_combos,signal_dim),dtype=np.complex128)
-        # decoded_mag_model = tf.keras.models.load_model('models/decoder_mag_model_rnd_3_sig.keras')
-        # decoded_ang_model = tf.keras.models.load_model('models/decoder_ang_model_rnd_3_sig.keras')
-        pseudo_inv = np.linalg.pinv(dictionary)
-        input_directory = "test_sets\\System_Config_1_Inputs\\"
-        output_base_directory_name = "System_Config_1_Outputs"
-        f_mod_list = [0.1, 0.2, 0.25, 0.5]
-        f_delta_list = [0.1, 0.8, 1.2, 10]
-        all_file_paths = get_all_file_paths(input_directory)
-        # all_file_names = get_all_file_names(input_directory)
-        
-        # t_test_filename = all_file_names.pop(0)
-        # t_test = np.load(all_file_paths.pop(0))
-        for input_set_file in all_file_paths:
-            test_sig_set = np.load(input_set_file)
-            input_path_list = input_set_file.split("\\")
-            output_file_name = input_path_list.pop()
-            output_base_path_list = input_path_list.copy()
-            output_base_path_list[1] = output_base_directory_name
-            output_base_dir = os.path.join(*output_base_path_list)
-            output_file_dirs = get_all_sub_dirs(output_base_dir)
-            for num_mod, f_mod in enumerate(f_mod_list):
-                LO_params['phase_freq'] = f_mod
-                num_mod_adj = num_mod * len(f_delta_list)
-                for num_delta, f_delta in enumerate(f_delta_list):
-                    LO_params['phase_delta'] = round(f_delta * f_mod, 2)
-                    output_file_dir = output_file_dirs[num_delta + num_mod_adj]
-                    # LO_output_file_path = (os.path.join(output_file_dir, "LO_mod_" + output_file_name))
-                    output_file_path = (os.path.join(output_file_dir, output_file_name))
-                    for idx, test_data in enumerate(test_sig_set):
-                        LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t_test, LO_params, system_params)
-                        y_mixed = np.copy(test_data*rising_zero_crossings)
-                        y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
-                        y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
-                        encoded_test_set[idx,:] = y_sampled
-                        # LO_mod_test_set[idx,:] = LO_mod
-                    # print(input_set_file, "   ", output_file_path)
-                    np.save(output_file_path, encoded_test_set)
-                    # np.save(LO_output_file_path, LO_mod_test_set)
-            # pass
-
-        for input_set_file in all_file_paths:
-            test_sig_set = np.load(input_set_file)
-            for idx, test_data in enumerate(test_sig_set):
-                LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t_test, LO_params, system_params)
-                y_mixed = np.copy(ifft(test_data)*rising_zero_crossings)
-                y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
-                y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
-                encoded_test_set[idx,:] = y_sampled
-            np.save("test_sets/System_Config_1_Outputs/high_noise/high_phase_shift/1_2_tone_sigs.npy", encoded_test_set)
-            pass
-        # test_sig_set = test_sig_set[np.random.permutation(tot_num_freq_combos),:]
-        for idx, test_data in enumerate(test_sig_set):
-            LO_mod, rising_zero_crossings, LO, sample_train, sample_train_fast, clock_ticks = generate_LO(t, LO_params, system_params)
-            y_mixed = np.copy(ifft(test_data)*rising_zero_crossings)
-            y_filtered, filt_freq, filt_freq_down = filter_signal(y_mixed, t, filter_params, system_params)
-            y_sampled, LO_mod_sampled, t_sampled, tf_sampled, filt_sampled, downsample_train = downsample(y_filtered, LO_mod, t, system_params, rising_zero_crossings, filt_freq)
-            encoded_test_set[idx,:] = y_sampled
-            y_sampled_mag = np.abs(y_sampled)
-            y_sampled_ang = np.angle(y_sampled)
-            y_sampled_mag = y_sampled_mag.reshape((1,y_sampled_mag.shape[0]))
-            y_sampled_ang = y_sampled_ang.reshape((1,y_sampled_ang.shape[0]))
-            coef_mag = np.transpose(decoded_mag_model.predict(y_sampled_mag))
-            coef_ang = np.transpose(decoded_ang_model.predict(y_sampled_ang))
-            dic_test_data = np.dot(pseudo_inv,y_sampled)
-            decoder_test_data = coef_mag*(cos(coef_ang)+1j*sin(coef_ang))
-            # dic_test_data = np.matmul(dictionary,test_data)
-            dic_test_set[idx,:] = dic_test_data
-            decoder_test_set[idx,:] = decoder_test_data.reshape((1,decoder_test_data.shape[0]))
-            pass
-        return test_sig_set, encoded_test_set, dic_test_set, decoder_test_set

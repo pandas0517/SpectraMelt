@@ -7,12 +7,12 @@
     "train": "test_sets\\System_Config_1\\Model_Inputs\\train\\",
     "test": "test_sets\\System_Config_1\\Model_Inputs\\test\\",
     "fft": "test_sets\\System_Config_1\\Model_Inputs\\FFT\\",
+    "df": "test_sets\\",
     "dictionary": {
         "enhanced": "test_sets\\System_Config_1\\Internal\\enhanced\\Dictionary\\",
         "original": "test_sets\\System_Config_1\\Internal\\original\\Dictionary\\"
     },
     "recovery": {
-        "df": "test_sets\\",
         "enhanced": {
         },
         "original": {

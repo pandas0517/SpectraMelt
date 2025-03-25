@@ -1,4 +1,14 @@
 {
+    "input_df": "input_df.pkl",
+    "output_df": "output_df.pkl",
+    "dictionary": {
+        "name": "dictionary.npy"
+    },
+    "time": {
+        "name": "time.npy",
+        "frequency": "complex_tf.npy",
+        "sampled_freq": "complex_tf_sampled.npy"
+    },
     "recovery":{
         "df": "recovery_df.pkl",
         "name": "recovery_list.txt",
@@ -13,20 +23,12 @@
             }
         }
     },
-    "time": {
-        "name": "time.npy",
-        "frequency": "complex_tf.npy",
-        "sampled_freq": "complex_tf_sampled.npy"
-    },
     "mlp_models": {
         "name" : "mlp_model_file.keras",
         "log": {
             "name": "input_list.txt",
-            "bedroom": "input_list_Bedroom.txt",
-            "daddo": "input_list_Daddo.txt"
+            "bedroom": "input_list_bedroom.txt",
+            "daddo": "input_list_daddo.txt"
         }
-    },
-    "dictionary": {
-        "name": "dictionary.npy"
     }
 }
