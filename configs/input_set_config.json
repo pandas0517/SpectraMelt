@@ -1,0 +1,14 @@
+{
+    "input_config_name": "Input_Config_1",
+    "tot_num_freq_combos": 79800,
+    "amp_min": 0.5,
+    "amp_max": 1,
+    "high_phase_max": 0.75,
+    "high_phase_min": 0.4,
+    "low_phase_max": 0.25,
+    "low_phase_min": 0.05,
+    "high_noise_max": 3,
+    "high_noise_min": 2,
+    "low_noise_max": 0.3,
+    "low_noise_min": 0.2
+}
