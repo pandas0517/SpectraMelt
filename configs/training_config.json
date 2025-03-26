@@ -1,5 +1,5 @@
 {
-    "processing_system": "daddo",    
+    "processing_system": "bedroom",    
     "modes": [
         "mag"
     ],
@@ -7,7 +7,7 @@
     "train_test_split_percentage": 0.7,
     "loss_type": "root_mean_squared_error",
     "learning_rate": 0.00001,
-    "num_epochs": 200,
+    "num_epochs": 50,
     "batch_sz": 128,
     "pre_multiply": 0.01,
     "save_fft_file": true,

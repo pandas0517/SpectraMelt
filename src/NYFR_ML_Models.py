@@ -154,15 +154,16 @@ def create_model(mlp_model_file_path,
                  training_params,
                  premultiply_sig_set_train,
                  premultiply_sig_set_test,
-                 input_sig_set_train_test):
+                 input_sig_set_train_test,
+                 nyfr):
     if ( os.path.isfile( mlp_model_file_path )):
         mlp_model = tf.keras.models.load_model(mlp_model_file_path)
     else:
         mlp_model = keras.Sequential()
         mlp_model.add(keras.Input(shape=(model_input_size,)))
         mlp_model.add(layers.Reshape((nyfr.get_Zones(), nyfr.get_K_band()), input_shape=(model_input_size,)))
-        mlp_model.add(layers.Conv1D(filters=nyfr.get_K_band(),
-                                    kernel_size=10,
+        mlp_model.add(layers.Conv1D(filters=nyfr.get_Zones(),
+                                    kernel_size=nyfr.get_K_band(),
                                     padding='same',
                                     input_shape=(nyfr.get_Zones(),nyfr.get_K_band()),
                                     # activity_regularizer=regularizers.l1(0.001),
@@ -172,8 +173,8 @@ def create_model(mlp_model_file_path,
         # mlp_model.add(layers.Dense(model_input_size, activity_regularizer=regularizers.l1(0.01), name="mlp_model_layer_2"))
         # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_3"))
         # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_4"))
-        mlp_model.add(layers.Dense(model_input_size,
-                                    activation='linear',
+        mlp_model.add(layers.Dense(nyfr.get_Zones(),
+                                    activation='softmax',
                                 #    activity_regularizer=regularizers.l2(0.001),
                                     name="mlp_model_out"))
         # mlp_model.add(layers.Activation('relu'))
@@ -301,7 +302,6 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
             output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
             premultiply_file_sub_dirs = get_all_sub_dirs(premultiply_sub_path)
             mlp_model_file_sub_dirs = get_all_sub_dirs(mlp_model_sub_path)
-            # for index, sub_dir in enumerate(premultiply_file_sub_dirs):
             for index, sub_dir in enumerate(output_file_sub_dirs):
                 output_file_path = os.path.join(sub_dir, file_name)
                 found_string_in_file = False
@@ -354,4 +354,5 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                  training_params,
                                  premultiply_sig_set_train,
                                  premultiply_sig_set_test,
-                                 input_sig_set_train_test)
+                                 input_sig_set_train_test,
+                                 nyfr)

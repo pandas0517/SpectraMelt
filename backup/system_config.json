@@ -11,7 +11,8 @@
         "wbf_cut_mod": 4,
         "adc_clock_freq": 100,
         "processing_systems": [
-            "bedroom"
+            "bedroom",
+            "daddo"
         ],
         "system_noise_level": 0
     },
