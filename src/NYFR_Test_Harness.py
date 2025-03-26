@@ -17,7 +17,8 @@ class NYFR_Test_Harness:
                  input_set_params=None, 
                  filenames_json=None,
                  directories_json=None,
-                 input_set_json=None) -> None:
+                 input_set_json=None,
+                 nyfr=None) -> None:
         if filenames_json is not None:
             filenames = load_settings(filenames_json)         
         
@@ -30,6 +31,7 @@ class NYFR_Test_Harness:
         self.set_filenames(filenames=filenames)
         self.set_input_set_params(input_set_params=input_set_params)
         self.set_directories(directories=directories)
+        self.nyfr = nyfr
 
     def set_filenames(self, filenames=None):
         if filenames is None:
@@ -245,16 +247,14 @@ class NYFR_Test_Harness:
             else:
                 print("Input set params need to be initialized")
                 need_init = True
+        
+        if self.nyfr is None:
+            if nyfr is not None:
+                self.nyfr = nyfr
+            else:
+                print("The NYFR needs to be initialized")
+                need_init = True
 
-        dictionary_params = nyfr.get_dictionary_params()
-        if dictionary_params is None:
-            print("NYFR dictionary not initialized")
-            need_init = True
-
-        recovery_params = nyfr.get_recovery_params()
-        if recovery_params is None:
-            print("NYFR dictionary parameters not initialized")
-            need_init = True
         if not need_init:
             mod_delta_table = {
                 "f_mod_0_1": 0.1,
@@ -266,12 +266,14 @@ class NYFR_Test_Harness:
                 "f_delta_1_2": 1.2,
                 "f_delta_9_9": 10,                        
             }
-        return mod_delta_table, dictionary_params, recovery_params
+        return mod_delta_table
 
-    def create_dictionaries(self, nyfr):
-        LO_params = nyfr.get_LO_params()
-        dictionary_params = nyfr.get_dictionary_params()
-        if LO_params == None or nyfr.get_K_band() == None or dictionary_params == None:
+    def create_dictionaries(self, nyfr=None):
+        if nyfr is not None:
+            self.nyfr = nyfr
+        LO_params = self.nyfr.get_LO_params()
+        dictionary_params = self.nyfr.get_dictionary_params()
+        if LO_params == None or self.nyfr.get_K_band() == None or dictionary_params == None:
             print("NYFR not initialized.  Please re-initialize object")
         else:
             f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
@@ -288,9 +290,9 @@ class NYFR_Test_Harness:
                     dictionary = nyfr.create_dict()
                     np.save(dictionary_file_path, dictionary)
 
-    def create_input_sets(self, nyfr, filenames=None, directories=None, input_set_params=None):
-        _, _, _ = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
-        system_params = nyfr.get_system_params()
+    def create_input_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        _ = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
+        system_params = self.nyfr.get_system_params()
         wbf_cut_freq = system_params['adc_clock_freq'] * system_params['wbf_cut_mod']
         pos_bins = list(range(1, wbf_cut_freq))
         for num_of_sigs, tone_sigs_file_name in self.input_tones.items():
@@ -350,13 +352,13 @@ class NYFR_Test_Harness:
                     input_set = np.array(input_list)
                     np.save(input_file_path, input_set)
 
-    def create_output_sets(self, nyfr, filenames=None, directories=None):
-        mod_delta_table, _, _ = self.__set_init(nyfr, filenames, directories)
+    def create_output_sets(self, nyfr=None, filenames=None, directories=None):
+        mod_delta_table = self.__set_init(nyfr, filenames, directories)
         f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
         f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
         input_file_paths = get_all_file_paths(self.input_dir)
         time_file_path = os.path.join(self.time_dir, self.time_file)
-        LO_params = nyfr.get_LO_params()
+        LO_params = self.nyfr.get_LO_params()
         output_list = []
         t = np.load(time_file_path)
         for input_file_path in input_file_paths:
@@ -379,9 +381,11 @@ class NYFR_Test_Harness:
                     np.save(output_file_path, output_set)
                     output_list.clear()
 
-    def batch_recover(self, nyfr, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
-        _, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
-        system_params = nyfr.get_system_params()
+    def batch_recover(self, nyfr=None, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
+        _ = self.__set_init(nyfr, filenames, directories)
+        system_params = self.nyfr.get_system_params()
+        dictionary_params = self.nyfr.get_dicionary_params()
+        recovery_params = self.nyfr.get_recovery_params()
 
         input_file_paths = get_all_file_paths(self.input_dir)
         recovery_set = np.zeros((recovery_set_size, nyfr.get_num_time_points()), dtype=np.complex128)
@@ -467,8 +471,11 @@ class NYFR_Test_Harness:
                                 recovery_set.fill(0)
                             delete_lines_with_string(recovery_log_file_path, output_file_path)
 
-    def create_dfs(self, nyfr, filenames=None, directories=None):
-        mod_delta_table, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+    def create_dfs(self, nyfr=None, filenames=None, directories=None):
+        mod_delta_table = self.__set_init(nyfr, filenames, directories)
+        dictionary_params = self.nyfr.get_dicionary_params()
+        recovery_params = self.nyfr.get_recovery_params()
+
         if mod_delta_table is not None:
             input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
                         'noise_level': pd.Series(dtype='str'),
@@ -516,7 +523,9 @@ class NYFR_Test_Harness:
             recovery_df.to_pickle(self.recovery_file['df'])
               
     def set_recovery_df(self, nyfr, filenames=None, directories=None):
-        mod_delta_table, dictionary_params, recovery_params = self.__set_init(nyfr, filenames, directories)
+        mod_delta_table = self.__set_init(nyfr, filenames, directories)
+        dictionary_params = self.nyfr.get_dicionary_params()
+        recovery_params = self.nyfr.get_recovery_params()
         if mod_delta_table is not None:
             add_columns = 0
             recovery_sig_set_size = 0
