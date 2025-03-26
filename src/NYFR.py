@@ -476,6 +476,9 @@ class NYFR:
     def get_dictionary_params(self):
         return self.dictionary_params
 
+    def get_recovery_params(self):
+        return self.recovery_params
+
     def get_filter_frequency(self):
         if self.sos is not None:
             _, filt_freq = sosfreqz(self.sos, worN=self.t.size, whole=True)
