@@ -78,6 +78,132 @@ def set_training_params(training_params=None, training_conf=None):
         training_params = load_settings(training_conf)
     return training_params
 
+def set_test_train(train_size,
+                   test_size,
+                   model_input_size,
+                   output_sig_set,
+                   use_premultiply,
+                   nyfr,
+                   dictionary,
+                   training_params,
+                   system_params,
+                   mode,
+                   premultiply_file_path):
+    premultiply_sig_set = []
+    premultiply_sig_set_train = np.zeros((train_size, model_input_size))
+    premultiply_sig_set_test = np.zeros((test_size, model_input_size))
+    complex_premultiply_sig_set_train = []
+    complex_premultiply_sig_set_test = []
+    for ij, output_signal in enumerate(output_sig_set):
+        if ( use_premultiply ):
+            premultiply_signal = np.copy(output_signal)
+        else:
+            if ( training_params['pre_omp'] ):
+                original_recovery = system_params['recovery']
+                system_params['recovery'] = 'c_omp'
+                nyfr.set_system_params(system_params=system_params)
+                premultiply_signal = nyfr.recover_signal(training_params['pre_multiply']*dictionary, output_signal)
+                system_params['recovery'] = original_recovery
+                nyfr.set_system_params(system_params=system_params)
+            else:
+                pseudo = np.linalg.pinv( training_params['pre_multiply'] * dictionary)
+                premultiply_signal = np.dot(pseudo,output_signal)
+
+            premultiply_sig_set.append(premultiply_signal)
+
+        if ( ij < train_size ):
+            if ( mode == 'real'):
+                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.real)
+            elif ( mode == 'imag'):
+                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.imag)
+            elif ( mode == 'mag'):
+                premultiply_sig_set_train[ij] = np.abs(premultiply_signal)
+            elif ( mode == 'ang'):
+                premultiply_sig_set_train[ij] = np.angle(premultiply_signal)
+            elif ( mode == 'complex'):
+                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
+                complex_premultiply_sig_set_train.append(premultiply_sig_concat)
+        else:
+            if ( mode == 'real'):
+                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.real)
+            elif ( mode == 'imag'):
+                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.imag)
+            elif ( mode == 'mag'):
+                premultiply_sig_set_test[ij - train_size] = np.abs(premultiply_signal)
+            elif ( mode == 'ang'):
+                premultiply_sig_set_test[ij - train_size] = np.angle(premultiply_signal)
+            elif ( mode == 'complex'):
+                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
+                complex_premultiply_sig_set_test.append(premultiply_sig_concat)
+
+    if ( not use_premultiply and training_params['save_premultiply'] ):
+        premultiply_sig_set_array = np.array(premultiply_sig_set)
+        np.save(premultiply_file_path, premultiply_sig_set_array)
+
+    if ( mode == 'complex'):
+        premultiply_sig_set_train = np.array(complex_premultiply_sig_set_train)
+        premultiply_sig_set_test = np.array(complex_premultiply_sig_set_test)
+
+    return premultiply_sig_set_train, premultiply_sig_set_test
+
+def create_model(mlp_model_file_path,
+                 output_file_path,
+                 recovery_log_file_path,
+                 model_log_file_path,
+                 model_input_size,
+                 training_params,
+                 premultiply_sig_set_train,
+                 premultiply_sig_set_test,
+                 input_sig_set_train_test):
+    if ( os.path.isfile( mlp_model_file_path )):
+        mlp_model = tf.keras.models.load_model(mlp_model_file_path)
+    else:
+        mlp_model = keras.Sequential()
+        mlp_model.add(keras.Input(shape=(model_input_size,)))
+        mlp_model.add(layers.Reshape((nyfr.get_Zones(), nyfr.get_K_band()), input_shape=(model_input_size,)))
+        mlp_model.add(layers.Conv1D(filters=nyfr.get_K_band(),
+                                    kernel_size=10,
+                                    padding='same',
+                                    input_shape=(nyfr.get_Zones(),nyfr.get_K_band()),
+                                    # activity_regularizer=regularizers.l1(0.001),
+                                    name="mlp_model_layer_1"))
+        mlp_model.add(layers.Flatten())
+        # mlp_model.add(layers.Dense(4*model_input_size, name="mlp_model_layer_2"))
+        # mlp_model.add(layers.Dense(model_input_size, activity_regularizer=regularizers.l1(0.01), name="mlp_model_layer_2"))
+        # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_3"))
+        # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_4"))
+        mlp_model.add(layers.Dense(model_input_size,
+                                    activation='linear',
+                                #    activity_regularizer=regularizers.l2(0.001),
+                                    name="mlp_model_out"))
+        # mlp_model.add(layers.Activation('relu'))
+        mlp_opt = keras.optimizers.Adam(learning_rate=training_params['learning_rate'])
+        if training_params['loss_type'] == "root_mean_squared_error":
+            mlp_model.compile(optimizer=mlp_opt, loss=root_mean_squared_error)
+        else:
+            mlp_model.compile(optimizer=mlp_opt, loss=training_params['loss_type'])
+
+    early_stopping = EarlyStopping(monitor=training_params['early_stopping']['monitor'],
+                                    min_delta=training_params['early_stopping']['min_delta'],
+                                    patience=training_params['early_stopping']['patience'],
+                                    verbose=training_params['early_stopping']['verbose'],
+                                    start_from_epoch=training_params['early_stopping']['start_from_epoch'],
+                                    restore_best_weights=training_params['early_stopping']['restore_best_weights'])
+    mlp_model.fit(premultiply_sig_set_train, input_sig_set_train_test[0],
+                    epochs=training_params['num_epochs'],
+                    batch_size=training_params['batch_sz'],
+                    shuffle=True,
+                    validation_data=(premultiply_sig_set_test, input_sig_set_train_test[1]),
+                    callbacks=[early_stopping])
+    mlp_model.save(mlp_model_file_path, overwrite=True)
+    # mlp_model.save(mlp_model_file_path_ind, overwrite=True)
+
+    with open(model_log_file_path, "a") as model_log:
+        model_log.write(output_file_path + "\n")
+    with open(recovery_log_file_path, "a") as recovery_log:
+        recovery_log.write(output_file_path + "\n")
+    reset_tensforflow_session()
+
 def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=None):
     training_params = set_training_params(training_params=training_params, training_conf=training_conf)
     
@@ -95,8 +221,6 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     dictionary_file_base_dir = directories['dictionary'][dictionary_params['version']]
     dictionary_file_sub_dirs = get_all_sub_dirs(dictionary_file_base_dir)
     input_file_paths = get_all_file_paths(directories['input'])
-
-
 
     for mode in training_params['modes']:
         for id, input_file_path in enumerate(input_file_paths):
@@ -207,116 +331,27 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                         del output_sig_set_total
                         del output_sig_set_split
 
-                    premultiply_sig_set = []
-                    premultiply_sig_set_train = np.zeros((train_size, model_input_size))
-                    premultiply_sig_set_test = np.zeros((test_size, model_input_size))
-                    complex_premultiply_sig_set_train = []
-                    complex_premultiply_sig_set_test = []
-                    # start_time = time.perf_counter()
-                    for ij, output_signal in enumerate(output_sig_set):
-                        if ( use_premultiply ):
-                            premultiply_signal = np.copy(output_signal)
-                        else:
-                            if ( training_params['pre_omp'] ):
-                                original_recovery = system_params['recovery']
-                                system_params['recovery'] = 'c_omp'
-                                nyfr.set_system_params(system_params=system_params)
-                                premultiply_signal = nyfr.recover_signal(training_params['pre_multiply']*dictionary, output_signal)
-                                system_params['recovery'] = original_recovery
-                                nyfr.set_system_params(system_params=system_params)
-                            else:
-                                pseudo = np.linalg.pinv( training_params['pre_multiply'] * dictionary)
-                                premultiply_signal = np.dot(pseudo,output_signal)
-
-                            premultiply_sig_set.append(premultiply_signal)
-
-                        if ( ij < train_size ):
-                            if ( mode == 'real'):
-                                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.real)
-                            elif ( mode == 'imag'):
-                                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.imag)
-                            elif ( mode == 'mag'):
-                                premultiply_sig_set_train[ij] = np.abs(premultiply_signal)
-                            elif ( mode == 'ang'):
-                                premultiply_sig_set_train[ij] = np.angle(premultiply_signal)
-                            elif ( mode == 'complex'):
-                                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
-                                complex_premultiply_sig_set_train.append(premultiply_sig_concat)
-                        else:
-                            if ( mode == 'real'):
-                                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.real)
-                            elif ( mode == 'imag'):
-                                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.imag)
-                            elif ( mode == 'mag'):
-                                premultiply_sig_set_test[ij - train_size] = np.abs(premultiply_signal)
-                            elif ( mode == 'ang'):
-                                premultiply_sig_set_test[ij - train_size] = np.angle(premultiply_signal)
-                            elif ( mode == 'complex'):
-                                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
-                                complex_premultiply_sig_set_test.append(premultiply_sig_concat)
-                        # premultiply_sig_flattened[ij] = np.concatenate((premultiply_signal_real, premultiply_signal_imag))
-                        pass
-
-                    if ( not use_premultiply and training_params['save_premultiply'] ):
-                        premultiply_sig_set_array = np.array(premultiply_sig_set)
-                        np.save(premultiply_file_path, premultiply_sig_set_array)
-                        del premultiply_sig_set_array
-                        del premultiply_sig_set
-
-                    if ( mode == 'complex'):
-                        premultiply_sig_set_train = np.array(complex_premultiply_sig_set_train)
-                        premultiply_sig_set_test = np.array(complex_premultiply_sig_set_test)
-                        del complex_premultiply_sig_set_train
-                        del complex_premultiply_sig_set_test
+                    premultiply_sig_set_train, premultiply_sig_set_test = set_test_train(train_size,                                    
+                                                                                         test_size,
+                                                                                         model_input_size,
+                                                                                         output_sig_set,
+                                                                                         use_premultiply,
+                                                                                         nyfr,
+                                                                                         dictionary,
+                                                                                         training_params,
+                                                                                         system_params,
+                                                                                         mode,
+                                                                                         premultiply_file_path)
 
                     # input_file_name_without_extension = os.path.splitext(input_file_name)[0]
                     # mlp_model_file_path_ind = os.path.join(mlp_model_file_sub_dirs[index], input_file_name_without_extension + ".keras" )
                     mlp_model_file_path = os.path.join(mlp_model_file_sub_dirs[index], files['mlp_models']['name'])
-                    if ( os.path.isfile( mlp_model_file_path )):
-                        mlp_model = tf.keras.models.load_model(mlp_model_file_path)
-                    else:
-                        mlp_model = keras.Sequential()
-                        mlp_model.add(keras.Input(shape=(model_input_size,)))
-                        mlp_model.add(layers.Reshape((nyfr.get_Zones(), nyfr.get_K_band()), input_shape=(model_input_size,)))
-                        mlp_model.add(layers.Conv1D(filters=nyfr.get_K_band(),
-                                                    kernel_size=10,
-                                                    padding='same',
-                                                    input_shape=(nyfr.get_Zones(),nyfr.get_K_band()),
-                                                    # activity_regularizer=regularizers.l1(0.001),
-                                                    name="mlp_model_layer_1"))
-                        mlp_model.add(layers.Flatten())
-                        # mlp_model.add(layers.Dense(4*model_input_size, name="mlp_model_layer_2"))
-                        # mlp_model.add(layers.Dense(model_input_size, activity_regularizer=regularizers.l1(0.01), name="mlp_model_layer_2"))
-                        # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_3"))
-                        # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_4"))
-                        mlp_model.add(layers.Dense(model_input_size,
-                                                   activation='linear',
-                                                #    activity_regularizer=regularizers.l2(0.001),
-                                                   name="mlp_model_out"))
-                        # mlp_model.add(layers.Activation('relu'))
-                        mlp_opt = keras.optimizers.Adam(learning_rate=training_params['learning_rate'])
-                        if training_params['loss_type'] == "root_mean_squared_error":
-                            mlp_model.compile(optimizer=mlp_opt, loss=root_mean_squared_error)
-                        else:
-                            mlp_model.compile(optimizer=mlp_opt, loss=training_params['loss_type'])
-
-                    early_stopping = EarlyStopping(monitor=training_params['early_stopping']['monitor'],
-                                                   min_delta=training_params['early_stopping']['min_delta'],
-                                                   patience=training_params['early_stopping']['patience'],
-                                                   verbose=training_params['early_stopping']['verbose'],
-                                                   start_from_epoch=training_params['early_stopping']['start_from_epoch'],
-                                                   restore_best_weights=training_params['early_stopping']['restore_best_weights'])
-                    mlp_model.fit(premultiply_sig_set_train, input_sig_set_train_test[0],
-                                    epochs=training_params['num_epochs'],
-                                    batch_size=training_params['batch_sz'],
-                                    shuffle=True,
-                                    validation_data=(premultiply_sig_set_test, input_sig_set_train_test[1]),
-                                    callbacks=[early_stopping])
-                    mlp_model.save(mlp_model_file_path, overwrite=True)
-                    # mlp_model.save(mlp_model_file_path_ind, overwrite=True)
-
-                    with open(model_log_file_path, "a") as model_log:
-                        model_log.write(output_file_path + "\n")
-                    with open(recovery_log_file_path, "a") as recovery_log:
-                        recovery_log.write(output_file_path + "\n")
-                    reset_tensforflow_session()
+                    create_model(mlp_model_file_path,
+                                 output_file_path,
+                                 recovery_log_file_path,
+                                 model_log_file_path,
+                                 model_input_size,
+                                 training_params,
+                                 premultiply_sig_set_train,
+                                 premultiply_sig_set_test,
+                                 input_sig_set_train_test)
