@@ -473,6 +473,9 @@ class NYFR:
         else:
             self.filter_params = dictionary_params
 
+    def get_dictionary_params(self):
+        return self.dictionary_params
+
     def get_filter_frequency(self):
         if self.sos is not None:
             _, filt_freq = sosfreqz(self.sos, worN=self.t.size, whole=True)
@@ -540,3 +543,6 @@ class NYFR:
     
     def get_sampled_LO(self):
         return self.LO_sampled
+    
+    def get_Zones(self):
+        return self.Zones

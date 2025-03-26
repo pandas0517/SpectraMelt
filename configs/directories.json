@@ -1,12 +1,13 @@
 {
     "system_config_name": "System_Config_1",
+    "input_config_name": "Input_Config_1",
     "time": "test_sets\\System_Config_1\\Internal\\System\\Not_Sampled\\",
     "time_sampled": "test_sets\\System_Config_1\\Internal\\System\\Sampled\\",
     "input": "test_sets\\System_Config_1\\Input_Config_1\\Inputs\\",
     "output": "test_sets\\System_Config_1\\Input_Config_1\\Outputs\\",
     "train": "test_sets\\System_Config_1\\Model_Inputs\\train\\",
     "test": "test_sets\\System_Config_1\\Model_Inputs\\test\\",
-    "fft": "test_sets\\System_Config_1\\Model_Inputs\\FFT\\",
+    "fft": "test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\FFT\\",
     "df": "test_sets\\",
     "dictionary": {
         "enhanced": "test_sets\\System_Config_1\\Internal\\enhanced\\Dictionary\\",
@@ -16,30 +17,30 @@
         "enhanced": {
         },
         "original": {
-            "OMP_Custom": "test_sets\\System_Config_1\\Recovery\\original\\OMP_Custom\\",
-            "OMP": "test_sets\\System_Config_1\\Recovery\\original\\OMP\\",
-            "MLP1": "test_sets\\System_Config_1\\Recovery\\original\\MLP1\\",
-            "SPGL1": "test_sets\\System_Config_1\\Recovery\\original\\SPGL1\\"
+            "OMP_Custom": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\OMP_Custom\\",
+            "OMP": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\OMP\\",
+            "MLP1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\MLP1\\",
+            "SPGL1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\SPGL1\\"
         }
     },
     "mlp_models": {
         "enhanced": {
-            "real": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\real\\",
-            "imag": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\imag\\",
-            "mag": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\mag\\",
-            "ang": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\MLP_Models\\enhanced\\complex\\"
+            "real": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\real\\",
+            "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\imag\\",
+            "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\mag\\",
+            "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\ang\\",
+            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\complex\\"
         },
         "original": {
-            "real": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\real\\",
-            "imag": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\imag\\",
-            "mag": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\mag\\",
-            "ang": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\MLP_Models\\original\\complex\\"
+            "real": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\real\\",
+            "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\imag\\",
+            "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\mag\\",
+            "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\ang\\",
+            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\complex\\"
         }
     },
     "premultiply": {
-        "enhanced": "Y:\\School_Stuff\\test_sets\\System_Config_1\\PreMultiply\\enhanced\\",
-        "original": "Y:\\School_Stuff\\test_test\\System_Config_1\\PreMultiply\\original\\"
+        "enhanced": "Y:\\School_Stuff\\test_sets\\System_Config_1\\Input_Config_1\\PreMultiply\\enhanced\\",
+        "original": "Y:\\School_Stuff\\test_test\\System_Config_1\\Input_Config_1\\PreMultiply\\original\\"
     }
 }

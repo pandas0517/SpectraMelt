@@ -33,6 +33,9 @@ class NYFR_Test_Harness:
         self.set_directories(directories=directories)
         self.nyfr = nyfr
 
+    def set_nyfr(self, nyfr):
+        self.nyfr = nyfr
+
     def set_filenames(self, filenames=None):
         if filenames is None:
             print("No file names provided. Adding new file names")
@@ -201,6 +204,9 @@ class NYFR_Test_Harness:
             self.recovery_dir = directories['recovery']
             self.df_dir = directories['df']
             self.mlp_models_dir = directories['mlp_models']
+
+    def get_nyfr(self):
+        return self.nyfr
 
     def get_filenames(self):
         filenames = {}

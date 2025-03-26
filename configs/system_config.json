@@ -38,16 +38,5 @@
         "modes": [
             "mag_ang"
         ]
-    },
-    "training_params": {
-        "modes": [
-            "mag"
-        ],
-        "total_num_sigs": 40000,
-        "train_test_split_percentage": 0.7,
-        "learning_rate": 0.00001,
-        "num_epochs": 200,
-        "batch_sz": 128,
-        "pre_omp": false
     }
 }
