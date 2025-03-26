@@ -224,7 +224,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     input_file_paths = get_all_file_paths(directories['input'])
 
     for mode in training_params['modes']:
-        for id, input_file_path in enumerate(input_file_paths):
+        for input_file_path in input_file_paths:
             use_fft_file = False
             noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
             fft_file_sub_dir = directories['fft'] + noise_level + "\\" + phase_shift + "\\"
