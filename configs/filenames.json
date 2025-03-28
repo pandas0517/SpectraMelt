@@ -27,6 +27,10 @@
                 "bedroom": "recovery_list_bedroom_ang.txt",
                 "daddo": "recovery_list_daddo_ang.txt"
             }
+        },
+        "active_zones": {
+            "bedroom": "recovery_list_bedroom_active_zones.txt",
+            "daddo": "recovery_list_daddo_active_zones.txt"
         }
     },
     "mlp_models": {

@@ -54,7 +54,7 @@ class NYFR_Test_Harness:
             recovery_modes = []
             total_recovery_modes = 0
             while add_recovery_mode and total_recovery_modes < 3:
-                recovery_modes.append(input("Enter recovery mode (mag_ang, real_imag, complex): "))
+                recovery_modes.append(input("Enter recovery mode (mag_ang, real_imag, complex, active_zone): "))
                 add_recovery_mode = input("Add another recovery mode? (y/n): ").lower() == 'y'
                 total_recovery_modes += 1
 
@@ -94,12 +94,16 @@ class NYFR_Test_Harness:
                 elif recovery_mode == 'real_imag':
                     sub_modes = [ 'real', 'imag' ]
 
-                if sub_modes == []:
+                if recovery_mode == "complex":
                     for processing_system in processing_systems:
                         recovery_file[recovery_mode][processing_system] = "recovery_list_" + processing_system + "_complex.txt"
+                elif recovery_mode == "active_zones":
+                    for processing_system in processing_systems:
+                        recovery_file[recovery_mode][processing_system] = "recovery_list_" + processing_system + "_active_zones.txt"
                 else:
                     for sub_mode in sub_modes:
-                        recovery_file[recovery_mode][sub_mode][processing_system] = "recovery_list_" + processing_system + "_" + sub_mode + ".txt"
+                        for processing_system in processing_systems:
+                            recovery_file[recovery_mode][sub_mode][processing_system] = "recovery_list_" + processing_system + "_" + sub_mode + ".txt"
 
             self.dictionary_file = {
                 "name": dictionary_base_name
