@@ -7,7 +7,8 @@
     "output": "test_sets\\System_Config_1\\Input_Config_1\\Outputs\\",
     "train": "test_sets\\System_Config_1\\Model_Inputs\\train\\",
     "test": "test_sets\\System_Config_1\\Model_Inputs\\test\\",
-    "fft": "test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\FFT\\",
+    "fft": "test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\fft\\",
+    "active_zones": "test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\active_zones\\",
     "df": "test_sets\\",
     "dictionary": {
         "enhanced": "test_sets\\System_Config_1\\Internal\\enhanced\\Dictionary\\",
