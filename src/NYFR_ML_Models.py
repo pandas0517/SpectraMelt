@@ -316,7 +316,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
             active_zones_sig_set = None
             if training_params['use_active_zones']:
                 if ( os.path.isfile(active_zones_file_path) ):
-                    if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                    if active_zones_sig_set.shape[0] == training_params['total_num_sigs']:
                         active_zones_sig_set = np.load(active_zones_file_path)
 
             output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
