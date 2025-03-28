@@ -205,6 +205,9 @@ def create_model(mlp_model_file_path,
         recovery_log.write(output_file_path + "\n")
     reset_tensforflow_session()
 
+def create_model_inputs():
+
+
 def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=None):
     training_params = set_training_params(training_params=training_params, training_conf=training_conf)
     
@@ -225,18 +228,23 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
 
     for mode in training_params['modes']:
         for input_file_path in input_file_paths:
-            use_fft_file = False
             noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
+
             fft_file_sub_dir = directories['fft'] + noise_level + "\\" + phase_shift + "\\"
             fft_file_path = os.path.join(fft_file_sub_dir, file_name)
             if ( os.path.isfile(fft_file_path) ):
-                input_sig_set = np.load(fft_file_path)
-                if input_sig_set.shape[0] == training_params['total_num_sigs']:
-                    use_fft_file = True
-                else:
-                    input_sig_set = None
+                fft_sig_set = np.load(fft_file_path)
+                if fft_sig_set.shape[0] != training_params['total_num_sigs']:
+                    fft_sig_set = None
 
-            if not use_fft_file:
+            active_zones_sub_dir = directories['active_zones'] + noise_level + "\\" + phase_shift + "\\"
+            active_zones_file_path = os.path.join(active_zones_sub_dir, file_name)
+            if ( os.path.isfile(active_zones_file_path) ):
+                active_zones_sig_set = np.load(active_zones_file_path)
+                if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                    active_zones_sig_set = None
+
+            if fft_sig_set is None:
                 input_sig_set_total = np.load(input_file_path)
                 num_input_sigs_total = input_sig_set_total.shape[0]
                 input_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
@@ -245,7 +253,8 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                 del input_sig_set_split
                 del input_sig_set_total
 
-            fft_input_sig_set = []
+            fft_sig_list = []
+            active_zones_sig_list = []
             complex_input_sig_set = []
             recovery_mode = ""
             for i, input_sig in enumerate(input_sig_set):
@@ -273,9 +282,9 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                     recovery_mode = "complex"
 
             if ( not use_fft_file and training_params['save_fft_file'] ):
-                fft_input_set = np.array(fft_input_sig_set)
+                fft_sig_set = np.array(fft_sig_list)
                 if ( not os.path.exists(fft_file_path) ):
-                    np.save(fft_file_path, fft_input_set)
+                    np.save(fft_file_path, fft_sig_set)
                 del fft_input_set
                 del fft_input_sig_set
 

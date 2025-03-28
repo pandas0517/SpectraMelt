@@ -153,7 +153,7 @@ class NYFR_Test_Harness:
             time_dir = input("Enter time directory: ")
             time_sampled_dir = input("Enter sampled time directory: ")
             df_dir = input("Enter data frame directory: ")
-
+            active_zones_dir = input("Enter active zones directory: ")
             dictionary_versions = []
             total_dictionary_versions = 0
             add_dictionary_version = True
@@ -178,6 +178,7 @@ class NYFR_Test_Harness:
             self.time_dir = time_dir
             self.time_sampled_dir = time_sampled_dir
             self.df_dir = df_dir
+            self.active_zones_dir = active_zones_dir
             recovery = {}
             dictionary = {}
             mlp_models = {}
@@ -204,6 +205,7 @@ class NYFR_Test_Harness:
             self.recovery_dir = directories['recovery']
             self.df_dir = directories['df']
             self.mlp_models_dir = directories['mlp_models']
+            self.active_zones_dir = directories['active_zones']
 
     def get_nyfr(self):
         return self.nyfr
@@ -225,6 +227,7 @@ class NYFR_Test_Harness:
         directories['time_sampled'] = self.time_sampled_dir
         directories['dictionary'] = self.dictionary_dir
         directories['recovery'] = self.recovery_dir
+        directories['active_zones'] = self.active_zones_dir
         return directories
 
     def get_input_set_params(self):
