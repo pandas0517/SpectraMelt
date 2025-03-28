@@ -306,37 +306,29 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
             fft_file_sub_dir = directories['fft'] + noise_level + "\\" + phase_shift + "\\"
             fft_file_path = os.path.join(fft_file_sub_dir, file_name)
             fft_sig_set = None
-            if ( os.path.isfile(fft_file_path) ):
-                if fft_sig_set.shape[0] == training_params['total_num_sigs']:
-                    fft_sig_set = np.load(fft_file_path)
+            if training_params['use_fft']:
+                if ( os.path.isfile(fft_file_path) ):
+                    if fft_sig_set.shape[0] == training_params['total_num_sigs']:
+                        fft_sig_set = np.load(fft_file_path)
 
             active_zones_sub_dir = directories['active_zones'] + noise_level + "\\" + phase_shift + "\\"
             active_zones_file_path = os.path.join(active_zones_sub_dir, file_name)
             active_zones_sig_set = None
-            if ( os.path.isfile(active_zones_file_path) ):
-                if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
-                    active_zones_sig_set = np.load(active_zones_file_path)
-
-            output_sig_set = None
             if training_params['use_active_zones']:
-                if active_zones_sig_set is None:
-                    output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
-                                                                                                           fft_file_path,
-                                                                                                           active_zones_file_path,
-                                                                                                           nyfr.get_Zones(),
-                                                                                                           training_params,
-                                                                                                           mode)
-                else:
-                    output_sig_set = active_zones_sig_set
-            elif training_params['use_fft']:
-                if fft_sig_set is None:
-                    output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
-                                                                                                           fft_file_path,
-                                                                                                           active_zones_file_path,
-                                                                                                           nyfr.get_Zones(),
-                                                                                                           training_params,
-                                                                                                           mode)
-                else: output_sig_set = fft_sig_set
+                if ( os.path.isfile(active_zones_file_path) ):
+                    if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                        active_zones_sig_set = np.load(active_zones_file_path)
+
+            output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
+                                                                                                    fft_file_path,
+                                                                                                    active_zones_file_path,
+                                                                                                    nyfr.get_Zones(),
+                                                                                                    training_params,
+                                                                                                    mode)
+            if active_zones_sig_set is not None:
+                output_sig_set = active_zones_sig_set
+            elif fft_sig_set is not None:
+                output_sig_set = fft_sig_set
 
             train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
             test_size = num_input_sigs - train_size
@@ -394,9 +386,6 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                                          system_params,
                                                                                          mode,
                                                                                          premultiply_file_path)
-
-                    # input_file_name_without_extension = os.path.splitext(input_file_name)[0]
-                    # mlp_model_file_path_ind = os.path.join(mlp_model_file_sub_dirs[index], input_file_name_without_extension + ".keras" )
                     mlp_model_file_path = os.path.join(mlp_model_file_sub_dirs[index], files['mlp_models']['name'])
                     create_model(mlp_model_file_path,
                                  output_file_path,
