@@ -158,6 +158,9 @@ class NYFR_Test_Harness:
             time_sampled_dir = input("Enter sampled time directory: ")
             df_dir = input("Enter data frame directory: ")
             active_zones_dir = input("Enter active zones directory: ")
+            premultiply_dir = input("Enter pre-multiply directory name: ")
+            mlp_model_dir = input("Enter MLP model directory name: ")
+            recovery_dir = input("Enter recovery directory name: ")
             dictionary_versions = []
             total_dictionary_versions = 0
             add_dictionary_version = True
@@ -186,18 +189,22 @@ class NYFR_Test_Harness:
             recovery = {}
             dictionary = {}
             mlp_models = {}
+            premultiply = {}
             for dictionary_version in dictionary_versions:
+                premultiply[dictionary_version] = "Y:\\School_Stuff\\test_sets\\" + self.system_config_name + "\\" \
+                    + self.input_set_params['input_config_name'] + "\\" + premultiply_dir + "\\" + dictionary_version + "\\"
                 dictionary[dictionary_version] = "test_sets\\" \
                     + self.system_config_name + "\\Internal\\" + dictionary_version + "\\Dictionary\\"
                 for mlp_model_type in mlp_model_types:
-                    mlp_models[dictionary_version][mlp_model_type] = "F:\\test_sets" \
-                        + self.system_config_name + "\\MLP_Models\\" + dictionary_version + "\\" + mlp_model_type + "\\"
+                    mlp_models[dictionary_version][mlp_model_type] = "F:\\test_sets\\" + self.system_config_name + "\\" + \
+                        self.input_set_params['input_config_name'] + "\\" + mlp_model_dir + "\\" + dictionary_version + "\\" + mlp_model_type + "\\"
                 for recovery_type in recovery_types:
-                    recovery[dictionary_version][recovery_type] = "test_sets\\" \
-                        + self.system_config_name + "\\Recovery\\" + dictionary_version + "\\" + recovery_type + "\\"
+                    recovery[dictionary_version][recovery_type] = "test_sets\\" + self.system_config_name + "\\" + \
+                        self.input_set_params['input_config_name'] + "\\" + recovery_dir + "\\" + dictionary_version + "\\" + recovery_type + "\\"
             self.mlp_models_dir = mlp_models
             self.dictionary_dir = dictionary
             self.recovery_dir = recovery
+            self.premultiply_dir = premultiply
         else:
             self.system_config_name = directories['system_config_name']
             self.input_dir = directories['input']
@@ -210,6 +217,8 @@ class NYFR_Test_Harness:
             self.df_dir = directories['df']
             self.mlp_models_dir = directories['mlp_models']
             self.active_zones_dir = directories['active_zones']
+            self.mlp_models_dir = directories['mlp_models']
+            self.premultiply_dir = directories['premultiply']
 
     def get_nyfr(self):
         return self.nyfr
@@ -232,6 +241,8 @@ class NYFR_Test_Harness:
         directories['dictionary'] = self.dictionary_dir
         directories['recovery'] = self.recovery_dir
         directories['active_zones'] = self.active_zones_dir
+        directories['mlp_models'] = self.mlp_models_dir
+        directories['premultiply'] = self.premultiply_dir
         return directories
 
     def get_input_set_params(self):

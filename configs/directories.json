@@ -30,14 +30,16 @@
             "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\imag\\",
             "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\mag\\",
             "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\complex\\"
+            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\complex\\",
+            "active_zones": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\active_zones\\"
         },
         "original": {
             "real": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\real\\",
             "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\imag\\",
             "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\mag\\",
             "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\complex\\"
+            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\complex\\",
+            "active_zones": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\active_zones\\"
         }
     },
     "premultiply": {

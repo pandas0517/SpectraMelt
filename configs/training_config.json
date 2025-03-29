@@ -1,7 +1,7 @@
 {
     "processing_system": "bedroom",    
     "modes": [
-        "mag"
+        "active_zones"
     ],
     "total_num_sigs": 40000,
     "train_test_split_percentage": 0.7,
@@ -12,6 +12,7 @@
     "pre_multiply": 0.01,
     "save_fft_file": true,
     "use_fft": false,
+    "active_zones_min_mag": 500,
     "use_active_zones": true,
     "save_active_zones_file": true,
     "save_premultiply": true,

@@ -78,9 +78,12 @@ class NYFR:
         self.tf = np.linspace(-1/(2*self.adj_spacing), 1/(2*self.adj_spacing), int(self.t.size), endpoint=False)
         self.adc_clock_ticks = int(self.points_per_second / self.system_params['adc_clock_freq'])
         self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
+        self.Real_K_band = None
         self.Zones = int( self.num_time_points/self.K_band )
+        self.Real_Zones = None
         if self.dictionary_params['type'] == 'real':
-            self.Zones *= 2
+            self.Real_Zones = 2 * self.Zones
+            self.Real_K_band = round(self.K_band / 2)
 
     def __set_points_per_second(self):
         points_per_second = round(1/self.time_params['spacing'])
@@ -304,7 +307,7 @@ class NYFR:
         idft_norm = np.transpose(np.conjugate(dft_matrix))/(2*self.Zones*self.K_band)
 
         R = np.copy(R_init)
-        for i in (range(self.Zones-1)):
+        for i in (range(2*self.Zones-1)):
             R = np.hstack((R,R_init))
         R_row, R_col = R.shape
 
@@ -325,9 +328,10 @@ class NYFR:
         for _ in (range(0,self.Zones)):
             LO_list.append(self.LO_modulation_sampled)
         LO_mod_concat = np.concatenate(LO_list)
+        double_LO_modulation = np.concatenate((LO_mod_concat,LO_mod_concat))
 
         for index,i in enumerate(range(0, R_col, self.K_band)):
-            LO_mod = LO_mod_concat[i:i+R_row]
+            LO_mod = double_LO_modulation[i:i+R_row]
             S[i:i+R_row,i:i+R_row] = np.diag(e**(double_M_index[index]*LO_mod*1j))
 
         for i in range (0, R_col, 2*self.K_band):
@@ -471,7 +475,7 @@ class NYFR:
                 "version": version,
             }
         else:
-            self.filter_params = dictionary_params
+            self.dictionary_params = dictionary_params
 
     def get_dictionary_params(self):
         return self.dictionary_params
@@ -533,8 +537,11 @@ class NYFR:
         return self.adj_spacing
     
     def get_K_band(self):
-        return self.K_band
-    
+        if self.Real_K_band is None:
+            return self.K_band
+        else:
+            return self.Real_K_band
+
     def get_num_time_points(self):
         return self.num_time_points
     
@@ -548,4 +555,7 @@ class NYFR:
         return self.LO_sampled
     
     def get_Zones(self):
-        return self.Zones
+        if self.Real_Zones is None:
+            return self.Zones
+        else:
+            return self.Real_Zones

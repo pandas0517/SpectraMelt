@@ -79,6 +79,7 @@ def set_training_params(training_params=None, training_conf=None):
                 "save_active_zones_file": True,
                 "save_premultiply": True,
                 "use_fft": False,
+                "active_zones_min_mag": 500,
                 "use_active_zones": True,
                 "pre_omp": False,
                 "early_stopping": {
@@ -235,11 +236,13 @@ def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path,
         input_sig_fft = fft(input_sig)
         fft_sig_list.append(input_sig_fft)
         input_zones = np.array_split(input_sig_fft, zones)
-        non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
-        for i, has_non_zero in enumerate(non_zero_in_zones):
-            if has_non_zero:
+        # non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
+        for i, zone in enumerate(input_zones):
+            zone_mag = np.abs(zone)
+            if np.any( zone_mag > training_params['active_zones_min_mag'] ):
                 active_zones[i] = 1
-        active_zones_sig_list.append(active_zones)
+        active_zones_sig_list.append(np.copy(active_zones))
+        active_zones.fill(0)
 
     fft_sig_set = np.array(fft_sig_list)
     if ( training_params['save_fft_file'] ):
@@ -253,7 +256,10 @@ def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path,
 
     output_sig_set = None
     recovery_mode = None
-    if training_params['use_fft']:
+    if training_params['use_active_zones']:
+        output_sig_set = active_zones_sig_set
+        recovery_mode = "active_zones"
+    elif training_params['use_fft']:
         output_sig_list = []
         for i, fft_sig in enumerate(fft_sig_set):
             if (mode == 'real'):
@@ -272,9 +278,6 @@ def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path,
                 output_sig_list.append(np.concatenate((fft_sig.real, fft_sig.imag)))
                 recovery_mode = "complex"
         output_sig_set = np.array(output_sig_list)
-    elif training_params['use_active_zones']:
-        output_sig_set = active_zones_sig_set
-        recovery_mode = "active_zones"
 
     model_input_size = input_sig_set.shape[1]
     num_input_sigs = input_sig_set.shape[0]
@@ -308,16 +311,18 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
             fft_sig_set = None
             if training_params['use_fft']:
                 if ( os.path.isfile(fft_file_path) ):
-                    if fft_sig_set.shape[0] == training_params['total_num_sigs']:
-                        fft_sig_set = np.load(fft_file_path)
+                    fft_sig_set = np.load(fft_file_path)
+                    if fft_sig_set.shape[0] != training_params['total_num_sigs']:
+                        fft_sig_set = None
 
             active_zones_sub_dir = directories['active_zones'] + noise_level + "\\" + phase_shift + "\\"
             active_zones_file_path = os.path.join(active_zones_sub_dir, file_name)
             active_zones_sig_set = None
             if training_params['use_active_zones']:
                 if ( os.path.isfile(active_zones_file_path) ):
-                    if active_zones_sig_set.shape[0] == training_params['total_num_sigs']:
-                        active_zones_sig_set = np.load(active_zones_file_path)
+                    active_zones_sig_set = np.load(active_zones_file_path)
+                    if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                        active_zones_sig_set = None
 
             output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
                                                                                                     fft_file_path,
@@ -327,8 +332,10 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                                                     mode)
             if active_zones_sig_set is not None:
                 output_sig_set = active_zones_sig_set
+                active_zones_sig_set = None
             elif fft_sig_set is not None:
                 output_sig_set = fft_sig_set
+                fft_sig_set = None
 
             train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
             test_size = num_input_sigs - train_size

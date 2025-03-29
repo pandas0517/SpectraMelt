@@ -27,6 +27,7 @@ if __name__ == '__main__':
     pseudo = np.linalg.pinv(0.01*dictionary)
     model_input_guess = np.dot(pseudo, output)
     model_output_guess = fft(np.dot(dictionary, input_frequency))
+    test = frequency[200]
     plt.figure()
     plt.subplot(4,1,1)
     plt.plot(frequency, np.fft.fftshift(np.abs(input_frequency)))
