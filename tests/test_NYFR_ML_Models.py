@@ -27,7 +27,7 @@ if __name__ == '__main__':
                                      directories_json=os.getenv('DIRECTORIES'),
                                      input_set_json=os.getenv('INPUTSET_CONF'))
 
-    create_mlp1_models(test_harness, training_conf=os.getenv('TRAINING_CONF'))
+    # create_mlp1_models(test_harness, training_conf=os.getenv('TRAINING_CONF'))
     test_harness.batch_recover()
 
     directories = test_harness.get_directories()
@@ -82,13 +82,13 @@ if __name__ == '__main__':
                             plt.subplot(7,1,3)
                             plt.plot(complex_tf, np.fft.fftshift(np.abs(input_guess_original)))
                             plt.xlim(-500,500)
-                            plt.subplot(7,1,4)
-                            plt.plot(complex_tf, np.fft.fftshift(np.angle(input_guess_original)))
-                            plt.xlim(-500,500)
+                            # plt.subplot(7,1,4)
+                            # plt.plot(complex_tf, np.fft.fftshift(np.angle(input_guess_original)))
+                            # plt.xlim(-500,500)
                             plt.subplot(7,1,5)
                             plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
                             plt.subplot(7,1,6)
                             plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess)))
-                            plt.subplot(7,1,7)
-                            plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess_original)))
+                            # plt.subplot(7,1,7)
+                            # plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess_original)))
                             plt.show()    

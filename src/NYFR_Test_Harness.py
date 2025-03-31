@@ -161,6 +161,7 @@ class NYFR_Test_Harness:
             premultiply_dir = input("Enter pre-multiply directory name: ")
             mlp_model_dir = input("Enter MLP model directory name: ")
             recovery_dir = input("Enter recovery directory name: ")
+            dictionary_dir = input("Enter dictionary directory name: ")
             dictionary_versions = []
             total_dictionary_versions = 0
             add_dictionary_version = True
@@ -194,7 +195,7 @@ class NYFR_Test_Harness:
                 premultiply[dictionary_version] = "Y:\\School_Stuff\\test_sets\\" + self.system_config_name + "\\" \
                     + self.input_set_params['input_config_name'] + "\\" + premultiply_dir + "\\" + dictionary_version + "\\"
                 dictionary[dictionary_version] = "test_sets\\" \
-                    + self.system_config_name + "\\Internal\\" + dictionary_version + "\\Dictionary\\"
+                    + self.system_config_name + "\\Internal\\" + dictionary_dir + "\\" + dictionary_version + "\\"
                 for mlp_model_type in mlp_model_types:
                     mlp_models[dictionary_version][mlp_model_type] = "F:\\test_sets\\" + self.system_config_name + "\\" + \
                         self.input_set_params['input_config_name'] + "\\" + mlp_model_dir + "\\" + dictionary_version + "\\" + mlp_model_type + "\\"
@@ -228,6 +229,10 @@ class NYFR_Test_Harness:
         filenames['dictionary'] = self.dictionary_file
         filenames['time'] = self.time_file
         filenames['recovery'] = self.recovery_file
+        filenames['input_df'] = self.input_df_file
+        filenames['output_df'] = self.output_df_file
+        filenames['mlp_models'] = self.mlp_models_file
+        filenames['input_tones'] = self.input_tones
         return filenames
     
     def get_directories(self):
@@ -408,24 +413,28 @@ class NYFR_Test_Harness:
     def batch_recover(self, nyfr=None, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
         _ = self.__set_init(nyfr, filenames, directories)
         system_params = self.nyfr.get_system_params()
-        dictionary_params = self.nyfr.get_dicionary_params()
+        dictionary_params = self.nyfr.get_dictionary_params()
         recovery_params = self.nyfr.get_recovery_params()
 
         input_file_paths = get_all_file_paths(self.input_dir)
-        recovery_set = np.zeros((recovery_set_size, nyfr.get_num_time_points()), dtype=np.complex128)
+        # recovery_set = np.zeros((recovery_set_size, self.nyfr.get_num_time_points()), dtype=np.complex128)
+        recovery_list = []
         for mode in recovery_params['modes']:
             recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
             if ( recovery_params['type'] == 'MLP1' ):
                 recovery_base_path = recovery_base_path + mode + "\\"
 
             if ( mode == 'real_imag' ):
-                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['real']
-                mlp_models_base_path_aux = self.mlp_models[dictionary_params['version']]['imag']
+                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['real']
+                mlp_models_base_path_aux = self.mlp_models_dir[dictionary_params['version']]['imag']
             elif ( mode == 'mag_ang' ):
-                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['mag']
-                mlp_models_base_path_aux = self.mlp_models[dictionary_params['version']]['ang']
+                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['mag']
+                mlp_models_base_path_aux = self.mlp_models_dir[dictionary_params['version']]['ang']
             elif ( mode == 'complex' ):
-                mlp_models_base_path = self.mlp_models[dictionary_params['version']]['complex']
+                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['complex']
+                mlp_models_base_path_aux = None
+            elif ( mode == 'active_zones' ):
+                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['active_zones']
                 mlp_models_base_path_aux = None
             
             for input_file_path in input_file_paths:
@@ -438,13 +447,22 @@ class NYFR_Test_Harness:
                 output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
                 for processing_system in system_params['processing_systems']:
                     if ( mode == 'real_imag' ):
-                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['real']
-                        recovery_log_file_path_aux = self.recovery_dir + self.recovery_file[mode]['imag']
+                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode]['real'][processing_system]
+                        recovery_log_file_path_aux = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode]['imag'][processing_system]
                     elif ( mode == 'mag_ang' ):
-                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['mag']
-                        recovery_log_file_path_aux = self.recovery_dir + self.recovery_file[mode]['ang']
+                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode]['mag'][processing_system]
+                        recovery_log_file_path_aux = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode]['ang'][processing_system]
                     elif ( mode == 'complex' ):
-                        recovery_log_file_path = self.recovery_dir + self.recovery_file[mode]['complex']
+                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode]['complex'][processing_system]
+                        recovery_log_file_path_aux = None
+                    elif ( mode == 'active_zones' ):
+                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
+                            mode + "\\" + self.recovery_file[mode][processing_system]
                         recovery_log_file_path_aux = None
 
                     for sub_dir in output_file_sub_dirs:
@@ -459,8 +477,8 @@ class NYFR_Test_Harness:
                             mlp_model_aux_file_path = os.path.join(mlp_model_aux_dir, self.mlp_models_file['name'])
                         else:
                             mlp_model_aux_file_path = None
-
-                        dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']], self.dictionary_file['name'])
+                        dictionary_sub_dir = self.dictionary_dir[dictionary_params['version']]  + f_mod + "\\" + f_delta + "\\"
+                        dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
                         recovery_file_path = os.path.join(recovery_dir, file_name)
                         found_string_in_file = False
                         found_string_in_file_aux = False
@@ -469,11 +487,12 @@ class NYFR_Test_Harness:
                                 if output_file_path in line:
                                     found_string_in_file = True
                                     break
-                        with open(recovery_log_file_path_aux, "r") as recovery_log:
-                            for line in recovery_log:
-                                if output_file_path in line:
-                                    found_string_in_file_aux = True
-                                    break                    
+                        if recovery_log_file_path_aux is not None:
+                            with open(recovery_log_file_path_aux, "r") as recovery_log:
+                                for line in recovery_log:
+                                    if output_file_path in line:
+                                        found_string_in_file_aux = True
+                                        break                    
                         if ( found_string_in_file ):
                             output_set = np.load(output_file_path)
                             dictionary = np.load(dictionary_file_path)
@@ -482,17 +501,19 @@ class NYFR_Test_Harness:
                                     ave_recovery_time = 0
                                     start_time = time.perf_counter()
                                 for idx in range(recovery_set_size):
-                                    recovered_signal = nyfr.recover_signal(dictionary,
-                                                                           output_set[idx],
-                                                                           file_path=mlp_model_file_path,
-                                                                           aux_file_path=mlp_model_aux_file_path,
-                                                                           mode=mode)
-                                    recovery_set[idx] = recovered_signal
+                                    pass
+                                    recovered_signal = self.nyfr.recover_signal(dictionary,
+                                                                                output_set[idx],
+                                                                                file_path=mlp_model_file_path,
+                                                                                aux_file_path=mlp_model_aux_file_path,
+                                                                                mode=mode)
+                                    recovery_list.append(recovered_signal)
                                 if get_recovery_time:
                                     end_time = time.perf_counter()
                                     ave_recovery_time = ( end_time - start_time ) / recovery_set_size
+                                recovery_set = np.array(recovery_list)
                                 np.save(recovery_file_path, recovery_set)
-                                recovery_set.fill(0)
+                                recovery_list = []
                             delete_lines_with_string(recovery_log_file_path, output_file_path)
 
     def create_dfs(self, nyfr=None, filenames=None, directories=None):

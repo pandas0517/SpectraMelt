@@ -58,6 +58,15 @@ def model_prediction(init_guess, file_path, mode, aux_file_path=None):
                 
             coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
             coef_imag = (coef_predict_mag*sin(coef_predict_ang)).reshape(-1)
+        elif ( mode == 'active_zones' ):
+            x_pre_mag = np.abs(init_guess)
+            x_pre_ang = np.angle(init_guess)
+            x_pre_mag_reshape = x_pre_mag.reshape((1,x_pre_mag.shape[0]))
+            x_pre_ang_reshape = x_pre_ang.reshape((1,x_pre_ang.shape[0]))
+            coef_predict_mag = mlp_model.predict(x_pre_mag_reshape)
+            coef_predict_ang = 0
+            coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
+            coef_imag = (coef_predict_mag*sin(coef_predict_ang)).reshape(-1)
     return coef_real, coef_imag
 
 def set_training_params(training_params=None, training_conf=None):
@@ -101,11 +110,12 @@ def set_test_train(train_size,
                    output_sig_set,
                    use_premultiply,
                    nyfr,
-                   dictionary,
+                   dictionary_file_path,
                    training_params,
                    system_params,
                    mode,
                    premultiply_file_path):
+    dictionary = np.load(dictionary_file_path)
     premultiply_sig_set = []
     premultiply_sig_set_train = np.zeros((train_size, model_input_size))
     premultiply_sig_set_test = np.zeros((test_size, model_input_size))
@@ -298,8 +308,6 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     recovery_params = nyfr.get_recovery_params()
     dictionary_params = nyfr.get_dictionary_params()
     system_params = nyfr.get_system_params()
-    dictionary_file_base_dir = directories['dictionary'][dictionary_params['version']]
-    dictionary_file_sub_dirs = get_all_sub_dirs(dictionary_file_base_dir)
     input_file_paths = get_all_file_paths(directories['input'])
 
     for mode in training_params['modes']:
@@ -345,19 +353,22 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
         
             output_sub_path = directories['output'] + noise_level + "\\" + phase_shift + "\\"
             mlp_model_sub_path = directories['mlp_models'][dictionary_params['version']][mode] + noise_level + "\\" + phase_shift + "\\"
-            model_log_file_path = directories['mlp_models'][dictionary_params['version']][mode] + files['mlp_models']['log'][training_params['processing_systems']]
+            model_log_file_path = directories['mlp_models'][dictionary_params['version']][mode] + files['mlp_models']['log'][training_params['processing_system']]
             premultiply_sub_path = directories['premultiply'][dictionary_params['version']] + noise_level + "\\" + phase_shift + "\\"
             if recovery_mode == "active_zones":
-                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']] + "\\" + recovery_mode + "\\" + \
+                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']]  + recovery_mode + "\\" + \
                         files['recovery'][recovery_mode][training_params['processing_system']]
             else:
-                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']] + "\\" + recovery_mode + "\\" + \
+                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']]  + recovery_mode + "\\" + \
                         files['recovery'][recovery_mode][mode][training_params['processing_system']]
             output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
             premultiply_file_sub_dirs = get_all_sub_dirs(premultiply_sub_path)
             mlp_model_file_sub_dirs = get_all_sub_dirs(mlp_model_sub_path)
             for index, sub_dir in enumerate(output_file_sub_dirs):
                 output_file_path = os.path.join(sub_dir, file_name)
+                f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
+                dictionary_file_sub_dir = directories['dictionary'][dictionary_params['version']] + f_mod + "\\" + f_delta + "\\"
+                dictionary_file_path = os.path.join(dictionary_file_sub_dir, files['dictionary']['name'])
                 found_string_in_file = False
                 premultiply_file_path = os.path.join(premultiply_file_sub_dirs[index], file_name)
                 with open(model_log_file_path, "r") as model_log:
@@ -374,8 +385,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                             use_premultiply = True
 
                     if not use_premultiply:
-                        dictionary_file_path = dictionary_file_sub_dirs[index] + "\\" + files['dictionary']['name']
-                        dictionary = np.load(dictionary_file_path)
+                        
                         output_sig_set_total = np.load(output_file_path)
                         num_input_sigs_total = output_sig_set_total.shape[0]
                         output_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
@@ -388,7 +398,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                                          output_sig_set,
                                                                                          use_premultiply,
                                                                                          nyfr,
-                                                                                         dictionary,
+                                                                                         dictionary_file_path,
                                                                                          training_params,
                                                                                          system_params,
                                                                                          mode,

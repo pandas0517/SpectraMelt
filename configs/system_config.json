@@ -35,7 +35,7 @@
     "recovery_params": {
         "type": "MLP1",
         "modes": [
-            "mag_ang"
+            "active_zones"
         ]
     }
 }

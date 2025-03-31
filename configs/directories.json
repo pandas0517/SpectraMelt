@@ -11,17 +11,17 @@
     "active_zones": "test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\active_zones\\",
     "df": "test_sets\\",
     "dictionary": {
-        "enhanced": "test_sets\\System_Config_1\\Internal\\enhanced\\Dictionary\\",
-        "original": "test_sets\\System_Config_1\\Internal\\original\\Dictionary\\"
+        "enhanced": "test_sets\\System_Config_1\\Internal\\Dictionary\\enhanced\\",
+        "original": "test_sets\\System_Config_1\\Internal\\Dictionary\\original\\"
     },
     "recovery": {
         "enhanced": {
         },
         "original": {
-            "OMP_Custom": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\OMP_Custom\\",
-            "OMP": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\OMP\\",
-            "MLP1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\MLP1\\",
-            "SPGL1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\original\\SPGL1\\"
+            "OMP_Custom": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\OMP_Custom\\original\\",
+            "OMP": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\OMP\\original\\",
+            "MLP1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\MLP1\\original\\",
+            "SPGL1": "test_sets\\System_Config_1\\Input_Config_1\\Recovery\\SPGL1\\original\\"
         }
     },
     "mlp_models": {

@@ -364,7 +364,7 @@ class NYFR:
             case 'MLP1':
                 pseudo = np.linalg.pinv(mlp_inv_mod*dictionary)
                 init_guess = np.dot(pseudo,output)
-                coef_real, coef_imag = model_prediction(init_guess, file_path, aux_file_path, mode)
+                coef_real, coef_imag = model_prediction(init_guess, file_path, mode, aux_file_path)
             case _:
                 print("No recovery performed")
         coef = coef_real + coef_imag*1j
