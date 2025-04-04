@@ -347,7 +347,7 @@ class NYFR:
         M_pattern = [0, 1]
         for i in range(0,int(self.Zones/2)):
             M_temp[0] = M_pattern[0] + i
-            M_temp[1] = -( M_pattern[1] + i )
+            M_temp[1] = M_pattern[1] + i
             M_index = M_index + M_temp
         
         return M_index
