@@ -245,11 +245,10 @@ def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path,
     for i, input_sig in enumerate(input_sig_set):
         input_sig_fft = fft(input_sig)
         fft_sig_list.append(input_sig_fft)
-        input_zones = np.array_split(input_sig_fft, zones)
+        input_zones = np.array_split(np.abs(input_sig_fft), zones)
         # non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
         for i, zone in enumerate(input_zones):
-            zone_mag = np.abs(zone)
-            if np.any( zone_mag > training_params['active_zones_min_mag'] ):
+            if np.any( zone > training_params['active_zones_min_mag'] ):
                 active_zones[i] = 1
         active_zones_sig_list.append(np.copy(active_zones))
         active_zones.fill(0)

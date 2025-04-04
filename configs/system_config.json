@@ -9,6 +9,7 @@
     },
     "system_params": {
         "wbf_cut_mod": 4,
+        "wbf_cut_freq": 500,
         "adc_clock_freq": 100,
         "processing_systems": [
             "bedroom"
@@ -18,7 +19,8 @@
     "time_params": {
         "start": -2,
         "stop": 2,
-        "spacing": 0.001
+        "sim_freq": 1000000,
+        "save_real_time": true
     },
     "LO_params": {
         "amp":1,

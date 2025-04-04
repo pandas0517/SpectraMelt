@@ -5,7 +5,7 @@
     ],
     "total_num_sigs": 40000,
     "train_test_split_percentage": 0.7,
-    "loss_type": "root_mean_squared_error",
+    "loss_type": "binary_crossentropy",
     "learning_rate": 0.00001,
     "num_epochs": 50,
     "batch_sz": 128,

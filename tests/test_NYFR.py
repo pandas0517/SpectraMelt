@@ -17,9 +17,11 @@ if __name__ == '__main__':
 
     nyfr = NYFR(file_path=Path(os.getenv('SYSTEM_CONF')))
     nyfr.initialize()
-    input, _ = nyfr.create_input_signal(file_path=Path(os.getenv('WAVE_PARAMS')))
-    output = nyfr.simulate_system(input_signal=input)
+    analog_input, _ = nyfr.create_input_signal(file_path=Path(os.getenv('WAVE_PARAMS')))
+    output = nyfr.simulate_system(input_signal=analog_input)
+    input = nyfr.sample_signals(data=analog_input, sample_rate=nyfr.get_wb_nyquist_rate())
     dictionary = nyfr.create_dict()
+
     input_frequency = fft(input)
     output_frequency = fft(output)
     frequency = nyfr.get_frequncy_bins()

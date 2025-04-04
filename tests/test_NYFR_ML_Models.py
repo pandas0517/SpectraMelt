@@ -41,7 +41,7 @@ if __name__ == '__main__':
     for mode in recovery_params['modes']:
         for input_file_path in input_file_paths:
             recovery_base_path = directories['recovery'][dictionary_params['version']][recovery_params['type']]
-            if ( recovery_params['type'] == 'mlp1' ):
+            if ( recovery_params['type'] == 'MLP1' ):
                 recovery_base_path = recovery_base_path + mode + "\\"
             noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
             output_sub_path = directories['output'] + noise_level + "\\" + phase_shift + "\\"
@@ -50,24 +50,28 @@ if __name__ == '__main__':
             recovery_file_sub_dirs = get_all_sub_dirs(recovery_sub_path)
             for index, sub_dir in enumerate(recovery_file_sub_dirs):
                 output_file_path = os.path.join(output_file_sub_dirs[index], file_name)
-                output_sig_set = np.load(output_file_path)
                 dictionary_file_name =  dictionary_file_list[index]
                 dictionary_file_name_original =  dictionary_file_list_original[index]
-                dictionary = np.load(dictionary_file_name)
-                dictionary_original = np.load(dictionary_file_name_original)
                 recovery_file_path = os.path.join(sub_dir, file_name)
                 if ( os.path.exists(recovery_file_path) ):
+                    dictionary = np.load(dictionary_file_name)
+                    dictionary_original = np.load(dictionary_file_name_original)
                     input_sig_set = np.load(input_file_path)
                     output_sig_set = np.load(output_file_path)
                     recovery_sig_set = np.load(recovery_file_path)
                     for idx, output_sig in enumerate(output_sig_set):
                         if ( idx < num_sigs_per_set ):
-                            recovered_signal = recovery_sig_set[idx]
+                            recovered_signal = np.real(recovery_sig_set[idx])
+                            active_zones = np.zeros_like(recovered_signal)
                             pseudo = np.linalg.pinv(0.2*dictionary)
                             input_guess = np.dot(pseudo, output_sig)
                             pseudo_original = np.linalg.pinv(0.01*dictionary_original)
                             input_guess_original = np.dot(pseudo_original, output_sig)
                             input_sig_xf = fft(input_sig_set[idx])
+                            input_zones = np.array_split(np.fft.fftshift(np.abs(input_sig_xf)), nyfr.get_Zones())
+                            for i, zone in enumerate(input_zones):
+                                if np.any( zone > 500 ):
+                                    active_zones[i] = 1
                             model_sig_xf_guess = fft(np.dot(dictionary, input_sig_xf))
                             model_sig_xf_guess_original = fft(np.dot(dictionary_original, input_sig_xf))
                             output_sig_xf = fft(output_sig)
@@ -76,9 +80,9 @@ if __name__ == '__main__':
                             plt.subplot(7,1,1)
                             plt.plot(complex_tf, np.fft.fftshift(np.abs(input_sig_xf)))
                             plt.xlim(-500,500)
-                            plt.subplot(7,1,2)
-                            plt.plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal)))
-                            plt.xlim(-500,500)
+                            # plt.subplot(7,1,2)
+                            # plt.plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal)))
+                            # plt.xlim(-500,500)
                             plt.subplot(7,1,3)
                             plt.plot(complex_tf, np.fft.fftshift(np.abs(input_guess_original)))
                             plt.xlim(-500,500)
@@ -91,4 +95,5 @@ if __name__ == '__main__':
                             plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess)))
                             # plt.subplot(7,1,7)
                             # plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess_original)))
-                            plt.show()    
+                            plt.show()
+                            pass 
