@@ -2,10 +2,22 @@
     "input_df": "input_df.pkl",
     "output_df": "output_df.pkl",
     "input_tones": {
-        "1_2": "1_2_tone_sigs.npy",
-        "3": "3_tone_sigs.npy", 
-        "4": "4_tone_sigs.npy",
-        "5": "5_tone_sigs.npy"
+        "1_2": {
+            "sigs": "1_2_tone_sigs.npy",
+            "list": "1_2_tone_list.pkl"
+        },
+        "3": {
+            "sigs": "3_tone_sigs.npy", 
+            "list": "3_tone_list.pkl"
+        },
+        "4": {
+            "sigs": "4_tone_sigs.npy", 
+            "list": "4_tone_list.pkl"
+        },
+        "5": {
+            "sigs": "5_tone_sigs.npy", 
+            "list": "5_tone_list.pkl"
+        }
     },
     "dictionary": {
         "name": "dictionary.npy"

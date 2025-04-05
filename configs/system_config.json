@@ -9,7 +9,7 @@
     },
     "system_params": {
         "wbf_cut_mod": 4,
-        "wbf_cut_freq": 500,
+        "wbf_cut_freq": 400,
         "adc_clock_freq": 100,
         "processing_systems": [
             "bedroom"
@@ -35,7 +35,7 @@
         "version": "original"
     },
     "recovery_params": {
-        "type": "MLP1",
+        "type": "SPGL1",
         "modes": [
             "active_zones"
         ]

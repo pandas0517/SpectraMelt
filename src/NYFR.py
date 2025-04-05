@@ -4,7 +4,7 @@ from numpy import sin
 from math import e, pi
 from scipy.signal import butter, sosfilt, sosfreqz
 from scipy.integrate import trapezoid
-from scipy.fftpack import fft
+from scipy.fftpack import fft, ifft
 from scipy.linalg import dft
 from NYFR_ML_Models import model_prediction
 from sklearn.linear_model import orthogonal_mp
@@ -59,7 +59,7 @@ class NYFR:
         self.LO_modulation_sampled = None
         self.rising_zero_crossings = None
         self.sos = None
-        self.real_LO = None
+        self.filt_freq = None
 
     def set_real_time(self, time_params=None):
         if time_params is not None or self.time_params is None:
@@ -84,40 +84,15 @@ class NYFR:
             points_per_second += int( self.system_params['adc_clock_freq'] )
 
         self.real_points_per_second = points_per_second
-        # self.__set_points_per_second()
-
         self.adj_spacing = 1/self.real_points_per_second
         self.total_time = abs( self.time_params['start'] - self.time_params['stop'] )
         self.num_real_time_points = int ( self.total_time * self.real_points_per_second )
         self.real_t = np.linspace(self.time_params['start'], self.time_params['stop'], self.num_real_time_points, endpoint=False)
         self.real_tf = np.linspace(-self.real_points_per_second/2, self.real_points_per_second/2, int(self.real_t.size), endpoint=False)
-        # self.t = np.linspace(self.time_params['start'], self.time_params['stop'], self.num_time_points, endpoint=False)
-        # self.tf = np.linspace(-1/(2*self.adj_spacing), 1/(2*self.adj_spacing), int(self.t.size), endpoint=False)
-        # self.adc_clock_ticks = int(self.points_per_second / self.system_params['adc_clock_freq'])
-        # self.K_band = round( self.num_time_points*self.adj_spacing*self.system_params['adc_clock_freq'] )
-        # self.Real_K_band = None
-        # self.Zones = int( self.num_time_points/self.K_band )
-        # self.Real_Zones = None
-        # if self.dictionary_params['type'] == 'real':
-        #     self.Real_Zones = 2 * self.Zones
-        #     self.Real_K_band = round(self.K_band / 2)
-
-    # def __set_points_per_second(self):
-    #     points_per_second = round(self.time_params['sim_freq'])
-    #     #adjusting points_per_second to be evenly divisible by adc_clock_freq
-    #     band = int( points_per_second / self.system_params['adc_clock_freq'] )
-    #     band_remainder = int(points_per_second % self.system_params['adc_clock_freq'])
-    #     if ( band_remainder != 0 ):
-    #         points_per_second -= band_remainder
-    #     # K_band must be an even number
-    #     if ( band % 2 != 0 ):
-    #         points_per_second += int( self.system_params['adc_clock_freq'] )
-
-    #     self.points_per_second = points_per_second
 
     def set_LO(self, t=None):
         if t is None:
-            t = self.t
+            t = self.real_t
         if self.LO_params is None:
             self.set_LO_params()
 
@@ -128,7 +103,7 @@ class NYFR:
     
     def generate_rising_zero_crossings(self, t=None):
         if t is None:
-            t = self.t
+            t = self.real_t
         if self.LO is None:
             self.set_LO()
         #zero-crossing pulse generator 
@@ -154,22 +129,23 @@ class NYFR:
 
     def sample_signals(self, data=None, update_sampled_time=False, sample_rate=None, points_per_second=None, t=None):
         if points_per_second is None:
-            points_per_second = self.points_per_second
+            points_per_second = self.real_points_per_second
         if sample_rate is None:
             sample_rate = self.system_params['adc_clock_freq']
         if t is None:
-            t = self.t
+            t = self.real_t
         clock_ticks = int(points_per_second / sample_rate)
         sampled_data_list = []
         sampled_time_list = []
         for i in range(0, t.size, clock_ticks):
             if data is not None:
                 sampled_data_list.append(data[i])
-            sampled_time_list.append(t[i])
+            if update_sampled_time:
+                sampled_time_list.append(t[i])
         if update_sampled_time:
             self.sampled_t = np.array(sampled_time_list)
-            self.sampled_tf = np.linspace(-1/(2*self.adj_spacing*self.adc_clock_ticks),
-                                        1/(2*self.adj_spacing*self.adc_clock_ticks),
+            self.sampled_tf = np.linspace(-self.system_params['adc_clock_freq']/2,
+                                        self.system_params['adc_clock_freq']/2,
                                         len(sampled_time_list),
                                         endpoint=False)
         sampled_data = np.array(sampled_data_list)
@@ -180,17 +156,12 @@ class NYFR:
         if system_params is not None:
             self.set_system_params(system_params)
         self.set_real_time()
-        self.set_LO(t=self.real_t)
-        self.rising_zero_crossings = self.generate_rising_zero_crossings(t=self.real_t)
+        self.set_LO()
+        self.rising_zero_crossings = self.generate_rising_zero_crossings()
         self.wb_nyquist_rate = int ( self.system_params['wbf_cut_freq'] * 2 )
         self.t = self.sample_signals(data=self.real_t,
-                                     points_per_second=self.real_points_per_second,
-                                     sample_rate=self.wb_nyquist_rate,
-                                     t=self.real_t)
-        self.tf = self.sample_signals(data=self.real_tf,
-                                     points_per_second=self.real_points_per_second,
-                                     sample_rate=self.wb_nyquist_rate,
-                                     t=self.real_tf)
+                                     sample_rate=self.wb_nyquist_rate,)
+        self.tf = np.linspace(-self.wb_nyquist_rate/2, self.wb_nyquist_rate/2, int(self.t.size), endpoint=False)
         self.num_time_points = self.t.size
         self.points_per_second = int( self.num_time_points / self.total_time )
         self.adc_clock_ticks = int(self.points_per_second / self.system_params['adc_clock_freq'])
@@ -202,10 +173,7 @@ class NYFR:
             self.Real_Zones = 2 * self.Zones
             self.Real_K_band = round(self.K_band / 2)
     
-    def simulate_system(self, input_signal=None, wave_params=None, file_path=None, t=None):
-        if t is None:
-            t = self.real_t
-
+    def simulate_system(self, input_signal=None, wave_params=None, file_path=None):
         if input_signal is None:
             print("No input signal provided. Creating Input Signal")
             if wave_params is None and file_path is None:
@@ -219,29 +187,24 @@ class NYFR:
                     wave_params.append({"amp": amp, "freq": freq, "phase": phase})
                     add_wave_param = input("Add another wave parameter? (y/n): ").lower() == 'y'
             if file_path is not None:
-                input_signal, _ = self.create_input_signal(file_path=file_path, t=t)
+                input_signal, _ = self.create_input_signal(file_path=file_path)
             else:
-                input_signal, _ = self.create_input_signal(wave_params=wave_params, t=t)
-        rising_zero_crossings = self.generate_rising_zero_crossings(t=t)
-        mixed_input = np.copy(input_signal*rising_zero_crossings)
-        mixed_input_filtered = self.filter_signal(mixed_input, t=t)
-        output = self.sample_signals(mixed_input_filtered)
-        self.real_LO = self.LO
+                input_signal, _ = self.create_input_signal(wave_params=wave_params)
+        mixed_input = np.copy(input_signal*self.rising_zero_crossings)
+        mixed_input_filtered = self.filter_signal(mixed_input)
+        output = self.sample_signals(data=mixed_input_filtered)
+        self.LO_sampled = self.sample_signals(data=self.LO,
+                                              update_sampled_time=True)
+        self.LO_modulation_sampled = self.sample_signals(data=self.LO_modulation)
         if not self.time_params['save_real_time']:
             self.clear_real_time_sigs()
-
-        LO = self.sample_signals(data=self.LO,
-                                 points_per_second=self.real_points_per_second,
-                                 sample_rate=self.wb_nyquist_rate,
-                                 t=t)
-        self.LO_sampled = self.sample_signals(LO, update_sampled_time=True)
-        self.LO_modulation_sampled = self.sample_signals(self.LO_modulation)
         return output
     
     def clear_real_time_sigs(self):
-        self.real_LO = None
+        self.LO = None
         self.real_t = None
         self.real_tf = None
+        self.filt_freq = None
 
     def create_input_signal(self, wave_params=None, file_path=None, t=None):
         if t is None:
@@ -277,17 +240,20 @@ class NYFR:
 
     def filter_signal(self, data, filter_params=None, t=None):
         if t is None:
-            t = self.t
+            t = self.real_t
         if self.filter_params is None and filter_params is None:
             print("No filter parameters provided.")
             self.set_filter_params()
         if (self.filter_params['type'] == 'butter'):
             system_nyquist_rate = 1/self.adj_spacing
-            self.sos = butter(self.filter_params['order'],
-                         self.filter_params['cutoff_freq'],
-                         fs=system_nyquist_rate, btype='lowpass',
-                         analog=False,
-                         output='sos')
+            if self.sos is None:
+                self.sos = butter(self.filter_params['order'],
+                            self.filter_params['cutoff_freq'],
+                            fs=system_nyquist_rate, btype='lowpass',
+                            analog=False,
+                            output='sos')
+                if self.dictionary_params['version'] == 'enhanced':
+                    _, self.filt_freq = sosfreqz(self.sos, worN=data.size, whole=True)
             filtered_data = sosfilt(self.sos, data)
         elif (self.filter_params['type'] == 'integrate'):
             filtered_data = np.zeros_like(t, dtype=np.complex_)
@@ -305,26 +271,29 @@ class NYFR:
         if self.dictionary_params is None:
             self.set_dictionary_params(dictionary_params=dictionary_params)
         
-        dft_init = dft(self.K_band)
+        R_init = np.eye(self.K_band)
+
         if self.dictionary_params['version'] == 'enhanced':
             if filt_down is not None:
                 filt_freq_down = fft(filt_down)
             else:
                 if self.filter_params['type'] == 'butter':
-                    _, filt_freq_down = self.get_filter_frequency()
+                    filt_time = ifft(self.filt_freq)
+                    filt_time_down = self.sample_signals(data=filt_time)
+                    filt_freq_down = fft(filt_time_down)
                 else:
                     filt_freq_down = np.ones_like(self.sampled_t)
-            dft_matrix = np.matmul(filt_freq_down * R_init, dft_init)
+            dft_matrix = np.matmul(filt_freq_down * R_init, dft(self.K_band))
 
         elif self.dictionary_params['version'] == 'original':
-            dft_matrix = np.copy(dft_init)
+            dft_matrix = dft(self.K_band)
         else:
             print("Unknown dictionary version")
             dictionary = None
             return dictionary
 
         M_index = self.__create_M_pattern()
-        R_init = np.eye(self.K_band)
+
 
         if self.dictionary_params['type'] == 'complex':
             R, S, PSI = self.__create_complex_dict(R_init=R_init,
@@ -339,6 +308,8 @@ class NYFR:
             dictionary = None
 
         dictionary = np.matmul(np.matmul(R,S),PSI)
+        if self.dictionary_params['version'] == 'enhanced':
+            dictionary = self.K_band * dictionary
         return dictionary
     
     def __create_M_pattern(self):
@@ -347,7 +318,7 @@ class NYFR:
         M_pattern = [0, 1]
         for i in range(0,int(self.Zones/2)):
             M_temp[0] = M_pattern[0] + i
-            M_temp[1] = M_pattern[1] + i
+            M_temp[1] = -( M_pattern[1] + i )
             M_index = M_index + M_temp
         
         return M_index
@@ -584,9 +555,6 @@ class NYFR:
     
     def get_ringing_zero_crossings(self):
         return self.rising_zero_crossings
-    
-    def get_real_LO(self):
-        return self.real_LO
 
     def get_real_time(self):
         return self.real_t

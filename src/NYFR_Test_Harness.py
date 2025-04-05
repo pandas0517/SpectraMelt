@@ -9,6 +9,7 @@ import os
 import time
 import random
 from itertools import combinations
+import pickle
 
 class NYFR_Test_Harness:
     def __init__(self,
@@ -297,6 +298,60 @@ class NYFR_Test_Harness:
             }
         return mod_delta_table
 
+    def create_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        mod_delta_table = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
+        system_params = self.nyfr.get_system_params()
+        wbf_cut_freq = system_params['wbf_cut_freq']
+        noise_level_list = ["no_noise", "low_noise", "high_noise"]
+        phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
+        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
+        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
+        input_tones_list = ["1_2", "3", "4", "5"]
+        LO_params = self.nyfr.get_LO_params()
+        for noise_level in noise_level_list:
+            for phase_shift in phase_shift_list:
+                for input_tones in input_tones_list:
+                    input_base_dir = self.input_dir + noise_level + "\\" + phase_shift + "\\"
+                    input_file_path = os.path.join(input_base_dir, self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
+                    input_list_path = os.path.join(input_base_dir, self.input_tones[input_tones]['list'])
+                    if ( not os.path.isfile(input_list_path) ):
+                        input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
+                        with open(input_list_path, 'wb') as file:
+                            pickle.dump(input_freq_tot_list, file)
+                    else:
+                        with open(input_list_path, 'rb') as file:
+                            input_freq_tot_list = pickle.load(file)
+                    output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
+                    for f_mod in f_mod_list:
+                        LO_params['phase_freq'] = mod_delta_table[f_mod]
+                        for f_delta in f_delta_list:
+                            LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
+                            self.nyfr.set_LO_params(LO_params=LO_params)
+                            output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
+                            dictionary_sub_dir = self.dictionary_dir[self.nyfr.get_dictionary_params()['version']] + "\\" + f_mod + "\\" + f_delta + "\\"
+                            output_file_path = (os.path.join(output_sub_dir, self.input_tones[input_tones]['sigs']))
+                            dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
+                            output_list = []
+                            input_list = []
+                            for input_freqs in input_freq_tot_list:
+                                wave_params, noise = self.__update_wave_system(input_freqs,phase_shift,noise_level)
+                                system_params['system_noise_level'] = noise
+                                self.nyfr.set_system_params(system_params=system_params)
+                                analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
+                                output_list.append( self.nyfr.simulate_system(input_signal=analog_input) )
+                                if ( not os.path.isfile(input_file_path) ):
+                                    input_list.append(self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate()))
+                                if ( not os.path.isfile(dictionary_file_path) ):
+                                    dictionary = self.nyfr.create_dict()
+                                    np.save(dictionary_file_path, dictionary) # save the dictionary for this f_mod/f_delta combo
+                                
+                            if input_list:
+                                # Save the input set if it was generated
+                                input_set = np.array(input_list)
+                                np.save(input_file_path, input_set)
+                            output_set = np.array(output_list)
+                            np.save(output_file_path, output_set)
+
     def create_dictionaries(self, nyfr=None):
         if nyfr is not None:
             self.nyfr = nyfr
@@ -319,64 +374,73 @@ class NYFR_Test_Harness:
                     dictionary = nyfr.create_dict()
                     np.save(dictionary_file_path, dictionary)
 
+    def __get_frequency_list(self, num_of_sigs, wbf_cut_freq):
+        pos_bins = list(range(1, wbf_cut_freq))
+        input_freq_tot_list = []
+        match num_of_sigs:
+            case '1_2':
+                for total_active_sig in [1,2]:
+                    input_freq_tot_list += list(combinations(pos_bins, total_active_sig))
+                random.shuffle(input_freq_tot_list)
+            case '3':
+                input_freq_tot_list += list(combinations(pos_bins, 3))
+                random.shuffle(input_freq_tot_list)
+                input_freq_tot_list = input_freq_tot_list[0:self.input_set_params['tot_num_freq_combos']]
+            case '4':
+                input_freq_tot_list = [(random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq)) for _ in range(self.input_set_params['tot_num_freq_combos'])]
+            case '5':
+                input_freq_tot_list = [(random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq),
+                                        random.randint(1, wbf_cut_freq)) for _ in range(self.input_set_params['tot_num_freq_combos'])]
+            case _:
+                print("Unsupported right now")
+        return input_freq_tot_list
+    
+    def __update_wave_system(self, input_freqs, phase_shift, noise_level):
+        wave_params = []
+        for input_freq in input_freqs:
+            wave_param = {
+                "amp": random.uniform(self.input_set_params['amp_min'], self.input_set_params['amp_max']),
+                "freq": input_freq,
+                "phase": 0
+            }
+            if phase_shift == "high_phase_shift":
+                wave_param['phase'] = random.uniform(self.input_set_params['high_phase_min'], self.input_set_params['high_phase_max']) / input_freq
+            if phase_shift == "low_phase_shift":
+                wave_param['phase'] = random.uniform(self.input_set_params['low_phase_min'], self.input_set_params['low_phase_max']) / input_freq
+            wave_params.append(wave_param)
+
+        noise = 0
+        if noise_level == "high_noise":
+            noise = random.uniform(self.input_set_params['high_noise_min'], self.input_set_params['high_noise_max'])
+        elif noise_level == "low_noise":
+            noise = random.uniform(self.input_set_params['low_noise_min'], self.input_set_params['low_noise_max'])
+        return wave_params, noise
+
     def create_input_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
         _ = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
         system_params = self.nyfr.get_system_params()
-        wbf_cut_freq = system_params['adc_clock_freq'] * system_params['wbf_cut_mod']
-        pos_bins = list(range(1, wbf_cut_freq))
+        wbf_cut_freq = system_params['wbf_cut_freq']
         for num_of_sigs, tone_sigs_file_name in self.input_tones.items():
-                input_freq_tot_list = []
-                match num_of_sigs:
-                    case '1_2':
-                        for total_active_sig in range(1,2):
-                            input_freq_tot_list += list(combinations(pos_bins, total_active_sig))
-                            random.shuffle(input_freq_tot_list)
-                    case '3':
-                        input_freq_tot_list += list(combinations(pos_bins, 3))
-                        random.shuffle(input_freq_tot_list)
-                        input_freq_tot_list = input_freq_tot_list[0:input_set_params['tot_num_freq_combos']]
-                    case '4':
-                        input_freq_tot_list = [(random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq)) for _ in range(input_set_params['tot_num_freq_combos'])]
-                    case '5':
-                        input_freq_tot_list = [(random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq),
-                                               random.randint(1, wbf_cut_freq)) for _ in range(input_set_params['tot_num_freq_combos'])]
-                    case _:
-                        print("Unsupported right now")
-                        break
-
+                input_freq_tot_list = self.__get_frequency_list(num_of_sigs=num_of_sigs,
+                                                               wbf_cut_freq=wbf_cut_freq)
                 input_sub_dirs = get_all_sub_dirs(self.input_dir)
                 for sub_dir in input_sub_dirs:
                     input_file_path = os.path.join(sub_dir, tone_sigs_file_name)
                     noise_level, phase_shift, _ = get_file_sub_dirs(input_file_path)
                     input_list = []
                     for input_freqs in input_freq_tot_list:
-                        wave_params = []
-                        for input_freq in input_freqs:
-                            wave_param = {
-                                "amp": random.uniform(input_set_params['amp_min'], input_set_params['amp_max']),
-                                "freq": input_freq,
-                                "phase": 0
-                            }
-                            if phase_shift == "high_phase_shift":
-                                wave_param['phase'] = random.uniform(input_set_params['high_phase_min'], input_set_params['high_phase_max']) / input_freq
-                            if phase_shift == "low_phase_shift":
-                                wave_param['phase'] = random.uniform(input_set_params['low_phase_min'], input_set_params['low_phase_max']) / input_freq
-                            wave_params.append(wave_param)
-
-                        noise = 0
-                        if noise_level == "high_noise":
-                            noise = random.uniform(input_set_params['high_noise_min'], input_set_params['high_noise_max'])
-                        elif noise_level == "low_noise":
-                            noise = random.uniform(input_set_params['low_noise_min'], input_set_params['low_noise_max'])
+                        wave_params, noise = self.__update_wave_system(input_freqs=input_freqs,
+                                                                       phase_shift=phase_shift,
+                                                                       noise_level=noise_level)
                         system_params['system_noise_level'] = noise
-                        nyfr.set_system_params(system_params=system_params)
-                        input, _ = nyfr.create_input_signal(wave_params=wave_params)
+                        self.nyfr.set_system_params(system_params=system_params)
+                        input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
                         input_list.append(input)
                     input_set = np.array(input_list)
                     np.save(input_file_path, input_set)
@@ -398,13 +462,13 @@ class NYFR_Test_Harness:
                 LO_params['phase_freq'] = mod_delta_table[f_mod]
                 for f_delta in f_delta_list:
                     LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
-                    nyfr.set_LO_params(LO_params=LO_params)
+                    self.nyfr.set_LO_params(LO_params=LO_params)
                     output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
                     output_file_path = (os.path.join(output_sub_dir, file_name))
                     if ( os.path.isfile(output_file_path) ):
                         os.remove( output_file_path )
                     for input in input_set:
-                        output_list.append( nyfr.simulate_system(input_signal=input) )
+                        output_list.append( self.nyfr.simulate_system(input_signal=input) )
 
                     output_set = np.array(output_list)
                     np.save(output_file_path, output_set)

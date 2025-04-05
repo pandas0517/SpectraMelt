@@ -25,7 +25,7 @@ if __name__ == '__main__':
                                      filenames_json=os.getenv('FILENAMES'),
                                      directories_json=os.getenv('DIRECTORIES'),
                                      input_set_json=os.getenv('INPUTSET_CONF'))
-    test_harness.create_input_sets()
+    test_harness.create_sets()
     test_harness.create_output_sets()
     test_harness.create_dictionaries()
     test_harness.create_dfs()
