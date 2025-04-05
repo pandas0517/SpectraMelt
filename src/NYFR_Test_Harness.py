@@ -379,9 +379,12 @@ class NYFR_Test_Harness:
         input_freq_tot_list = []
         match num_of_sigs:
             case '1_2':
-                for total_active_sig in [1,2]:
-                    input_freq_tot_list += list(combinations(pos_bins, total_active_sig))
-                random.shuffle(input_freq_tot_list)
+                    input_freq_list_1 = list(combinations(pos_bins,1))
+                    input_freq_list_2 = list(combinations(pos_bins, 2))
+                    random.shuffle(input_freq_list_2)
+                    input_freq_list_2 = input_freq_list_2[0:self.input_set_params['tot_num_freq_combos'] - len(input_freq_list_1)]
+                    input_freq_tot_list = input_freq_list_1 + input_freq_list_2
+                    random.shuffle(input_freq_tot_list)
             case '3':
                 input_freq_tot_list += list(combinations(pos_bins, 3))
                 random.shuffle(input_freq_tot_list)
