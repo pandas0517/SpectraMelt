@@ -331,10 +331,11 @@ class NYFR_Test_Harness:
                             input_list_exists = os.path.isfile(input_list_path)
                             if not output_file_exists:
                                 if input_list_exists:
-                                    input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
-                                else:
                                     with open(input_list_path, 'rb') as file:
                                         input_freq_tot_list = pickle.load(file)
+                                else:
+                                    input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
+
                                 for input_freqs in input_freq_tot_list:
                                     if input_list_exists:
                                         wave_params = input_freqs[0]
