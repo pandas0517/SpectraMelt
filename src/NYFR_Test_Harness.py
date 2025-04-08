@@ -314,13 +314,6 @@ class NYFR_Test_Harness:
                     input_base_dir = self.input_dir + noise_level + "\\" + phase_shift + "\\"
                     input_file_path = os.path.join(input_base_dir, self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
                     input_list_path = os.path.join(input_base_dir, self.input_tones[input_tones]['list'])
-                    if ( not os.path.isfile(input_list_path) ):
-                        input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
-                        with open(input_list_path, 'wb') as file:
-                            pickle.dump(input_freq_tot_list, file)
-                    else:
-                        with open(input_list_path, 'rb') as file:
-                            input_freq_tot_list = pickle.load(file)
                     output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
                     for f_mod in f_mod_list:
                         LO_params['phase_freq'] = mod_delta_table[f_mod]
@@ -333,24 +326,41 @@ class NYFR_Test_Harness:
                             dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
                             output_list = []
                             input_list = []
-                            for input_freqs in input_freq_tot_list:
-                                wave_params, noise = self.__update_wave_system(input_freqs,phase_shift,noise_level)
-                                system_params['system_noise_level'] = noise
-                                self.nyfr.set_system_params(system_params=system_params)
-                                analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
-                                output_list.append( self.nyfr.simulate_system(input_signal=analog_input) )
-                                if ( not os.path.isfile(input_file_path) ):
-                                    input_list.append(self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate()))
-                                if ( not os.path.isfile(dictionary_file_path) ):
-                                    dictionary = self.nyfr.create_dict()
-                                    np.save(dictionary_file_path, dictionary) # save the dictionary for this f_mod/f_delta combo
-                                
-                            if input_list:
-                                # Save the input set if it was generated
-                                input_set = np.array(input_list)
-                                np.save(input_file_path, input_set)
-                            output_set = np.array(output_list)
-                            np.save(output_file_path, output_set)
+                            wave_param_list = []
+                            output_file_exists = os.path.isfile(output_file_path)
+                            input_list_exists = os.path.isfile(input_list_path)
+                            if not output_file_exists:
+                                if input_list_exists:
+                                    input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
+                                else:
+                                    with open(input_list_path, 'rb') as file:
+                                        input_freq_tot_list = pickle.load(file)
+                                for input_freqs in input_freq_tot_list:
+                                    if input_list_exists:
+                                        wave_params = input_freqs[0]
+                                        noise = input_freqs[1]
+                                    else:
+                                        wave_params, noise = self.__update_wave_system(input_freqs,phase_shift,noise_level)
+                                        wave_param_list.append((wave_params, noise))
+                                    system_params['system_noise_level'] = noise
+                                    self.nyfr.set_system_params(system_params=system_params)
+                                    analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
+                                    output_list.append( self.nyfr.simulate_system(input_signal=analog_input) )
+                                    if ( not os.path.isfile(input_file_path) ):
+                                        input_list.append(self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate()))
+                                    if ( not os.path.isfile(dictionary_file_path) ):
+                                        dictionary = self.nyfr.create_dict()
+                                        np.save(dictionary_file_path, dictionary) # save the dictionary for this f_mod/f_delta combo
+                                if wave_param_list:
+                                    # Save the wave parameters if they were generated
+                                    with open(input_list_path, 'wb') as file:
+                                        pickle.dump(wave_param_list, file)
+                                if input_list:
+                                    # Save the input set if it was generated
+                                    input_set = np.array(input_list)
+                                    np.save(input_file_path, input_set)
+                                output_set = np.array(output_list)
+                                np.save(output_file_path, output_set)
 
     def create_dictionaries(self, nyfr=None):
         if nyfr is not None:
