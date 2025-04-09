@@ -321,7 +321,7 @@ class NYFR_Test_Harness:
                             LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
                             self.nyfr.set_LO_params(LO_params=LO_params)
                             output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
-                            dictionary_sub_dir = self.dictionary_dir[self.nyfr.get_dictionary_params()['version']] + "\\" + f_mod + "\\" + f_delta + "\\"
+                            dictionary_sub_dir = self.dictionary_dir[self.nyfr.get_dictionary_params()['version']] + f_mod + "\\" + f_delta + "\\"
                             output_file_path = (os.path.join(output_sub_dir, self.input_tones[input_tones]['sigs']))
                             dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
                             output_list = []
