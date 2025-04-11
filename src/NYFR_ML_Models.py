@@ -307,110 +307,139 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     recovery_params = nyfr.get_recovery_params()
     dictionary_params = nyfr.get_dictionary_params()
     system_params = nyfr.get_system_params()
-    input_file_paths = get_all_file_paths(directories['input'])
+    noise_level_list = ["no_noise", "low_noise", "high_noise"]
+    phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
+    f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
+    f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
+    input_tones_list = ["1_2", "3", "4", "5"]
 
     for mode in training_params['modes']:
-        for input_file_path in input_file_paths:
-            noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
+        for noise_level in noise_level_list:
+            for phase_shift in phase_shift_list:
+                for input_tones in input_tones_list:
+                    fft_file_path = os.path.join(directories['fft'],
+                                                 noise_level,
+                                                 phase_shift,
+                                                 files["input_tones"][input_tones]["sigs"])
+                    input_file_path = os.path.join(directories["input"],
+                                                   noise_level,
+                                                   phase_shift,
+                                                   files["input_tones"][input_tones]["sigs"])
+                    active_zones_file_path = os.path.join(directories['active_zones'],
+                                                 noise_level,
+                                                 phase_shift,
+                                                 files["input_tones"][input_tones]["sigs"])
+                    model_log_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
+                                                       files['mlp_models']['log'][training_params['processing_system']])
+                    fft_sig_set = None
+                    if training_params['use_fft']:
+                        if ( os.path.isfile(fft_file_path) ):
+                            fft_sig_set = np.load(fft_file_path)
+                            if fft_sig_set.shape[0] != training_params['total_num_sigs']:
+                                fft_sig_set = None
 
-            fft_file_sub_dir = directories['fft'] + noise_level + "\\" + phase_shift + "\\"
-            fft_file_path = os.path.join(fft_file_sub_dir, file_name)
-            fft_sig_set = None
-            if training_params['use_fft']:
-                if ( os.path.isfile(fft_file_path) ):
-                    fft_sig_set = np.load(fft_file_path)
-                    if fft_sig_set.shape[0] != training_params['total_num_sigs']:
+                    active_zones_sig_set = None
+                    if training_params['use_active_zones']:
+                        if ( os.path.isfile(active_zones_file_path) ):
+                            active_zones_sig_set = np.load(active_zones_file_path)
+                            if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                                active_zones_sig_set = None
+
+                    output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
+                                                                                                            fft_file_path,
+                                                                                                            active_zones_file_path,
+                                                                                                            nyfr.get_Zones(),
+                                                                                                            training_params,
+                                                                                                            mode)
+                    if active_zones_sig_set is not None:
+                        output_sig_set = active_zones_sig_set
+                        active_zones_sig_set = None
+                    elif fft_sig_set is not None:
+                        output_sig_set = fft_sig_set
                         fft_sig_set = None
 
-            active_zones_sub_dir = directories['active_zones'] + noise_level + "\\" + phase_shift + "\\"
-            active_zones_file_path = os.path.join(active_zones_sub_dir, file_name)
-            active_zones_sig_set = None
-            if training_params['use_active_zones']:
-                if ( os.path.isfile(active_zones_file_path) ):
-                    active_zones_sig_set = np.load(active_zones_file_path)
-                    if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
-                        active_zones_sig_set = None
+                    train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
+                    test_size = num_input_sigs - train_size
 
-            output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
-                                                                                                    fft_file_path,
-                                                                                                    active_zones_file_path,
-                                                                                                    nyfr.get_Zones(),
-                                                                                                    training_params,
-                                                                                                    mode)
-            if active_zones_sig_set is not None:
-                output_sig_set = active_zones_sig_set
-                active_zones_sig_set = None
-            elif fft_sig_set is not None:
-                output_sig_set = fft_sig_set
-                fft_sig_set = None
+                    output_sig_set_train, output_sig_set_test = np.vsplit(output_sig_set, [train_size])
+                    output_sig_set = None
 
-            train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
-            test_size = num_input_sigs - train_size
 
-            output_sig_set_train, output_sig_set_test = np.vsplit(output_sig_set, [train_size])
-            output_sig_set = None
-        
-            output_sub_path = directories['output'] + noise_level + "\\" + phase_shift + "\\"
-            mlp_model_sub_path = directories['mlp_models'][dictionary_params['version']][mode] + noise_level + "\\" + phase_shift + "\\"
-            model_log_file_path = directories['mlp_models'][dictionary_params['version']][mode] + files['mlp_models']['log'][training_params['processing_system']]
-            premultiply_sub_path = directories['premultiply'][dictionary_params['version']] + noise_level + "\\" + phase_shift + "\\"
-            if recovery_mode == "active_zones":
-                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']]  + recovery_mode + "\\" + \
-                        files['recovery'][recovery_mode][training_params['processing_system']]
-            else:
-                recovery_log_file_path = directories['recovery'][dictionary_params['version']][recovery_params['type']]  + recovery_mode + "\\" + \
-                        files['recovery'][recovery_mode][mode][training_params['processing_system']]
-            output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
-            premultiply_file_sub_dirs = get_all_sub_dirs(premultiply_sub_path)
-            mlp_model_file_sub_dirs = get_all_sub_dirs(mlp_model_sub_path)
-            for index, sub_dir in enumerate(output_file_sub_dirs):
-                output_file_path = os.path.join(sub_dir, file_name)
-                f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
-                dictionary_file_sub_dir = directories['dictionary'][dictionary_params['version']] + f_mod + "\\" + f_delta + "\\"
-                dictionary_file_path = os.path.join(dictionary_file_sub_dir, files['dictionary']['name'])
-                found_string_in_file = False
-                premultiply_file_path = os.path.join(premultiply_file_sub_dirs[index], file_name)
-                with open(model_log_file_path, "r") as model_log:
-                    for line in model_log:
-                        if output_file_path in line:
-                            found_string_in_file = True
-                            break
-
-                if not found_string_in_file:
-                    use_premultiply = False
-                    if ( os.path.isfile(premultiply_file_path) ):
-                        output_sig_set = np.load(premultiply_file_path)
-                        if output_sig_set.shape[0] == training_params['total_num_sigs']:
-                            use_premultiply = True
-
-                    if not use_premultiply:
+                    if recovery_mode == "active_zones":
+                        recovery_log_file_path = os.path.join(directories['recovery'][dictionary_params['version']][recovery_params['type']],
+                                                              recovery_mode,
+                                                              files['recovery'][recovery_mode][training_params['processing_system']])
+                    else:
+                        recovery_log_file_path = os.path.join(directories['recovery'][dictionary_params['version']][recovery_params['type']],
+                                                              recovery_mode,
+                                                              files['recovery'][recovery_mode][mode][training_params['processing_system']])
                         
-                        output_sig_set_total = np.load(output_file_path)
-                        num_input_sigs_total = output_sig_set_total.shape[0]
-                        output_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
-                        _, output_sig_set = np.vsplit(output_sig_set_total, [output_sigs_not_used])
-                        del output_sig_set_total
+                    for f_mod in f_mod_list:
+                        for f_delta in f_delta_list:
+                            dictionary_file_path = os.path.join(directories['dictionary'][dictionary_params['version']],
+                                                                f_mod,
+                                                                f_delta,
+                                                                files['dictionary']['name'])
+                            output_file_path = os.path.join(directories['output'],
+                                                            noise_level,
+                                                            phase_shift,
+                                                            f_mod,
+                                                            f_delta,
+                                                            files["input_tones"][input_tones]["sigs"])
+                            premultiply_file_path = os.path.join(directories['premultiply'][dictionary_params['version']],
+                                                                 noise_level,
+                                                                 phase_shift,
+                                                                 f_mod,
+                                                                 f_delta,
+                                                                 files["input_tones"][input_tones]["sigs"])
+                            mlp_model_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
+                                                               noise_level,
+                                                               phase_shift,
+                                                               f_mod,
+                                                               f_delta,
+                                                               files['mlp_models']['name'])
+                            found_string_in_file = False
+                            with open(model_log_file_path, "r") as model_log:
+                                for line in model_log:
+                                    if output_file_path in line:
+                                        found_string_in_file = True
+                                        break
 
-                    premultiply_sig_set_train, premultiply_sig_set_test = set_test_train(train_size,                                    
-                                                                                         test_size,
-                                                                                         model_input_size,
-                                                                                         output_sig_set,
-                                                                                         use_premultiply,
-                                                                                         nyfr,
-                                                                                         dictionary_file_path,
-                                                                                         training_params,
-                                                                                         system_params,
-                                                                                         mode,
-                                                                                         premultiply_file_path)
-                    mlp_model_file_path = os.path.join(mlp_model_file_sub_dirs[index], files['mlp_models']['name'])
-                    create_model(mlp_model_file_path,
-                                 output_file_path,
-                                 recovery_log_file_path,
-                                 model_log_file_path,
-                                 model_input_size,
-                                 training_params,
-                                 premultiply_sig_set_train,
-                                 premultiply_sig_set_test,
-                                 output_sig_set_train,
-                                 output_sig_set_test,
-                                 nyfr)
+                            if not found_string_in_file:
+                                use_premultiply = False
+                                if ( os.path.isfile(premultiply_file_path) ):
+                                    output_sig_set = np.load(premultiply_file_path)
+                                    if output_sig_set.shape[0] == training_params['total_num_sigs']:
+                                        use_premultiply = True
+
+                                if not use_premultiply:
+                                    
+                                    output_sig_set_total = np.load(output_file_path)
+                                    num_input_sigs_total = output_sig_set_total.shape[0]
+                                    output_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
+                                    _, output_sig_set = np.vsplit(output_sig_set_total, [output_sigs_not_used])
+                                    del output_sig_set_total
+
+                                premultiply_sig_set_train, premultiply_sig_set_test = set_test_train(train_size,                                    
+                                                                                                    test_size,
+                                                                                                    model_input_size,
+                                                                                                    output_sig_set,
+                                                                                                    use_premultiply,
+                                                                                                    nyfr,
+                                                                                                    dictionary_file_path,
+                                                                                                    training_params,
+                                                                                                    system_params,
+                                                                                                    mode,
+                                                                                                    premultiply_file_path)
+                                
+                                create_model(mlp_model_file_path,
+                                            output_file_path,
+                                            recovery_log_file_path,
+                                            model_log_file_path,
+                                            model_input_size,
+                                            training_params,
+                                            premultiply_sig_set_train,
+                                            premultiply_sig_set_test,
+                                            output_sig_set_train,
+                                            output_sig_set_test,
+                                            nyfr)

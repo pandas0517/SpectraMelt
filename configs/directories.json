@@ -1,49 +1,49 @@
 {
     "system_config_name": "System_Config_1",
     "input_config_name": "Input_Config_1",
-    "time": "test_sets\\System_Config_1\\Internal\\System\\Not_Sampled\\",
-    "time_sampled": "test_sets\\System_Config_1\\Internal\\System\\Sampled\\",
-    "input": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Inputs\\",
-    "output": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Outputs\\",
-    "train": "test_sets\\System_Config_1\\Model_Inputs\\train\\",
-    "test": "test_sets\\System_Config_1\\Model_Inputs\\test\\",
-    "fft": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\fft\\",
-    "active_zones": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Model_Inputs\\active_zones\\",
-    "df": "F:\\test_sets\\",
+    "time": ["test_sets", "System_Config_1", "Internal", "System", "Not_Sampled"],
+    "time_sampled": ["test_sets", "System_Config_1", "Internal", "System", "Sampled"],
+    "input": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Inputs"],
+    "output": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Outputs"],
+    "train": ["test_sets", "System_Config_1", "Model_Inputs", "train"],
+    "test": ["test_sets", "System_Config_1", "Model_Inputs", "test"],
+    "fft": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "fft"],
+    "active_zones": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "active_zones"],
+    "df": ["F:", "test_sets"],
     "dictionary": {
-        "enhanced": "F:\\test_sets\\System_Config_1\\Dictionaries\\enhanced\\",
-        "original": "F:\\test_sets\\System_Config_1\\Dictionaries\\original\\"
+        "enhanced": ["F:", "test_sets", "System_Config_1", "Dictionaries", "enhanced"],
+        "original": ["F:", "test_sets", "System_Config_1", "Dictionaries", "original"]
     },
     "recovery": {
         "enhanced": {
         },
         "original": {
-            "OMP_Custom": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Recovery\\OMP_Custom\\original\\",
-            "OMP": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Recovery\\OMP\\original\\",
-            "MLP1": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Recovery\\MLP1\\original\\",
-            "SPGL1": "F:\\test_sets\\System_Config_1\\Input_Config_1\\Recovery\\SPGL1\\original\\"
+            "OMP_Custom": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP_Custom", "original"],
+            "OMP": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP", "original"],
+            "MLP1": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "MLP1", "original"],
+            "SPGL1": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "SPGL1", "original"]
         }
     },
     "mlp_models": {
         "enhanced": {
-            "real": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\real\\",
-            "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\imag\\",
-            "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\mag\\",
-            "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\complex\\",
-            "active_zones": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\enhanced\\active_zones\\"
+            "real": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "real"],
+            "imag": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "imag"],
+            "mag": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "mag"],
+            "ang": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "ang"],
+            "complex": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "complex"],
+            "active_zones": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "active_zones"]
         },
         "original": {
-            "real": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\real\\",
-            "imag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\imag\\",
-            "mag": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\mag\\",
-            "ang": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\ang\\",
-            "complex": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\complex\\",
-            "active_zones": "F:\\test_sets\\System_Config_1\\Input_Config_1\\MLP_Models\\original\\active_zones\\"
+            "real": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "real"],
+            "imag": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "imag"],
+            "mag": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "mag"],
+            "ang": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "ang"],
+            "complex": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "complex"],
+            "active_zones": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "active_zones"]
         }
     },
     "premultiply": {
-        "enhanced": "F:\\School_Stuff\\test_sets\\System_Config_1\\Input_Config_1\\PreMultiply\\enhanced\\",
-        "original": "F:\\School_Stuff\\test_sets\\System_Config_1\\Input_Config_1\\PreMultiply\\original\\"
+        "enhanced": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "PreMultiply", "enhanced"],
+        "original": ["F:", "test_sets", "System_Config_1", "Input_Config_1", "PreMultiply", "original"]
     }
 }

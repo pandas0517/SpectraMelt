@@ -181,8 +181,14 @@ class NYFR_Test_Harness:
 
             mlp_model_types = [ "real", "imag", "mag", "ang", "complex"]
             self.system_config_name = system_config_name
-            self.input_dir = "test_sets\\" + system_config_name + "\\" + self.input_set_params['input_config_name'] + "\\" + input_dir + "\\" 
-            self.output_dir = "test_sets\\" + system_config_name + "\\" + self.input_set_params['input_config_name'] + "\\" + output_dir + "\\"
+            self.input_dir = os.path.join("test_sets",
+                                          system_config_name,
+                                          self.input_set_params['input_config_name'],
+                                          input_dir)
+            self.output_dir = os.path.join("test_sets",
+                                          system_config_name,
+                                          self.input_set_params['input_config_name'],
+                                          output_dir)
             self.fft_dir = fft_dir
             self.time_dir = time_dir
             self.time_sampled_dir = time_sampled_dir
@@ -193,34 +199,71 @@ class NYFR_Test_Harness:
             mlp_models = {}
             premultiply = {}
             for dictionary_version in dictionary_versions:
-                premultiply[dictionary_version] = "Y:\\School_Stuff\\test_sets\\" + self.system_config_name + "\\" \
-                    + self.input_set_params['input_config_name'] + "\\" + premultiply_dir + "\\" + dictionary_version + "\\"
-                dictionary[dictionary_version] = "test_sets\\" \
-                    + self.system_config_name + "\\Internal\\" + dictionary_dir + "\\" + dictionary_version + "\\"
+                premultiply[dictionary_version] = os.path.join("F:",
+                                                               "test_sets",
+                                                               self.system_config_name,
+                                                               self.input_set_params['input_config_name'],
+                                                               premultiply_dir,
+                                                               dictionary_version)
+                dictionary[dictionary_version] = os.path.join("F:",
+                                                              "test_sets",
+                                                              self.system_config_name,
+                                                              dictionary_dir,
+                                                              dictionary_version)
                 for mlp_model_type in mlp_model_types:
-                    mlp_models[dictionary_version][mlp_model_type] = "F:\\test_sets\\" + self.system_config_name + "\\" + \
-                        self.input_set_params['input_config_name'] + "\\" + mlp_model_dir + "\\" + dictionary_version + "\\" + mlp_model_type + "\\"
+                    mlp_models[dictionary_version][mlp_model_type] = os.path.join("F:",
+                                                                                  "test_sets",
+                                                                                  self.system_config_name,
+                                                                                  self.input_set_params['input_config_name'],
+                                                                                  mlp_model_dir,
+                                                                                  dictionary_version,
+                                                                                  mlp_model_type)
                 for recovery_type in recovery_types:
-                    recovery[dictionary_version][recovery_type] = "test_sets\\" + self.system_config_name + "\\" + \
-                        self.input_set_params['input_config_name'] + "\\" + recovery_dir + "\\" + dictionary_version + "\\" + recovery_type + "\\"
+                    recovery[dictionary_version][recovery_type] = os.path.join("F:",
+                                                                               "test_sets",
+                                                                               self.system_config_name,
+                                                                               self.input_set_params['input_config_name'],
+                                                                               recovery_dir,
+                                                                               dictionary_version,
+                                                                               recovery_type)
             self.mlp_models_dir = mlp_models
             self.dictionary_dir = dictionary
             self.recovery_dir = recovery
             self.premultiply_dir = premultiply
         else:
             self.system_config_name = directories['system_config_name']
-            self.input_dir = directories['input']
-            self.output_dir = directories['output']
-            self.fft_dir = directories['fft']
-            self.time_dir = directories['time']
-            self.time_sampled_dir = directories['time_sampled']
-            self.dictionary_dir = directories['dictionary']
-            self.recovery_dir = directories['recovery']
-            self.df_dir = directories['df']
-            self.mlp_models_dir = directories['mlp_models']
-            self.active_zones_dir = directories['active_zones']
-            self.mlp_models_dir = directories['mlp_models']
-            self.premultiply_dir = directories['premultiply']
+            self.input_dir = os.path.join(directories['input'])
+            self.output_dir = os.path.join(directories['output'])
+            self.fft_dir = os.path.join(directories['fft'])
+            self.time_dir = os.path.join(directories['time'])
+            self.time_sampled_dir = os.path.join(directories['time_sampled'])
+            self.df_dir = os.path.join(directories['df'])
+            self.active_zones_dir = os.path.join(directories['active_zones'])
+
+            recovery = directories['recovery']
+            for type in recovery:
+                if recovery[type]:
+                    for algorithm in recovery[type]:
+                        recovery[type][algorithm] = os.path.join(recovery[type][algorithm])
+            self.recovery_dir = recovery
+
+            mlp_models = directories['mlp_models']
+            for type in mlp_models:
+                if mlp_models[type]:
+                    for mode in mlp_models[type]:
+                        mlp_models[type][mode] = os.path.join(mlp_models[type][mode])
+            self.mlp_models_dir = mlp_models
+
+            premultiply = directories['premultiply']
+            for type in premultiply:
+                premultiply[type] = os.path.join(premultiply[type])
+            self.premultiply_dir = premultiply
+
+            dictionary = directories['dictionary']
+            for type in dictionary:
+                dictionary[type] = os.path.join(dictionary[type])
+            self.dictionary_dir = dictionary
+
 
     def get_nyfr(self):
         return self.nyfr
@@ -311,19 +354,29 @@ class NYFR_Test_Harness:
         for noise_level in noise_level_list:
             for phase_shift in phase_shift_list:
                 for input_tones in input_tones_list:
-                    input_base_dir = self.input_dir + noise_level + "\\" + phase_shift + "\\"
-                    input_file_path = os.path.join(input_base_dir, self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
-                    input_list_path = os.path.join(input_base_dir, self.input_tones[input_tones]['list'])
-                    output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
+                    input_file_path = os.path.join(self.input_dir,
+                                                   noise_level,
+                                                   phase_shift,
+                                                   self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
+                    input_list_path = os.path.join(self.input_dir,
+                                                   noise_level,
+                                                   phase_shift,
+                                                   self.input_tones[input_tones]['list'])
                     for f_mod in f_mod_list:
                         LO_params['phase_freq'] = mod_delta_table[f_mod]
                         for f_delta in f_delta_list:
                             LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
                             self.nyfr.set_LO_params(LO_params=LO_params)
-                            output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
-                            dictionary_sub_dir = self.dictionary_dir[self.nyfr.get_dictionary_params()['version']] + f_mod + "\\" + f_delta + "\\"
-                            output_file_path = (os.path.join(output_sub_dir, self.input_tones[input_tones]['sigs']))
-                            dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
+                            output_file_path = os.path.join(self.output_dir,
+                                                           noise_level,
+                                                           phase_shift,
+                                                           f_mod,
+                                                           f_delta,
+                                                           self.input_tones[input_tones]['sigs'])
+                            dictionary_file_path = os.path.join(self.dictionary_dir[self.nyfr.get_dictionary_params()['version']],
+                                                                f_mod,
+                                                                f_delta,
+                                                                self.dictionary_file['name'])
                             output_list = []
                             input_list = []
                             wave_param_list = []
@@ -493,15 +546,17 @@ class NYFR_Test_Harness:
         system_params = self.nyfr.get_system_params()
         dictionary_params = self.nyfr.get_dictionary_params()
         recovery_params = self.nyfr.get_recovery_params()
-
-        input_file_paths = get_all_file_paths(self.input_dir)
-        # recovery_set = np.zeros((recovery_set_size, self.nyfr.get_num_time_points()), dtype=np.complex128)
+        noise_level_list = ["no_noise", "low_noise", "high_noise"]
+        phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
+        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
+        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
+        input_tones_list = ["1_2", "3", "4", "5"]
         recovery_list = []
         for mode in recovery_params['modes']:
             recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
             if ( recovery_params['type'] == 'MLP1' ):
-                recovery_base_path = recovery_base_path + mode + "\\"
-
+                recovery_base_path = os.path.join(recovery_base_path,
+                                                  mode)
             if ( mode == 'real_imag' ):
                 mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['real']
                 mlp_models_base_path_aux = self.mlp_models_dir[dictionary_params['version']]['imag']
@@ -514,85 +569,102 @@ class NYFR_Test_Harness:
             elif ( mode == 'active_zones' ):
                 mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['active_zones']
                 mlp_models_base_path_aux = None
-            
-            for input_file_path in input_file_paths:
-                noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
-                output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
-                recovery_sub_path = recovery_base_path + noise_level + "\\" + phase_shift + "\\"
-                mlp_models_sub_path = mlp_models_base_path + noise_level + "\\" + phase_shift + "\\"
-                if mlp_models_base_path_aux is not None:
-                    mlp_models_sub_path_aux = mlp_models_base_path_aux + noise_level + "\\" + phase_shift + "\\"
-                output_file_sub_dirs = get_all_sub_dirs(output_sub_path)
-                for processing_system in system_params['processing_systems']:
-                    if ( mode == 'real_imag' ):
-                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode]['real'][processing_system]
-                        recovery_log_file_path_aux = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode]['imag'][processing_system]
-                    elif ( mode == 'mag_ang' ):
-                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode]['mag'][processing_system]
-                        recovery_log_file_path_aux = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode]['ang'][processing_system]
-                    elif ( mode == 'complex' ):
-                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode]['complex'][processing_system]
-                        recovery_log_file_path_aux = None
-                    elif ( mode == 'active_zones' ):
-                        recovery_log_file_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + \
-                            mode + "\\" + self.recovery_file[mode][processing_system]
-                        recovery_log_file_path_aux = None
+            for noise_level in noise_level_list:
+                for phase_shift in phase_shift_list:
+                    for input_tones in input_tones_list:
+                        for processing_system in system_params['processing_systems']:
+                            if ( mode == 'real_imag' ):
+                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode]['real'][processing_system])
+                                recovery_log_file_path_aux = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode]['imag'][processing_system])
+                            elif ( mode == 'mag_ang' ):
+                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode]['mag'][processing_system])
+                                recovery_log_file_path_aux = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode]['ang'][processing_system])
+                            elif ( mode == 'complex' ):
+                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode]['complex'][processing_system])
+                                recovery_log_file_path_aux = None
+                            elif ( mode == 'active_zones' ):
+                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
+                                                                    mode,
+                                                                    self.recovery_file[mode][processing_system])
+                                recovery_log_file_path_aux = None
 
-                    for sub_dir in output_file_sub_dirs:
-                        output_file_path = os.path.join(sub_dir, file_name)
-                        f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
-                        mlp_model_dir = mlp_models_sub_path + f_mod + "\\" + f_delta + "\\"
-                        if mlp_models_base_path_aux is not None:
-                            mlp_model_aux_dir = mlp_models_sub_path_aux + f_mod + "\\" + f_delta + "\\"
-                        recovery_dir = recovery_sub_path + f_mod + "\\" + f_delta + "\\"
-                        mlp_model_file_path = os.path.join(mlp_model_dir, self.mlp_models_file['name'])
-                        if mlp_models_base_path_aux is not None:
-                            mlp_model_aux_file_path = os.path.join(mlp_model_aux_dir, self.mlp_models_file['name'])
-                        else:
-                            mlp_model_aux_file_path = None
-                        dictionary_sub_dir = self.dictionary_dir[dictionary_params['version']]  + f_mod + "\\" + f_delta + "\\"
-                        dictionary_file_path = os.path.join(dictionary_sub_dir, self.dictionary_file['name'])
-                        recovery_file_path = os.path.join(recovery_dir, file_name)
-                        found_string_in_file = False
-                        found_string_in_file_aux = False
-                        with open(recovery_log_file_path, "r") as recovery_log:
-                            for line in recovery_log:
-                                if output_file_path in line:
-                                    found_string_in_file = True
-                                    break
-                        if recovery_log_file_path_aux is not None:
-                            with open(recovery_log_file_path_aux, "r") as recovery_log:
-                                for line in recovery_log:
-                                    if output_file_path in line:
-                                        found_string_in_file_aux = True
-                                        break                    
-                        if ( found_string_in_file ):
-                            output_set = np.load(output_file_path)
-                            dictionary = np.load(dictionary_file_path)
-                            if ( not os.path.isfile(recovery_file_path )):
-                                if get_recovery_time:
-                                    ave_recovery_time = 0
-                                    start_time = time.perf_counter()
-                                for idx in range(recovery_set_size):
-                                    pass
-                                    recovered_signal = self.nyfr.recover_signal(dictionary,
-                                                                                output_set[idx],
-                                                                                file_path=mlp_model_file_path,
-                                                                                aux_file_path=mlp_model_aux_file_path,
-                                                                                mode=mode)
-                                    recovery_list.append(recovered_signal)
-                                if get_recovery_time:
-                                    end_time = time.perf_counter()
-                                    ave_recovery_time = ( end_time - start_time ) / recovery_set_size
-                                recovery_set = np.array(recovery_list)
-                                np.save(recovery_file_path, recovery_set)
-                                recovery_list = []
-                            delete_lines_with_string(recovery_log_file_path, output_file_path)
+                            for f_mod in f_mod_list:
+                                for f_delta in f_delta_list:
+                                    output_file_path = os.path.join(self.output_dir,
+                                                                    noise_level,
+                                                                    phase_shift,
+                                                                    f_mod,
+                                                                    f_delta,
+                                                                    self.input_tones[input_tones]['sigs'])
+                                    mlp_model_file_path = os.path.join(mlp_models_base_path,
+                                                                       noise_level,
+                                                                       phase_shift,
+                                                                       f_mod,
+                                                                       f_delta,
+                                                                       self.mlp_models_file['name'])
+                                    mlp_model_aux_file_path = None
+                                    if mlp_models_base_path_aux is not None:
+                                        mlp_model_aux_file_path = os.path.join(mlp_models_base_path_aux,
+                                                                               noise_level,
+                                                                               phase_shift,
+                                                                               f_mod,
+                                                                               f_delta,
+                                                                               self.mlp_models_file['name'])
+                                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
+                                                                        f_mod,
+                                                                        f_delta,
+                                                                        self.dictionary_file['name'])
+                                    recovery_file_path = os.path.join(recovery_base_path,
+                                                                      noise_level,
+                                                                      phase_shift,
+                                                                      f_mod,
+                                                                      f_delta,
+                                                                      self.recovery_file['name'])
+                                    found_string_in_file = False
+                                    found_string_in_file_aux = False
+                                    with open(recovery_log_file_path, "r") as recovery_log:
+                                        for line in recovery_log:
+                                            if output_file_path in line:
+                                                found_string_in_file = True
+                                                break
+                                    if recovery_log_file_path_aux is not None:
+                                        with open(recovery_log_file_path_aux, "r") as recovery_log:
+                                            for line in recovery_log:
+                                                if output_file_path in line:
+                                                    found_string_in_file_aux = True
+                                                    break                    
+                                    if ( found_string_in_file ):
+                                        output_set = np.load(output_file_path)
+                                        dictionary = np.load(dictionary_file_path)
+                                        if ( not os.path.isfile(recovery_file_path )):
+                                            if get_recovery_time:
+                                                ave_recovery_time = 0
+                                                start_time = time.perf_counter()
+                                            for idx in range(recovery_set_size):
+                                                pass
+                                                recovered_signal = self.nyfr.recover_signal(dictionary,
+                                                                                            output_set[idx],
+                                                                                            file_path=mlp_model_file_path,
+                                                                                            aux_file_path=mlp_model_aux_file_path,
+                                                                                            mode=mode)
+                                                recovery_list.append(recovered_signal)
+                                            if get_recovery_time:
+                                                end_time = time.perf_counter()
+                                                ave_recovery_time = ( end_time - start_time ) / recovery_set_size
+                                            recovery_set = np.array(recovery_list)
+                                            np.save(recovery_file_path, recovery_set)
+                                            recovery_list = []
+                                        delete_lines_with_string(recovery_log_file_path, output_file_path)
 
     def create_dfs(self, nyfr=None, filenames=None, directories=None):
         mod_delta_table = self.__set_init(nyfr, filenames, directories)
