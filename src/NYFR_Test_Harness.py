@@ -152,6 +152,8 @@ class NYFR_Test_Harness:
         if directories is None:
             print("No directory names provided.  Adding new directory names")
             system_config_name = input("Enter system configuration name: ")
+            drive_letter = input("Enter drive letter (e.g. F:): ")
+            base_dir = input("Enter base test directory name: ")
             input_dir = input("Enter input directory name: ")
             output_dir = input("Enter output directory name: ")
             fft_dir = input("Enter frequency file base name: ")
@@ -181,11 +183,11 @@ class NYFR_Test_Harness:
 
             mlp_model_types = [ "real", "imag", "mag", "ang", "complex"]
             self.system_config_name = system_config_name
-            self.input_dir = os.path.join("test_sets",
+            self.input_dir = os.path.join(base_dir,
                                           system_config_name,
                                           self.input_set_params['input_config_name'],
                                           input_dir)
-            self.output_dir = os.path.join("test_sets",
+            self.output_dir = os.path.join(base_dir,
                                           system_config_name,
                                           self.input_set_params['input_config_name'],
                                           output_dir)
@@ -199,28 +201,28 @@ class NYFR_Test_Harness:
             mlp_models = {}
             premultiply = {}
             for dictionary_version in dictionary_versions:
-                premultiply[dictionary_version] = os.path.join("F:",
-                                                               "test_sets",
+                premultiply[dictionary_version] = os.path.join(drive_letter,
+                                                               base_dir,
                                                                self.system_config_name,
                                                                self.input_set_params['input_config_name'],
                                                                premultiply_dir,
                                                                dictionary_version)
-                dictionary[dictionary_version] = os.path.join("F:",
-                                                              "test_sets",
+                dictionary[dictionary_version] = os.path.join(drive_letter,
+                                                              base_dir,
                                                               self.system_config_name,
                                                               dictionary_dir,
                                                               dictionary_version)
                 for mlp_model_type in mlp_model_types:
-                    mlp_models[dictionary_version][mlp_model_type] = os.path.join("F:",
-                                                                                  "test_sets",
+                    mlp_models[dictionary_version][mlp_model_type] = os.path.join(drive_letter,
+                                                                                  base_dir,
                                                                                   self.system_config_name,
                                                                                   self.input_set_params['input_config_name'],
                                                                                   mlp_model_dir,
                                                                                   dictionary_version,
                                                                                   mlp_model_type)
                 for recovery_type in recovery_types:
-                    recovery[dictionary_version][recovery_type] = os.path.join("F:",
-                                                                               "test_sets",
+                    recovery[dictionary_version][recovery_type] = os.path.join(drive_letter,
+                                                                               base_dir,
                                                                                self.system_config_name,
                                                                                self.input_set_params['input_config_name'],
                                                                                recovery_dir,
@@ -232,36 +234,36 @@ class NYFR_Test_Harness:
             self.premultiply_dir = premultiply
         else:
             self.system_config_name = directories['system_config_name']
-            self.input_dir = os.path.join(directories['input'])
-            self.output_dir = os.path.join(directories['output'])
-            self.fft_dir = os.path.join(directories['fft'])
-            self.time_dir = os.path.join(directories['time'])
-            self.time_sampled_dir = os.path.join(directories['time_sampled'])
-            self.df_dir = os.path.join(directories['df'])
-            self.active_zones_dir = os.path.join(directories['active_zones'])
+            self.input_dir = os.path.join(*directories['input'])
+            self.output_dir = os.path.join(*directories['output'])
+            self.fft_dir = os.path.join(*directories['fft'])
+            self.time_dir = os.path.join(*directories['time'])
+            self.time_sampled_dir = os.path.join(*directories['time_sampled'])
+            self.df_dir = os.path.join(*directories['df'])
+            self.active_zones_dir = os.path.join(*directories['active_zones'])
 
             recovery = directories['recovery']
             for type in recovery:
                 if recovery[type]:
                     for algorithm in recovery[type]:
-                        recovery[type][algorithm] = os.path.join(recovery[type][algorithm])
+                        recovery[type][algorithm] = os.path.join(*recovery[type][algorithm])
             self.recovery_dir = recovery
 
             mlp_models = directories['mlp_models']
             for type in mlp_models:
                 if mlp_models[type]:
                     for mode in mlp_models[type]:
-                        mlp_models[type][mode] = os.path.join(mlp_models[type][mode])
+                        mlp_models[type][mode] = os.path.join(*mlp_models[type][mode])
             self.mlp_models_dir = mlp_models
 
             premultiply = directories['premultiply']
             for type in premultiply:
-                premultiply[type] = os.path.join(premultiply[type])
+                premultiply[type] = os.path.join(*premultiply[type])
             self.premultiply_dir = premultiply
 
             dictionary = directories['dictionary']
             for type in dictionary:
-                dictionary[type] = os.path.join(dictionary[type])
+                dictionary[type] = os.path.join(*dictionary[type])
             self.dictionary_dir = dictionary
 
 
@@ -432,9 +434,10 @@ class NYFR_Test_Harness:
                 for f_delta in f_delta_list:
                     LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
                     nyfr.set_LO_params(LO_params=LO_params)
-                    delta_dir = f_delta[1]
-                    dictionary_base_path = self.dictionary_dir[dictionary_params['version']] + "\\" + mod_dir + "\\" + delta_dir + "\\"
-                    dictionary_file_path = os.path.join(dictionary_base_path, self.dictionary_file['name'])
+                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
+                                                        mod_dir,
+                                                        f_delta[1],
+                                                        self.dictionary_file['name'])
                     dictionary = nyfr.create_dict()
                     np.save(dictionary_file_path, dictionary)
 
