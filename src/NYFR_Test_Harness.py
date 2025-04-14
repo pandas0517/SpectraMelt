@@ -1,9 +1,9 @@
 from utility import get_all_file_paths, get_all_sub_dirs
 from utility import load_settings, get_file_sub_dirs
 from utility import delete_lines_with_string
+from NYFR import NYFR
 import numpy as np
 import pandas as pd
-from numpy import sin
 from scipy.fftpack import fft
 import os
 import time
@@ -19,6 +19,7 @@ class NYFR_Test_Harness:
                  filenames_json=None,
                  directories_json=None,
                  input_set_json=None,
+                 system_conf_json=None,
                  nyfr=None) -> None:
         if filenames_json is not None:
             filenames = load_settings(filenames_json)         
@@ -29,10 +30,14 @@ class NYFR_Test_Harness:
         if input_set_json is not None:
             input_set_params = load_settings(input_set_json)
 
-        self.set_filenames(filenames=filenames)
-        self.set_input_set_params(input_set_params=input_set_params)
-        self.set_directories(directories=directories)
-        self.nyfr = nyfr
+        if system_conf_json is not None:
+            nyfr = NYFR(file_path=system_conf_json)
+            nyfr.initialize()
+
+        self.__set_init(nyfr=nyfr,
+                        filenames=filenames,
+                        directories=directories,
+                        input_set_params=input_set_params)
 
     def set_nyfr(self, nyfr):
         self.nyfr = nyfr
@@ -144,7 +149,12 @@ class NYFR_Test_Harness:
                 "high_noise_max": 3,
                 "high_noise_min": 2,
                 "low_noise_max": 0.3,
-                "low_noise_min": 0.2           
+                "low_noise_min": 0.2,
+                "noise_level_list": ["no_noise", "low_noise", "high_noise"],
+                "phase_shift_list": ["no_phase_shift", "low_phase_shift", "high_phase_shift"],
+                "f_mods": [["f_mod_0_1", 0.1], ["f_mod_0_2", 0.2], ["f_mod_0_25", 0.25], ["f_mod_0_5", 0.5]],
+                "f_deltas": [["f_delta_0_1", 0.1], ["f_delta_0_8", 0.8], ["f_delta_1_2", 1.2], ["f_delta_9_9", 10.0]],
+                "input_tones": [["1_2", [1,2]], ["3", [3]], ["4", [4]], ["5", [5]]]       
             }
         self.input_set_params = input_set_params
 
@@ -153,6 +163,8 @@ class NYFR_Test_Harness:
             print("No directory names provided.  Adding new directory names")
             system_config_name = input("Enter system configuration name: ")
             drive_letter = input("Enter drive letter (e.g. F:): ")
+            if drive_letter is not None:
+                drive_letter = drive_letter + os.sep
             base_dir = input("Enter base test directory name: ")
             input_dir = input("Enter input directory name: ")
             output_dir = input("Enter output directory name: ")
@@ -183,19 +195,41 @@ class NYFR_Test_Harness:
 
             mlp_model_types = [ "real", "imag", "mag", "ang", "complex"]
             self.system_config_name = system_config_name
-            self.input_dir = os.path.join(base_dir,
+            self.input_dir = os.path.join(drive_letter,
+                                          base_dir,
                                           system_config_name,
                                           self.input_set_params['input_config_name'],
                                           input_dir)
-            self.output_dir = os.path.join(base_dir,
+            self.output_dir = os.path.join(drive_letter,
+                                           base_dir,
                                           system_config_name,
                                           self.input_set_params['input_config_name'],
                                           output_dir)
-            self.fft_dir = fft_dir
-            self.time_dir = time_dir
-            self.time_sampled_dir = time_sampled_dir
-            self.df_dir = df_dir
-            self.active_zones_dir = active_zones_dir
+            self.fft_dir = os.path.join(drive_letter,
+                                        base_dir,
+                                        system_config_name,
+                                        self.input_set_params['input_config_name'],
+                                        fft_dir)
+            self.time_dir = os.path.join(drive_letter,
+                                        base_dir,
+                                        system_config_name,
+                                        self.input_set_params['input_config_name'],
+                                        time_dir)
+            self.time_sampled_dir = os.path.join(drive_letter,
+                                                 base_dir,
+                                                 system_config_name,
+                                                 self.input_set_params['input_config_name'],
+                                                 time_sampled_dir)
+            self.df_dir = os.path.join(drive_letter,
+                                       base_dir,
+                                       system_config_name,
+                                       self.input_set_params['input_config_name'],
+                                       df_dir)
+            self.active_zones_dir = os.path.join(drive_letter,
+                                                 base_dir,
+                                                 system_config_name,
+                                                 self.input_set_params['input_config_name'],
+                                                 active_zones_dir)
             recovery = {}
             dictionary = {}
             mlp_models = {}
@@ -228,10 +262,26 @@ class NYFR_Test_Harness:
                                                                                recovery_dir,
                                                                                dictionary_version,
                                                                                recovery_type)
-            self.mlp_models_dir = mlp_models
-            self.dictionary_dir = dictionary
-            self.recovery_dir = recovery
-            self.premultiply_dir = premultiply
+            self.mlp_models_dir = os.path.join(drive_letter,
+                                               base_dir,
+                                               self.system_config_name,
+                                               self.input_set_params['input_config_name'],
+                                               mlp_model_dir)
+            self.dictionary_dir = os.path.join(drive_letter,
+                                               base_dir,
+                                               self.system_config_name,
+                                               self.input_set_params['input_config_name'],
+                                               dictionary_dir)
+            self.recovery_dir = os.path.join(drive_letter,
+                                             base_dir,
+                                             self.system_config_name,
+                                             self.input_set_params['input_config_name'],
+                                             recovery_dir)
+            self.premultiply_dir = os.path.join(drive_letter,
+                                                base_dir,
+                                                self.system_config_name,
+                                                self.input_set_params['input_config_name'],
+                                                premultiply_dir)
         else:
             self.system_config_name = directories['system_config_name']
             self.input_dir = os.path.join(*directories['input'])
@@ -266,7 +316,6 @@ class NYFR_Test_Harness:
                 dictionary[type] = os.path.join(*dictionary[type])
             self.dictionary_dir = dictionary
 
-
     def get_nyfr(self):
         return self.nyfr
 
@@ -299,63 +348,50 @@ class NYFR_Test_Harness:
     def get_input_set_params(self):
         return self.input_set_params
 
-    def __set_init(self, nyfr, filenames, directories, input_set_params=None):
-        mod_delta_table = None
-        need_init = False
-        if self.recovery_file is None:
-            if filenames is not None:
-                self.set_filenames(filenames=filenames)
-            else:
-                print("File names need to be initialized")
-                need_init = True
+    def __set_init(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        if filenames is not None:
+            self.set_filenames(filenames=filenames)
 
-        if self.recovery_dir is None:
-            if directories is not None:
-                self.set_directories(directories=directories)
-            else:
-                print("File names need to be initialized")
-                need_init = True
+        if directories is not None:
+            self.set_directories(directories=directories)
 
-        if self.set_input_set_params is None:
-            if input_set_params is not None:
-                self.set_input_set_params(input_set_params=input_set_params)
-            else:
-                print("Input set params need to be initialized")
-                need_init = True
-        
+        if input_set_params is not None:
+            self.set_input_set_params(input_set_params=input_set_params)
+
+        if nyfr is not None:
+            self.nyfr = nyfr
+
+    def __needs_init(self, include_set_params=False):
+        needs_init = False
+        filenames = self.get_filenames()
+        directories = self.get_directories()
+        input_set_params = self.get_input_set_params()
+        if not filenames:
+            needs_init = True
+
+        if not directories:
+            needs_init = True
+
+        if include_set_params:
+            if not input_set_params:
+                needs_init = True
+
         if self.nyfr is None:
-            if nyfr is not None:
-                self.nyfr = nyfr
-            else:
-                print("The NYFR needs to be initialized")
-                need_init = True
+            needs_init = True
 
-        if not need_init:
-            mod_delta_table = {
-                "f_mod_0_1": 0.1,
-                "f_mod_0_2": 0.2,
-                "f_mod_0_25": 0.25,
-                "f_mod_0_5": 0.5,
-                "f_delta_0_1": 0.1,
-                "f_delta_0_8": 0.8,
-                "f_delta_1_2": 1.2,
-                "f_delta_9_9": 10,                        
-            }
-        return mod_delta_table
+        return needs_init
 
     def create_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
-        mod_delta_table = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
+        self.__set_init(nyfr, filenames, directories, input_set_params)
+        if self.__needs_init(include_set_params=True):
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
         system_params = self.nyfr.get_system_params()
         wbf_cut_freq = system_params['wbf_cut_freq']
-        noise_level_list = ["no_noise", "low_noise", "high_noise"]
-        phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
-        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
-        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
-        input_tones_list = ["1_2", "3", "4", "5"]
         LO_params = self.nyfr.get_LO_params()
-        for noise_level in noise_level_list:
-            for phase_shift in phase_shift_list:
-                for input_tones in input_tones_list:
+        for noise_level, _ in self.input_set_params["noise_levels"]:
+            for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                for input_tones, _ in self.input_set_params["input_tones"]:
                     input_file_path = os.path.join(self.input_dir,
                                                    noise_level,
                                                    phase_shift,
@@ -364,10 +400,10 @@ class NYFR_Test_Harness:
                                                    noise_level,
                                                    phase_shift,
                                                    self.input_tones[input_tones]['list'])
-                    for f_mod in f_mod_list:
-                        LO_params['phase_freq'] = mod_delta_table[f_mod]
-                        for f_delta in f_delta_list:
-                            LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
+                    for f_mod, f_mod_value in self.input_set_params["f_mods"]:
+                        LO_params['phase_freq'] = f_mod_value
+                        for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
+                            LO_params['phase_delta'] = round(f_delta_value * f_mod_value, 2)
                             self.nyfr.set_LO_params(LO_params=LO_params)
                             output_file_path = os.path.join(self.output_dir,
                                                            noise_level,
@@ -545,15 +581,14 @@ class NYFR_Test_Harness:
                     output_list.clear()
 
     def batch_recover(self, nyfr=None, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
-        _ = self.__set_init(nyfr, filenames, directories)
+        self.__set_init(nyfr=nyfr, filenames=filenames, directories=directories)
+        if self.__needs_init():
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
         system_params = self.nyfr.get_system_params()
         dictionary_params = self.nyfr.get_dictionary_params()
         recovery_params = self.nyfr.get_recovery_params()
-        noise_level_list = ["no_noise", "low_noise", "high_noise"]
-        phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
-        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
-        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
-        input_tones_list = ["1_2", "3", "4", "5"]
+        
         recovery_list = []
         for mode in recovery_params['modes']:
             recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
@@ -572,9 +607,9 @@ class NYFR_Test_Harness:
             elif ( mode == 'active_zones' ):
                 mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['active_zones']
                 mlp_models_base_path_aux = None
-            for noise_level in noise_level_list:
-                for phase_shift in phase_shift_list:
-                    for input_tones in input_tones_list:
+            for noise_level, _ in self.input_set_params["noise_levels"]:
+                for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                    for input_tones, _ in self.input_set_params["input_tones"]:
                         for processing_system in system_params['processing_systems']:
                             if ( mode == 'real_imag' ):
                                 recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
@@ -600,9 +635,8 @@ class NYFR_Test_Harness:
                                                                     mode,
                                                                     self.recovery_file[mode][processing_system])
                                 recovery_log_file_path_aux = None
-
-                            for f_mod in f_mod_list:
-                                for f_delta in f_delta_list:
+                            for f_mod, _ in self.input_set_params["f_mods"]:
+                                for f_delta, _ in self.input_set_params["f_deltas"]:
                                     output_file_path = os.path.join(self.output_dir,
                                                                     noise_level,
                                                                     phase_shift,
@@ -670,110 +704,139 @@ class NYFR_Test_Harness:
                                         delete_lines_with_string(recovery_log_file_path, output_file_path)
 
     def create_dfs(self, nyfr=None, filenames=None, directories=None):
-        mod_delta_table = self.__set_init(nyfr, filenames, directories)
-        dictionary_params = self.nyfr.get_dicionary_params()
+        self.__set_init(nyfr=nyfr, filename=filenames, directories=directories)
+        if self.__needs_init():
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
+        dictionary_params = self.nyfr.get_dictionary_params()
         recovery_params = self.nyfr.get_recovery_params()
+        input_df_file_path = os.path.join(self.df_dir, self.input_df_file)
+        output_df_file_path = os.path.join(self.df_dir, self.output_df_file)
+        recovery_df_file_path = os.path.join(self.df_dir, self.recovery_file['df'])
 
-        if mod_delta_table is not None:
-            input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                        'noise_level': pd.Series(dtype='str'),
-                        'phase_shift': pd.Series(dtype='str'),
-                        'num_tones': pd.Series(dtype='int'),
-                        'tone_frequencies': pd.Series(dtype='int')})
-            output_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                        'noise_level': pd.Series(dtype='str'),
-                        'phase_shift': pd.Series(dtype='str'),
-                        'f_mod': pd.Series(dtype='float'),
-                        'f_delta': pd.Series(dtype='float')})
-            recovery_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
-                        'noise_level': pd.Series(dtype='str'),
-                        'phase_shift': pd.Series(dtype='str'),
-                        'f_mod': pd.Series(dtype='float'),
-                        'f_delta': pd.Series(dtype='float')})
-            input_file_paths = get_all_file_paths(self.input_dir)
-            for input_file_path in input_file_paths:
-                noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
-                match file_name:
-                    case '1_2_tone_sigs.npy':
-                        num_tones = [1,2]
-                    case '3_tone_sigs.npy':
-                        num_tones = [3]
-                    case '4_tone_sigs.npy':
-                        num_tones = [4]
-                    case '5_tone_sigs.npy':
-                        num_tones = [5]
-                    case _:
-                        num_tones = []
-                input_df.loc[len(input_df)] = [file_name, noise_level, phase_shift, num_tones, 0]
-                output_base_dir = self.output_dir + noise_level + "\\" + phase_shift + "\\"
-                recovery_base_dir = self.recovery_dir[dictionary_params['version']][recovery_params['type']] + noise_level + "\\" + phase_shift + "\\"
-                output_file_sub_dirs = get_all_sub_dirs(output_base_dir)
-                for sub_dir in output_file_sub_dirs:
-                    output_file_path = os.path.join(sub_dir, file_name)
-                    f_mod, f_delta, _ = get_file_sub_dirs(output_file_path)
-                    recovery_dir = recovery_base_dir + f_mod + "\\" + f_delta + "\\"
-                    recovery_file_path = os.path.join(recovery_dir, file_name)
-                    output_df.loc[len(output_df)] = [output_file_path, noise_level, phase_shift, mod_delta_table[f_mod], mod_delta_table[f_delta]]
-                    recovery_df.loc[len(recovery_df)] = [recovery_file_path, noise_level, phase_shift, mod_delta_table[f_mod], mod_delta_table[f_delta]]
-                    pass
-            input_df.to_pickle(self.input_df_file)
-            output_df.to_pickle(self.output_df_file)
-            recovery_df.to_pickle(self.recovery_file['df'])
+        input_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                    'noise_level': pd.Series(dtype='str'),
+                    'phase_shift': pd.Series(dtype='str'),
+                    'num_tones': pd.Series(dtype='int'),
+                    'tone_frequencies': pd.Series(dtype='int')})
+        output_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                    'noise_level': pd.Series(dtype='str'),
+                    'phase_shift': pd.Series(dtype='str'),
+                    'f_mod': pd.Series(dtype='float'),
+                    'f_delta': pd.Series(dtype='float')})
+        recovery_df = pd.DataFrame({'file_name': pd.Series(dtype='str'),
+                    'noise_level': pd.Series(dtype='str'),
+                    'phase_shift': pd.Series(dtype='str'),
+                    'f_mod': pd.Series(dtype='float'),
+                    'f_delta': pd.Series(dtype='float')})
+        for mode in recovery_params['modes']:
+            recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
+            if ( recovery_params['type'] == 'MLP1' ):
+                recovery_base_path = os.path.join(recovery_base_path,
+                                                  mode)
+            for noise_level, _ in self.input_set_params["noise_levels"]:
+                for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                    for input_tones, num_tones in self.input_set_params["input_tones"]:
+                        input_df.loc[len(input_df)] = [input_tones, noise_level, phase_shift, num_tones, 0]
+                        for f_mod, f_mod_value in self.input_set_params["f_mods"]:
+                            for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
+                                output_file_path = os.path.join(self.output_dir,
+                                                                noise_level,
+                                                                phase_shift,
+                                                                f_mod,
+                                                                f_delta,
+                                                                self.input_tones[input_tones]['sigs'])
+                                recovery_file_path = os.path.join(recovery_base_path,
+                                                                  noise_level,
+                                                                  phase_shift,
+                                                                  f_mod,
+                                                                  f_delta,
+                                                                  self.recovery_file['name'])       
+                                output_df.loc[len(output_df)] = [output_file_path, noise_level, phase_shift, f_mod_value, f_delta_value]
+                                recovery_df.loc[len(recovery_df)] = [recovery_file_path, noise_level, phase_shift, f_mod_value, f_delta_value]
+
+            input_df.to_pickle(input_df_file_path)
+            output_df.to_pickle(output_df_file_path)
+            recovery_df.to_pickle(recovery_df_file_path)
               
-    def set_recovery_df(self, nyfr, filenames=None, directories=None):
-        mod_delta_table = self.__set_init(nyfr, filenames, directories)
-        dictionary_params = self.nyfr.get_dicionary_params()
+    def set_recovery_df(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        self.__set_init(nyfr=nyfr, filename=filenames, directories=directories, input_set_params=input_set_params)
+        if self.__needs_init(include_set_params=True):
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
+        dictionary_params = self.nyfr.get_dictionary_params()
         recovery_params = self.nyfr.get_recovery_params()
-        if mod_delta_table is not None:
-            add_columns = 0
-            recovery_sig_set_size = 0
-            input_tone_thresh = 600
-            recovery_mag_thresh = 2
-            recovery_df_path = os.path.join(self.recovery_dir['df'], self.recovery_file['df'])
-            if os.path.exists(recovery_df_path):
-                recovery_df = pd.read_pickle(recovery_df_path)
-                input_file_paths = get_all_file_paths(self.input_dir)
-                for input_file_path in input_file_paths:
-                    file_name, noise_level, phase_shift = get_file_sub_dirs(input_file_path)
-                    recovery_sub_path = self.recovery_dir[dictionary_params['version']] + noise_level + "\\" + phase_shift + "\\"
-                    input_sig_set = np.load(input_file_path)
-                    recovery_file_sub_dirs = get_all_sub_dirs(recovery_sub_path)
-                    for sub_dir in recovery_file_sub_dirs:
-                        recovery_file_path = os.path.join(sub_dir, file_name)
-                        _, f_mod, f_delta = get_file_sub_dirs(recovery_file_path)
-                        recovery_sig_set = np.load(recovery_file_path)
-                        if ( add_columns == 1 ):
-                            recovery_sig_set_size = recovery_sig_set.shape[0]
-                            add_columns = 0
-                            for stats in range(recovery_sig_set_size):
-                                min_spur_mag = "min_spur_mag_" + str(stats)
-                                recovery_df[min_spur_mag] = 0.0
-                                min_rec_mag = "min_rec_mag_" + str(stats)
-                                recovery_df[min_rec_mag] = 0.0
-                                pass
-                            recovery_df.to_pickle(recovery_df_path)
 
-                        current_recovery_row = recovery_df.index[(recovery_df['file_name']==file_name) &
-                                    (recovery_df['noise_level']==noise_level) &
-                                    (recovery_df['phase_shift']==phase_shift) &
-                                    (recovery_df['f_mod']==mod_delta_table[f_mod]) &
-                                    (recovery_df['f_delta']==mod_delta_table[f_delta]) &
-                                    (recovery_df['dictionary_type']==dictionary_params['type']) &
-                                    (recovery_df['recovery_method']==recovery_params['type'])]
-                        recovery_df = self.__update_recovery_df(recovery_df,                         
-                                                                    recovery_sig_set,
-                                                                    input_sig_set,
-                                                                    input_tone_thresh,
-                                                                    recovery_mag_thresh,
-                                                                    current_recovery_row)     
-            recovery_df.to_pickle(recovery_df_path)
+        add_columns = False
+        
+        recovery_df_path = os.path.join(self.df_dir, self.recovery_file['df'])
+        if os.path.exists(recovery_df_path):
+            recovery_df = pd.read_pickle(recovery_df_path)
+            for mode in recovery_params['modes']:
+                recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
+                if ( recovery_params['type'] == 'MLP1' ):
+                    recovery_base_path = os.path.join(recovery_base_path,
+                                                    mode)
+                for noise_level, _ in self.input_set_params["noise_levels"]:
+                    for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                        for input_tones, _ in self.input_set_params["input_tones"]:
+                            input_list_path = os.path.join(self.input_dir,
+                                                           noise_level,
+                                                           phase_shift,
+                                                           self.input_tones[input_tones]['list'])
+                            for f_mod, f_mod_value in self.input_set_params["f_mods"]:
+                                for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
+                                    recovery_file_path = os.path.join(recovery_base_path,
+                                                                      noise_level,
+                                                                      phase_shift,
+                                                                      f_mod,
+                                                                      f_delta,
+                                                                      self.recovery_file['name'])
+                                    recovery_sig_set = np.load(recovery_file_path)
+                                    recovery_sig_set_size = 0
+                                    if add_columns:
+                                        recovery_sig_set_size = recovery_sig_set.shape[0]
+                                        add_columns = False
+                                        for stats in range(recovery_sig_set_size):
+                                            min_spur_mag = "min_spur_mag_" + str(stats)
+                                            recovery_df[min_spur_mag] = 0.0
+                                            min_rec_mag = "min_rec_mag_" + str(stats)
+                                            recovery_df[min_rec_mag] = 0.0
+                                            pass
+                                        recovery_df.to_pickle(recovery_df_path)
 
-    def __update_recovery_df(recovery_df,
-                                  recovery_sig_set,
-                                  input_sig_set,
-                                  input_tone_thresh,
-                                  recovery_mag_thresh,
-                                  current_recovery_row):
+                                    current_recovery_row = recovery_df.index[(recovery_df['file_name']==self.input_tones[input_tones]['sigs']) &
+                                                (recovery_df['noise_level']==noise_level) &
+                                                (recovery_df['phase_shift']==phase_shift) &
+                                                (recovery_df['f_mod']==f_mod_value) &
+                                                (recovery_df['f_delta']==f_delta_value) &
+                                                (recovery_df['dictionary_type']==dictionary_params['type']) &
+                                                (recovery_df['recovery_method']==recovery_params['type'])]
+                                    recovery_df = self.__update_recovery_df(recovery_df,                         
+                                                                            recovery_sig_set,
+                                                                            input_list_path,
+                                                                            recovery_params["mag_thresh"],
+                                                                            current_recovery_row,
+                                                                            self.input_set_params["amp_min"])     
+                        recovery_df.to_pickle(recovery_df_path)
+
+    def __update_recovery_df(self,
+                             recovery_df,
+                             recovery_sig_set,
+                             input_list_path,
+                             recovery_mag_thresh,
+                             current_recovery_row,
+                             input_tone_thresh):
+        input_sig_params = pd.read_pickle(input_list_path)
+        system_params = self.nyfr.get_system_params()
+        orig_system_noise_level = system_params["system_noise_level"]
+        system_params["system_noise_level"] = 0
+        self.nyfr.set_system_params(system_params=system_params)
+
+        if len(input_sig_params) != recovery_sig_set.shape[0]:
+            print("Input signal set size does not match recovery signal set size")
+            return recovery_df
+        
         for idx,rec_sig in enumerate(recovery_sig_set):
             meta_data = {
                 'num_rec_freq': {
@@ -821,11 +884,14 @@ class NYFR_Test_Harness:
                     'value': 0
                 }
             }
-            input_sig_xf = fft(input_sig_set[idx])
+            input_sig_param, _ = input_sig_params[idx]
+            analog_input, _ = self.nyfr.create_input_signal(wave_params=input_sig_param)
+            input_sig = self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate())
+            input_sig_xf = fft(input_sig)
             input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
-            input_tone_mag = abs(input_sig_xf[input_sig_tones])
+            input_tone_mag = np.abs(input_sig_xf)
             rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_thresh)[0]
-            mask = np.isin(rec_sig_tones,input_sig_tones)
+            mask = np.in1d(rec_sig_tones,input_sig_tones)
             recovered_freq = np.where(mask)[0]
             spur_freq = np.where(~mask)[0]
             recovered_tones = rec_sig_tones[recovered_freq]
@@ -857,5 +923,6 @@ class NYFR_Test_Harness:
             pass
             for data in meta_data:
                 recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
-            
-            return recovery_df
+        system_params["system_noise_level"] = orig_system_noise_level
+        self.nyfr.set_system_params(system_params=system_params)
+        return recovery_df

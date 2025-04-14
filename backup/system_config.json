@@ -37,6 +37,7 @@
         "type": "MLP1",
         "modes": [
             "mag_ang"
-        ]
+        ],
+        "mag_thresh": 2
     }
 }

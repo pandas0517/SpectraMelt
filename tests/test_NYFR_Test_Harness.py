@@ -8,7 +8,6 @@ if __name__ == '__main__':
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
     from pathlib import Path
     from dotenv import load_dotenv
-    from NYFR import NYFR
     from NYFR_Test_Harness import NYFR_Test_Harness
     import matplotlib.pyplot as plt
     from scipy.fftpack import fft
@@ -17,21 +16,22 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    nyfr = NYFR(file_path=Path(os.getenv('SYSTEM_CONF')))
-    nyfr.initialize()
-    dictionary_params = nyfr.get_dictionary_params()
-    recovery_params = nyfr.get_recovery_params()
-    test_harness = NYFR_Test_Harness(nyfr=nyfr,
-                                     filenames_json=os.getenv('FILENAMES'),
+    test_harness = NYFR_Test_Harness(filenames_json=os.getenv('FILENAMES'),
                                      directories_json=os.getenv('DIRECTORIES'),
-                                     input_set_json=os.getenv('INPUTSET_CONF'))
+                                     input_set_json=os.getenv('INPUTSET_CONF'),
+                                     system_conf_json=os.getenv('SYSTEM_CONF'))
     test_harness.create_sets()
     test_harness.create_output_sets()
     test_harness.create_dictionaries()
     test_harness.create_dfs()
     test_harness.batch_recover()
-    
+
     directories = test_harness.get_directories()
+    nyfr = test_harness.get_nyfr()
+    del test_harness
+    recovery_params = nyfr.get_recovery_params()
+    dictionary_params = nyfr.get_dictionary_params()
+    
     input_file_paths = get_all_file_paths(directories['input'])
     dictionary_file_list = get_all_file_paths(directories['dictionary'][dictionary_params['version']])
     dictionary_file_list_original = get_all_file_paths(directories['dictionary']['original'])
