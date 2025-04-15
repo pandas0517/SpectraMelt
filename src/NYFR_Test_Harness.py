@@ -316,38 +316,6 @@ class NYFR_Test_Harness:
                 dictionary[type] = os.path.join(*dictionary[type])
             self.dictionary_dir = dictionary
 
-    def get_nyfr(self):
-        return self.nyfr
-
-    def get_filenames(self):
-        filenames = {}
-        filenames['dictionary'] = self.dictionary_file
-        filenames['time'] = self.time_file
-        filenames['recovery'] = self.recovery_file
-        filenames['input_df'] = self.input_df_file
-        filenames['output_df'] = self.output_df_file
-        filenames['mlp_models'] = self.mlp_models_file
-        filenames['input_tones'] = self.input_tones
-        return filenames
-    
-    def get_directories(self):
-        directories = {}
-        directories['system_config_name'] = self.system_config_name
-        directories['input'] = self.input_dir
-        directories['output'] = self.output_dir
-        directories['fft'] = self.fft_dir
-        directories['time'] = self.time_dir
-        directories['time_sampled'] = self.time_sampled_dir
-        directories['dictionary'] = self.dictionary_dir
-        directories['recovery'] = self.recovery_dir
-        directories['active_zones'] = self.active_zones_dir
-        directories['mlp_models'] = self.mlp_models_dir
-        directories['premultiply'] = self.premultiply_dir
-        return directories
-
-    def get_input_set_params(self):
-        return self.input_set_params
-
     def __set_init(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
         if filenames is not None:
             self.set_filenames(filenames=filenames)
@@ -607,10 +575,10 @@ class NYFR_Test_Harness:
             elif ( mode == 'active_zones' ):
                 mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['active_zones']
                 mlp_models_base_path_aux = None
-            for noise_level, _ in self.input_set_params["noise_levels"]:
-                for phase_shift, _ in self.input_set_params["phase_shifts"]:
-                    for input_tones, _ in self.input_set_params["input_tones"]:
-                        for processing_system in system_params['processing_systems']:
+            for processing_system in system_params['processing_systems']:
+                for noise_level, _ in self.input_set_params["noise_levels"]:
+                    for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                        for input_tones, _ in self.input_set_params["input_tones"]:
                             if ( mode == 'real_imag' ):
                                 recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
                                                                     mode,
@@ -926,3 +894,53 @@ class NYFR_Test_Harness:
         system_params["system_noise_level"] = orig_system_noise_level
         self.nyfr.set_system_params(system_params=system_params)
         return recovery_df
+
+    def get_nyfr(self):
+        return self.nyfr
+
+    def get_filenames(self):
+        filenames = {}
+        filenames['dictionary'] = self.dictionary_file
+        filenames['time'] = self.time_file
+        filenames['recovery'] = self.recovery_file
+        filenames['input_df'] = self.input_df_file
+        filenames['output_df'] = self.output_df_file
+        filenames['mlp_models'] = self.mlp_models_file
+        filenames['input_tones'] = self.input_tones
+        return filenames
+    
+    def get_directories(self):
+        directories = {}
+        directories['system_config_name'] = self.system_config_name
+        directories['input'] = self.input_dir
+        directories['output'] = self.output_dir
+        directories['fft'] = self.fft_dir
+        directories['time'] = self.time_dir
+        directories['time_sampled'] = self.time_sampled_dir
+        directories['dictionary'] = self.dictionary_dir
+        directories['recovery'] = self.recovery_dir
+        directories['active_zones'] = self.active_zones_dir
+        directories['mlp_models'] = self.mlp_models_dir
+        directories['premultiply'] = self.premultiply_dir
+        return directories
+
+    def get_input_set_params(self):
+        return self.input_set_params
+
+    def get_recovery_params(self):
+        return self.nyfr.get_recovery_params()
+
+    def get_dictionary_params(self):
+        return self.nyfr.get_dictionary_params()
+    
+    def get_real_time(self):
+        return self.nyfr.get_real_time()
+    
+    def get_frequncy_bins(self):
+        return self.nyfr.get_frequncy_bins()
+    
+    def get_sampled_freq_bins(self):
+        return self.nyfr.get_sampled_freq_bins()
+
+    def get_system_params(self):
+        return self.nyfr.get_system_params()
