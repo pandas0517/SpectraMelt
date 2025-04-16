@@ -90,4 +90,5 @@ if __name__ == '__main__':
                                             plt.subplot(num_subplots,1,3)
                                             plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
                                             plt.subplot(num_subplots,1,4)
-                                            plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess))) 
+                                            plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess)))
+                                            plt.show()
