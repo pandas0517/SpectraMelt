@@ -839,3 +839,6 @@ class NYFR_Test_Harness:
 
     def get_system_params(self):
         return self.nyfr.get_system_params()
+    
+    def get_Zones(self):
+        return self.nyfr.get_zones()
