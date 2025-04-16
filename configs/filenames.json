@@ -32,25 +32,25 @@
         "name": "recovery_list.txt",
         "mag_ang": {
             "mag": {
-                "bedroom": "recovery_list_bedroom_mag.txt",
-                "daddo": "recovery_list_daddo_mag.txt"
+                "system1": "recovery_list_system1_mag.txt",
+                "system2": "recovery_list_system2_mag.txt"
             },
             "ang": {
-                "bedroom": "recovery_list_bedroom_ang.txt",
-                "daddo": "recovery_list_daddo_ang.txt"
+                "system1": "recovery_list_system1_ang.txt",
+                "system2": "recovery_list_system2_ang.txt"
             }
         },
         "active_zones": {
-            "bedroom": "recovery_list_bedroom_active_zones.txt",
-            "daddo": "recovery_list_daddo_active_zones.txt"
+            "system1": "recovery_list_system1_active_zones.txt",
+            "system2": "recovery_list_system2_active_zones.txt"
         }
     },
     "mlp_models": {
         "name" : "mlp_model_file.keras",
         "log": {
             "name": "input_list.txt",
-            "bedroom": "input_list_bedroom.txt",
-            "daddo": "input_list_daddo.txt"
+            "system1": "input_list_system1.txt",
+            "system2": "input_list_system2.txt"
         }
     }
 }

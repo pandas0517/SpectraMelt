@@ -39,316 +39,6 @@ class NYFR_Test_Harness:
                         directories=directories,
                         input_set_params=input_set_params)
 
-    def set_nyfr(self, nyfr):
-        self.nyfr = nyfr
-
-    def set_filenames(self, filenames=None):
-        if filenames is None:
-            print("No file names provided. Adding new file names")
-            input_df_filename = input("Enter input data frame file name: ")
-            output_df_filename = input("Enter output data frame file name: ")
-            recovery_df_filename = input("Enter recovery data frame file name: ")
-            dictionary_base_name = input("Enter dictionary file base name: ")
-            time_base_name = input("Enter time file base name: ")
-            frequency_base_name = input("Enter frequency file base name: ")
-            sampled_frequency_base_name = input("Enter sampled frequency file base name: ")
-            recovery_base_name = input("Enter recovery file base name: ")
-            mlp_model_file_name = input("Enter MLP model file name: ")
-            mlp_log_file_name = input("Enter MLP log file name: ")
-
-            add_recovery_mode = True
-            recovery_modes = []
-            total_recovery_modes = 0
-            while add_recovery_mode and total_recovery_modes < 3:
-                recovery_modes.append(input("Enter recovery mode (mag_ang, real_imag, complex, active_zone): "))
-                add_recovery_mode = input("Add another recovery mode? (y/n): ").lower() == 'y'
-                total_recovery_modes += 1
-
-            add_processing_systems = True
-            processing_systems = []
-            while add_processing_systems:
-                processing_systems.append(input("Enter processing systems: "))
-                add_processing_systems = input("Add another processing system? (y/n): ").lower() == 'y'
-
-            add_input_tone_file_name = True
-            input_tones = {}
-            while add_input_tone_file_name:
-                num_input_tones = input("Enter number of input tones (1_2/3/4/5): ")
-                input_tones[num_input_tones] = num_input_tones + "_tone_sigs.npy"
-                add_input_tone_file_name = input("Add another input signal filename? (y/n): ").lower() == 'y'
-
-            mlp_log_name = os.path.splitext(mlp_log_file_name)[0]
-            mlp_log_extension = os.path.splitext(mlp_log_file_name)[1]
-            mlp_models = {
-                "name": mlp_model_file_name,
-                "log": {
-                    "name": mlp_log_file_name
-                }
-            }
-            for processing_system in processing_systems:
-                mlp_models["log"][processing_system] = mlp_log_name + "_" + processing_system + mlp_log_extension
-
-            recovery_file = {
-                "df": recovery_df_filename,
-                "name": recovery_base_name
-            }
-            for recovery_mode in recovery_modes:
-                recovery_file[recovery_mode] = {}
-                sub_modes = []
-                if recovery_mode == 'mag_ang':
-                    sub_modes = [ 'mag', 'ang' ]
-                elif recovery_mode == 'real_imag':
-                    sub_modes = [ 'real', 'imag' ]
-
-                if recovery_mode == "complex":
-                    for processing_system in processing_systems:
-                        recovery_file[recovery_mode][processing_system] = "recovery_list_" + processing_system + "_complex.txt"
-                elif recovery_mode == "active_zones":
-                    for processing_system in processing_systems:
-                        recovery_file[recovery_mode][processing_system] = "recovery_list_" + processing_system + "_active_zones.txt"
-                else:
-                    for sub_mode in sub_modes:
-                        for processing_system in processing_systems:
-                            recovery_file[recovery_mode][sub_mode][processing_system] = "recovery_list_" + processing_system + "_" + sub_mode + ".txt"
-
-            self.dictionary_file = {
-                "name": dictionary_base_name
-            }
-            self.time_file = {
-                "name": time_base_name,
-                "frequency": frequency_base_name,
-                "sample_freq": sampled_frequency_base_name
-            }
-            self.recovery_file = recovery_file           
-            self.input_df_file = input_df_filename
-            self.output_df_file = output_df_filename
-            self.mlp_models_file = mlp_models
-            self.input_tones = input_tones
-        else:
-            self.dictionary_file = filenames['dictionary']
-            self.time_file = filenames['time']
-            self.recovery_file = filenames['recovery']
-            self.input_df_file = filenames['input_df']
-            self.output_df_file = filenames['output_df']
-            self.mlp_models_file = filenames['mlp_models']
-            self.input_tones = filenames['input_tones']
-
-    def set_input_set_params(self, input_set_params=None, input_set_json=None):
-        if input_set_json is not None:
-            input_set_params = load_settings(input_set_json)
-        elif input_set_params is None:
-            input_set_params = {
-                "input_config_name": "Input_Config_1",
-                "tot_num_freq_combos": 79800,
-                "amp_min": 0.5,
-                "amp_max": 1,
-                "high_phase_max": 0.75,
-                "high_phase_min": 0.4,
-                "low_phase_max": 0.25,
-                "low_phase_min": 0.05,
-                "high_noise_max": 3,
-                "high_noise_min": 2,
-                "low_noise_max": 0.3,
-                "low_noise_min": 0.2,
-                "noise_level_list": ["no_noise", "low_noise", "high_noise"],
-                "phase_shift_list": ["no_phase_shift", "low_phase_shift", "high_phase_shift"],
-                "f_mods": [["f_mod_0_1", 0.1], ["f_mod_0_2", 0.2], ["f_mod_0_25", 0.25], ["f_mod_0_5", 0.5]],
-                "f_deltas": [["f_delta_0_1", 0.1], ["f_delta_0_8", 0.8], ["f_delta_1_2", 1.2], ["f_delta_9_9", 10.0]],
-                "input_tones": [["1_2", [1,2]], ["3", [3]], ["4", [4]], ["5", [5]]]       
-            }
-        self.input_set_params = input_set_params
-
-    def set_directories(self, directories=None):
-        if directories is None:
-            print("No directory names provided.  Adding new directory names")
-            system_config_name = input("Enter system configuration name: ")
-            drive_letter = input("Enter drive letter (e.g. F:): ")
-            if drive_letter is not None:
-                drive_letter = drive_letter + os.sep
-            base_dir = input("Enter base test directory name: ")
-            input_dir = input("Enter input directory name: ")
-            output_dir = input("Enter output directory name: ")
-            fft_dir = input("Enter frequency file base name: ")
-            time_dir = input("Enter time directory: ")
-            time_sampled_dir = input("Enter sampled time directory: ")
-            df_dir = input("Enter data frame directory: ")
-            active_zones_dir = input("Enter active zones directory: ")
-            premultiply_dir = input("Enter pre-multiply directory name: ")
-            mlp_model_dir = input("Enter MLP model directory name: ")
-            recovery_dir = input("Enter recovery directory name: ")
-            dictionary_dir = input("Enter dictionary directory name: ")
-            dictionary_versions = []
-            total_dictionary_versions = 0
-            add_dictionary_version = True
-            while add_dictionary_version and total_dictionary_versions < 2:
-                dictionary_versions.append(input("Add dictionary version (enhanced/original): "))
-                add_dictionary_version = input("Add another dictionary version? (y/n): ").lower() == 'y'
-                total_recovery_modes += 1
-            
-            recovery_types = []
-            total_recovery_types = 0
-            add_recovery_types = True
-            while add_recovery_types and total_recovery_types < 4:
-                recovery_types.append(input("Add recovery type (OMP_Custom/OMP/MLP1/SPGL1): "))
-                add_recovery_types = input("Add another dictionary version? (y/n): ").lower() == 'y'
-                total_recovery_types += 1
-
-            mlp_model_types = [ "real", "imag", "mag", "ang", "complex"]
-            self.system_config_name = system_config_name
-            self.input_dir = os.path.join(drive_letter,
-                                          base_dir,
-                                          system_config_name,
-                                          self.input_set_params['input_config_name'],
-                                          input_dir)
-            self.output_dir = os.path.join(drive_letter,
-                                           base_dir,
-                                          system_config_name,
-                                          self.input_set_params['input_config_name'],
-                                          output_dir)
-            self.fft_dir = os.path.join(drive_letter,
-                                        base_dir,
-                                        system_config_name,
-                                        self.input_set_params['input_config_name'],
-                                        fft_dir)
-            self.time_dir = os.path.join(drive_letter,
-                                        base_dir,
-                                        system_config_name,
-                                        self.input_set_params['input_config_name'],
-                                        time_dir)
-            self.time_sampled_dir = os.path.join(drive_letter,
-                                                 base_dir,
-                                                 system_config_name,
-                                                 self.input_set_params['input_config_name'],
-                                                 time_sampled_dir)
-            self.df_dir = os.path.join(drive_letter,
-                                       base_dir,
-                                       system_config_name,
-                                       self.input_set_params['input_config_name'],
-                                       df_dir)
-            self.active_zones_dir = os.path.join(drive_letter,
-                                                 base_dir,
-                                                 system_config_name,
-                                                 self.input_set_params['input_config_name'],
-                                                 active_zones_dir)
-            recovery = {}
-            dictionary = {}
-            mlp_models = {}
-            premultiply = {}
-            for dictionary_version in dictionary_versions:
-                premultiply[dictionary_version] = os.path.join(drive_letter,
-                                                               base_dir,
-                                                               self.system_config_name,
-                                                               self.input_set_params['input_config_name'],
-                                                               premultiply_dir,
-                                                               dictionary_version)
-                dictionary[dictionary_version] = os.path.join(drive_letter,
-                                                              base_dir,
-                                                              self.system_config_name,
-                                                              dictionary_dir,
-                                                              dictionary_version)
-                for mlp_model_type in mlp_model_types:
-                    mlp_models[dictionary_version][mlp_model_type] = os.path.join(drive_letter,
-                                                                                  base_dir,
-                                                                                  self.system_config_name,
-                                                                                  self.input_set_params['input_config_name'],
-                                                                                  mlp_model_dir,
-                                                                                  dictionary_version,
-                                                                                  mlp_model_type)
-                for recovery_type in recovery_types:
-                    recovery[dictionary_version][recovery_type] = os.path.join(drive_letter,
-                                                                               base_dir,
-                                                                               self.system_config_name,
-                                                                               self.input_set_params['input_config_name'],
-                                                                               recovery_dir,
-                                                                               dictionary_version,
-                                                                               recovery_type)
-            self.mlp_models_dir = os.path.join(drive_letter,
-                                               base_dir,
-                                               self.system_config_name,
-                                               self.input_set_params['input_config_name'],
-                                               mlp_model_dir)
-            self.dictionary_dir = os.path.join(drive_letter,
-                                               base_dir,
-                                               self.system_config_name,
-                                               self.input_set_params['input_config_name'],
-                                               dictionary_dir)
-            self.recovery_dir = os.path.join(drive_letter,
-                                             base_dir,
-                                             self.system_config_name,
-                                             self.input_set_params['input_config_name'],
-                                             recovery_dir)
-            self.premultiply_dir = os.path.join(drive_letter,
-                                                base_dir,
-                                                self.system_config_name,
-                                                self.input_set_params['input_config_name'],
-                                                premultiply_dir)
-        else:
-            self.system_config_name = directories['system_config_name']
-            self.input_dir = os.path.join(*directories['input'])
-            self.output_dir = os.path.join(*directories['output'])
-            self.fft_dir = os.path.join(*directories['fft'])
-            self.time_dir = os.path.join(*directories['time'])
-            self.time_sampled_dir = os.path.join(*directories['time_sampled'])
-            self.df_dir = os.path.join(*directories['df'])
-            self.active_zones_dir = os.path.join(*directories['active_zones'])
-
-            recovery = directories['recovery']
-            for type in recovery:
-                if recovery[type]:
-                    for algorithm in recovery[type]:
-                        recovery[type][algorithm] = os.path.join(*recovery[type][algorithm])
-            self.recovery_dir = recovery
-
-            mlp_models = directories['mlp_models']
-            for type in mlp_models:
-                if mlp_models[type]:
-                    for mode in mlp_models[type]:
-                        mlp_models[type][mode] = os.path.join(*mlp_models[type][mode])
-            self.mlp_models_dir = mlp_models
-
-            premultiply = directories['premultiply']
-            for type in premultiply:
-                premultiply[type] = os.path.join(*premultiply[type])
-            self.premultiply_dir = premultiply
-
-            dictionary = directories['dictionary']
-            for type in dictionary:
-                dictionary[type] = os.path.join(*dictionary[type])
-            self.dictionary_dir = dictionary
-
-    def __set_init(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
-        if filenames is not None:
-            self.set_filenames(filenames=filenames)
-
-        if directories is not None:
-            self.set_directories(directories=directories)
-
-        if input_set_params is not None:
-            self.set_input_set_params(input_set_params=input_set_params)
-
-        if nyfr is not None:
-            self.nyfr = nyfr
-
-    def __needs_init(self, include_set_params=False):
-        needs_init = False
-        filenames = self.get_filenames()
-        directories = self.get_directories()
-        input_set_params = self.get_input_set_params()
-        if not filenames:
-            needs_init = True
-
-        if not directories:
-            needs_init = True
-
-        if include_set_params:
-            if not input_set_params:
-                needs_init = True
-
-        if self.nyfr is None:
-            needs_init = True
-
-        return needs_init
-
     def create_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
         self.__set_init(nyfr, filenames, directories, input_set_params)
         if self.__needs_init(include_set_params=True):
@@ -422,29 +112,6 @@ class NYFR_Test_Harness:
                                 output_set = np.array(output_list)
                                 np.save(output_file_path, output_set)
 
-    def create_dictionaries(self, nyfr=None):
-        if nyfr is not None:
-            self.nyfr = nyfr
-        LO_params = self.nyfr.get_LO_params()
-        dictionary_params = self.nyfr.get_dictionary_params()
-        if LO_params == None or self.nyfr.get_K_band() == None or dictionary_params == None:
-            print("NYFR not initialized.  Please re-initialize object")
-        else:
-            f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
-            f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
-            for f_mod in f_mod_list:
-                LO_params['phase_freq'] = f_mod[0]
-                mod_dir = f_mod[1]
-                for f_delta in f_delta_list:
-                    LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
-                    nyfr.set_LO_params(LO_params=LO_params)
-                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
-                                                        mod_dir,
-                                                        f_delta[1],
-                                                        self.dictionary_file['name'])
-                    dictionary = nyfr.create_dict()
-                    np.save(dictionary_file_path, dictionary)
-
     def __get_frequency_list(self, num_of_sigs, wbf_cut_freq):
         pos_bins = list(range(1, wbf_cut_freq))
         input_freq_tot_list = []
@@ -495,6 +162,29 @@ class NYFR_Test_Harness:
         elif noise_level == "low_noise":
             noise = random.uniform(self.input_set_params['low_noise_min'], self.input_set_params['low_noise_max'])
         return wave_params, noise
+
+    def create_dictionaries(self, nyfr=None):
+        if nyfr is not None:
+            self.nyfr = nyfr
+        LO_params = self.nyfr.get_LO_params()
+        dictionary_params = self.nyfr.get_dictionary_params()
+        if LO_params == None or self.nyfr.get_K_band() == None or dictionary_params == None:
+            print("NYFR not initialized.  Please re-initialize object")
+        else:
+            f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
+            f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
+            for f_mod in f_mod_list:
+                LO_params['phase_freq'] = f_mod[0]
+                mod_dir = f_mod[1]
+                for f_delta in f_delta_list:
+                    LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
+                    nyfr.set_LO_params(LO_params=LO_params)
+                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
+                                                        mod_dir,
+                                                        f_delta[1],
+                                                        self.dictionary_file['name'])
+                    dictionary = nyfr.create_dict()
+                    np.save(dictionary_file_path, dictionary)
 
     def create_input_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
         _ = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
@@ -788,7 +478,7 @@ class NYFR_Test_Harness:
                                                                             self.input_set_params["amp_min"])     
                         recovery_df.to_pickle(recovery_df_path)
 
-    def __update_recovery_df(self,
+    def __update_recovery_df(self, 
                              recovery_df,
                              recovery_sig_set,
                              input_list_path,
@@ -894,6 +584,211 @@ class NYFR_Test_Harness:
         system_params["system_noise_level"] = orig_system_noise_level
         self.nyfr.set_system_params(system_params=system_params)
         return recovery_df
+
+    def set_nyfr(self, nyfr):
+        self.nyfr = nyfr
+
+    def set_filenames(self, filenames=None):
+        if filenames is None:
+            filenames = {
+                "input_df": "input_df.pkl",
+                "output_df": "output_df.pkl",
+                "input_tones": {
+                    "1_2": {
+                        "sigs": "1_2_tone_sigs.npy",
+                        "list": "1_2_tone_list.pkl"
+                    },
+                    "3": {
+                        "sigs": "3_tone_sigs.npy", 
+                        "list": "3_tone_list.pkl"
+                    },
+                    "4": {
+                        "sigs": "4_tone_sigs.npy", 
+                        "list": "4_tone_list.pkl"
+                    },
+                    "5": {
+                        "sigs": "5_tone_sigs.npy", 
+                        "list": "5_tone_list.pkl"
+                    }
+                },
+                "dictionary": {
+                    "name": "dictionary.npy"
+                },
+                "time": {
+                    "name": "time.npy",
+                    "frequency": "complex_tf.npy",
+                    "sampled_freq": "complex_tf_sampled.npy"
+                },
+                "recovery":{
+                    "df": "recovery_df.pkl",
+                    "name": "recovery_list.txt",
+                    "mag_ang": {
+                        "mag": {
+                            "system1": "recovery_list_system1_mag.txt",
+                            "system2": "recovery_list_system2_mag.txt"
+                        },
+                        "ang": {
+                            "system1": "recovery_list_system1_ang.txt",
+                            "system2": "recovery_list_system2_ang.txt"
+                        }
+                    },
+                    "active_zones": {
+                        "system1": "recovery_list_system1_active_zones.txt",
+                        "system2": "recovery_list_system2_active_zones.txt"
+                    }
+                },
+                "mlp_models": {
+                    "name" : "mlp_model_file.keras",
+                    "log": {
+                        "name": "input_list.txt",
+                        "system1": "input_list_system1.txt",
+                        "system2": "input_list_system2.txt"
+                    }
+                }
+            }
+
+        self.dictionary_file = filenames['dictionary']
+        self.time_file = filenames['time']
+        self.recovery_file = filenames['recovery']
+        self.input_df_file = filenames['input_df']
+        self.output_df_file = filenames['output_df']
+        self.mlp_models_file = filenames['mlp_models']
+        self.input_tones = filenames['input_tones']
+
+    def set_input_set_params(self, input_set_params=None, input_set_json=None):
+        if input_set_json is not None:
+            input_set_params = load_settings(input_set_json)
+        elif input_set_params is None:
+            input_set_params = {
+                "input_config_name": "Input_Config_1",
+                "tot_num_freq_combos": 40000,
+                "amp_min": 0.5,
+                "amp_max": 1,
+                "noise_levels": [["no_noise", []], ["low_noise", [0.2, 0.3]], ["high_noise", [2, 3]]],
+                "phase_shifts": [["no_phase_shift", []], ["low_phase_shift",[0.05,0.25]], ["high_phase_shift", [0.4,0.75]]],
+                "f_mods": [["f_mod_0_1", 0.1], ["f_mod_0_2", 0.2], ["f_mod_0_25", 0.25], ["f_mod_0_5", 0.5]],
+                "f_deltas": [["f_delta_0_1", 0.1], ["f_delta_0_8", 0.8], ["f_delta_1_2", 1.2], ["f_delta_9_9", 10.0]],
+                "input_tones": [["1_2", [1,2]], ["3", [3]], ["4", [4]], ["5", [5]]]     
+            }
+        self.input_set_params = input_set_params
+
+    def set_directories(self, directories=None):
+        if directories is None:
+            directories = {
+                "system_config_name": "System_Config_1",
+                "input_config_name": "Input_Config_1",
+                "time": ["test_sets", "System_Config_1", "Internal", "System", "Not_Sampled"],
+                "time_sampled": ["test_sets", "System_Config_1", "Internal", "System", "Sampled"],
+                "input": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Inputs"],
+                "output": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Outputs"],
+                "train": ["test_sets", "System_Config_1", "Model_Inputs", "train"],
+                "test": ["test_sets", "System_Config_1", "Model_Inputs", "test"],
+                "fft": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "fft"],
+                "active_zones": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "active_zones"],
+                "df": ["F:\\", "test_sets"],
+                "dictionary": {
+                    "enhanced": ["F:\\", "test_sets", "System_Config_1", "Dictionaries", "enhanced"],
+                    "original": ["F:\\", "test_sets", "System_Config_1", "Dictionaries", "original"]
+                },
+                "recovery": {
+                    "enhanced": {
+                    },
+                    "original": {
+                        "OMP_Custom": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP_Custom", "original"],
+                        "OMP": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP", "original"],
+                        "MLP1": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "MLP1", "original"],
+                        "SPGL1": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "SPGL1", "original"]
+                    }
+                },
+                "mlp_models": {
+                    "enhanced": {
+                        "real": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "real"],
+                        "imag": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "imag"],
+                        "mag": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "mag"],
+                        "ang": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "ang"],
+                        "complex": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "complex"],
+                        "active_zones": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "enhanced", "active_zones"]
+                    },
+                    "original": {
+                        "real": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "real"],
+                        "imag": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "imag"],
+                        "mag": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "mag"],
+                        "ang": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "ang"],
+                        "complex": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "complex"],
+                        "active_zones": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "MLP_Models", "original", "active_zones"]
+                    }
+                },
+                "premultiply": {
+                    "enhanced": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "PreMultiply", "enhanced"],
+                    "original": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "PreMultiply", "original"]
+                }
+            }
+
+        self.system_config_name = directories['system_config_name']
+        self.input_dir = os.path.join(*directories['input'])
+        self.output_dir = os.path.join(*directories['output'])
+        self.fft_dir = os.path.join(*directories['fft'])
+        self.time_dir = os.path.join(*directories['time'])
+        self.time_sampled_dir = os.path.join(*directories['time_sampled'])
+        self.df_dir = os.path.join(*directories['df'])
+        self.active_zones_dir = os.path.join(*directories['active_zones'])
+
+        recovery = directories['recovery']
+        for type in recovery:
+            if recovery[type]:
+                for algorithm in recovery[type]:
+                    recovery[type][algorithm] = os.path.join(*recovery[type][algorithm])
+        self.recovery_dir = recovery
+
+        mlp_models = directories['mlp_models']
+        for type in mlp_models:
+            if mlp_models[type]:
+                for mode in mlp_models[type]:
+                    mlp_models[type][mode] = os.path.join(*mlp_models[type][mode])
+        self.mlp_models_dir = mlp_models
+
+        premultiply = directories['premultiply']
+        for type in premultiply:
+            premultiply[type] = os.path.join(*premultiply[type])
+        self.premultiply_dir = premultiply
+
+        dictionary = directories['dictionary']
+        for type in dictionary:
+            dictionary[type] = os.path.join(*dictionary[type])
+        self.dictionary_dir = dictionary
+
+    def __set_init(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        if filenames is not None:
+            self.set_filenames(filenames=filenames)
+
+        if directories is not None:
+            self.set_directories(directories=directories)
+
+        if input_set_params is not None:
+            self.set_input_set_params(input_set_params=input_set_params)
+
+        if nyfr is not None:
+            self.nyfr = nyfr
+
+    def __needs_init(self, include_set_params=False):
+        needs_init = False
+        filenames = self.get_filenames()
+        directories = self.get_directories()
+        input_set_params = self.get_input_set_params()
+        if not filenames:
+            needs_init = True
+
+        if not directories:
+            needs_init = True
+
+        if include_set_params:
+            if not input_set_params:
+                needs_init = True
+
+        if self.nyfr is None:
+            needs_init = True
+
+        return needs_init
 
     def get_nyfr(self):
         return self.nyfr

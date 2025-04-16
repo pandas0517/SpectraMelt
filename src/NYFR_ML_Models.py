@@ -5,8 +5,7 @@ from keras import losses
 import tensorflow as tf
 from numpy import sin, cos
 import numpy as np
-from utility import load_settings, get_all_sub_dirs
-from utility import get_all_file_paths, get_file_sub_dirs
+from utility import load_settings
 from scipy.fftpack import fft
 import os
 

@@ -6,7 +6,6 @@ if __name__ == '__main__':
     import sys
     # Add the src directory to the system path
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
-    from pathlib import Path
     from dotenv import load_dotenv
     from NYFR_Test_Harness import NYFR_Test_Harness
     import matplotlib.pyplot as plt
