@@ -1,5 +1,4 @@
-from utility import get_all_file_paths, get_all_sub_dirs
-from utility import load_settings, get_file_sub_dirs
+from utility import load_settings
 from utility import delete_lines_with_string
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft
