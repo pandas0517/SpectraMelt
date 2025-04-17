@@ -1,6 +1,8 @@
 from utility import get_all_file_paths, get_all_sub_dirs
 from utility import load_settings, get_file_sub_dirs
 from utility import delete_lines_with_string
+import matplotlib.pyplot as plt
+from scipy.fftpack import fft
 from NYFR import NYFR
 import numpy as np
 import pandas as pd
@@ -164,79 +166,122 @@ class NYFR_Test_Harness:
         return wave_params, noise
 
     def create_dictionaries(self, nyfr=None):
-        if nyfr is not None:
-            self.nyfr = nyfr
-        LO_params = self.nyfr.get_LO_params()
-        dictionary_params = self.nyfr.get_dictionary_params()
-        if LO_params == None or self.nyfr.get_K_band() == None or dictionary_params == None:
+        if nyfr is None:
+            nyfr = self.nyfr
+        LO_params = nyfr.get_LO_params()
+        dictionary_params = nyfr.get_dictionary_params()
+        if LO_params == None or nyfr.get_K_band() == None or dictionary_params == None:
             print("NYFR not initialized.  Please re-initialize object")
         else:
-            f_mod_list = [[0.1, "f_mod_0_1"], [0.2, "f_mod_0_2"], [0.25, "f_mod_0_25"], [0.5, "f_mod_0_5"]]
-            f_delta_list = [[0.1, "f_delta_0_1"], [0.8, "f_delta_0_8"], [1.2, "f_delta_1_2"], [10, "f_delta_9_9"]]
-            for f_mod in f_mod_list:
-                LO_params['phase_freq'] = f_mod[0]
-                mod_dir = f_mod[1]
-                for f_delta in f_delta_list:
-                    LO_params['phase_delta'] = round(f_delta[0] * f_mod[0], 2)
+            for f_mod, f_mod_value in self.input_set_params["f_mods"]:
+                LO_params['phase_freq'] = f_mod_value
+                for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
+                    LO_params['phase_delta'] = round(f_delta_value * f_mod_value, 2)
                     nyfr.set_LO_params(LO_params=LO_params)
                     dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
-                                                        mod_dir,
-                                                        f_delta[1],
+                                                        f_mod,
+                                                        f_delta,
                                                         self.dictionary_file['name'])
                     dictionary = nyfr.create_dict()
                     np.save(dictionary_file_path, dictionary)
 
     def create_input_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
-        _ = self.__set_init(nyfr, filenames, directories, input_set_params=input_set_params)
+        self.__set_init(nyfr, filenames, directories, input_set_params)
+        if self.__needs_init(include_set_params=True):
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
         system_params = self.nyfr.get_system_params()
         wbf_cut_freq = system_params['wbf_cut_freq']
-        for num_of_sigs, tone_sigs_file_name in self.input_tones.items():
-                input_freq_tot_list = self.__get_frequency_list(num_of_sigs=num_of_sigs,
-                                                               wbf_cut_freq=wbf_cut_freq)
-                input_sub_dirs = get_all_sub_dirs(self.input_dir)
-                for sub_dir in input_sub_dirs:
-                    input_file_path = os.path.join(sub_dir, tone_sigs_file_name)
-                    noise_level, phase_shift, _ = get_file_sub_dirs(input_file_path)
+        for noise_level, _ in self.input_set_params["noise_levels"]:
+            for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                for input_tones, _ in self.input_set_params["input_tones"]:
+                    input_file_path = os.path.join(self.input_dir,
+                                                   noise_level,
+                                                   phase_shift,
+                                                   self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
+                    input_list_path = os.path.join(self.input_dir,
+                                                   noise_level,
+                                                   phase_shift,
+                                                   self.input_tones[input_tones]['list'])
                     input_list = []
+                    wave_param_list = []
+
+                    input_list_exists = os.path.isfile(input_list_path)
+                    if input_list_exists:
+                        with open(input_list_path, 'rb') as file:
+                            input_freq_tot_list = pickle.load(file)
+                    else:
+                        input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
+
                     for input_freqs in input_freq_tot_list:
-                        wave_params, noise = self.__update_wave_system(input_freqs=input_freqs,
-                                                                       phase_shift=phase_shift,
-                                                                       noise_level=noise_level)
+                        if input_list_exists:
+                            wave_params = input_freqs[0]
+                            noise = input_freqs[1]
+                        else:
+                            wave_params, noise = self.__update_wave_system(input_freqs,phase_shift,noise_level)
+                            wave_param_list.append((wave_params, noise))
                         system_params['system_noise_level'] = noise
                         self.nyfr.set_system_params(system_params=system_params)
-                        input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
-                        input_list.append(input)
-                    input_set = np.array(input_list)
-                    np.save(input_file_path, input_set)
+                        analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
+                        if ( not os.path.isfile(input_file_path) ):
+                            input_list.append(self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate()))
+                    if wave_param_list:
+                        # Save the wave parameters if they were generated
+                        with open(input_list_path, 'wb') as file:
+                            pickle.dump(wave_param_list, file)
+                    if input_list:
+                        # Save the input set if it was generated
+                        input_set = np.array(input_list)
+                        np.save(input_file_path, input_set)
 
-    def create_output_sets(self, nyfr=None, filenames=None, directories=None):
-        mod_delta_table = self.__set_init(nyfr, filenames, directories)
-        f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
-        f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
-        input_file_paths = get_all_file_paths(self.input_dir)
-        time_file_path = os.path.join(self.time_dir, self.time_file)
+    def create_output_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
+        self.__set_init(nyfr, filenames, directories, input_set_params)
+        if self.__needs_init(include_set_params=True):
+            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
+            return
+        system_params = self.nyfr.get_system_params()
         LO_params = self.nyfr.get_LO_params()
-        output_list = []
-        t = np.load(time_file_path)
-        for input_file_path in input_file_paths:
-            input_set = np.load(input_file_path)
-            noise_level, phase_shift, file_name = get_file_sub_dirs(input_file_path)
-            output_sub_path = self.output_dir + noise_level + "\\" + phase_shift + "\\"
-            for f_mod in f_mod_list:
-                LO_params['phase_freq'] = mod_delta_table[f_mod]
-                for f_delta in f_delta_list:
-                    LO_params['phase_delta'] = round(mod_delta_table[f_delta] * mod_delta_table[f_mod], 2)
-                    self.nyfr.set_LO_params(LO_params=LO_params)
-                    output_sub_dir = output_sub_path + f_mod + "\\" + f_delta + "\\"
-                    output_file_path = (os.path.join(output_sub_dir, file_name))
-                    if ( os.path.isfile(output_file_path) ):
-                        os.remove( output_file_path )
-                    for input in input_set:
-                        output_list.append( self.nyfr.simulate_system(input_signal=input) )
+        for noise_level, _ in self.input_set_params["noise_levels"]:
+            for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                for input_tones, _ in self.input_set_params["input_tones"]:
+                    input_list_path = os.path.join(self.input_dir,
+                                                   noise_level,
+                                                   phase_shift,
+                                                   self.input_tones[input_tones]['list'])
+                    for f_mod, f_mod_value in self.input_set_params["f_mods"]:
+                        LO_params['phase_freq'] = f_mod_value
+                        for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
+                            LO_params['phase_delta'] = round(f_delta_value * f_mod_value, 2)
+                            self.nyfr.set_LO_params(LO_params=LO_params)
+                            output_file_path = os.path.join(self.output_dir,
+                                                           noise_level,
+                                                           phase_shift,
+                                                           f_mod,
+                                                           f_delta,
+                                                           self.input_tones[input_tones]['sigs'])
+                            output_list = []
+                            output_file_exists = os.path.isfile(output_file_path)
+                            input_list_exists = os.path.isfile(input_list_path)
+                            if not output_file_exists and input_list_exists:
+                                with open(input_list_path, 'rb') as file:
+                                    input_freq_tot_list = pickle.load(file)
 
-                    output_set = np.array(output_list)
-                    np.save(output_file_path, output_set)
-                    output_list.clear()
+                                for input_freqs in input_freq_tot_list:
+                                    wave_params = input_freqs[0]
+                                    noise = input_freqs[1]
+
+                                    system_params['system_noise_level'] = noise
+                                    self.nyfr.set_system_params(system_params=system_params)
+                                    analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
+                                    output_list.append( self.nyfr.simulate_system(input_signal=analog_input) )
+
+                                output_set = np.array(output_list)
+                                np.save(output_file_path, output_set)
+                            else:
+                                if output_file_exists:
+                                    print("Output file already exists: ", output_file_path)
+                                if not input_list_exists:
+                                    print("Input list file does not exist: ", input_list_path)
 
     def batch_recover(self, nyfr=None, filenames=None, directories=None, recovery_set_size=100, get_recovery_time=False):
         self.__set_init(nyfr=nyfr, filenames=filenames, directories=directories)
@@ -584,6 +629,78 @@ class NYFR_Test_Harness:
         system_params["system_noise_level"] = orig_system_noise_level
         self.nyfr.set_system_params(system_params=system_params)
         return recovery_df
+
+    def display_test_signals(self):
+        recovery_params = self.nyfr.get_recovery_params()
+        dictionary_params = self.nyfr.get_dictionary_params()
+        system_params = self.nyfr.get_system_params()
+        t_test = self.nyfr.get_real_time()
+        complex_tf = self.nyfr.get_frequncy_bins()
+        complex_tf_sampled = self.nyfr.get_sampled_freq_bins()
+        num_sigs_per_set = 3
+        num_subplots = 4
+        for processing_system in system_params['processing_systems']:
+            for mode in recovery_params['modes']:
+                for noise_level, _ in self.input_set_params["noise_levels"]:
+                    for phase_shift, _ in self.input_set_params["phase_shifts"]:
+                        for input_tones, _ in self.input_set_params["input_tones"]:
+                            input_file_path = os.path.join(self.input_dir,
+                                                        noise_level,
+                                                        phase_shift,
+                                                        self.input_tones[input_tones]['sigs'])
+                            recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
+                            if ( recovery_params['type'] == 'MLP1' ):
+                                recovery_base_path = os.path.join(recovery_base_path,
+                                                                mode)
+                            for f_mod, _ in self.input_set_params["f_mods"]:
+                                for f_delta, _ in self.input_set_params["f_deltas"]:
+                                    output_file_path = os.path.join(self.output_dir,
+                                                                    noise_level,
+                                                                    phase_shift,
+                                                                    f_mod,
+                                                                    f_delta,
+                                                                    self.input_tones[input_tones]['sigs'])
+                                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
+                                                                        f_mod,
+                                                                        f_delta,
+                                                                        self.dictionary_file['name'])
+                                    recovery_file_path = os.path.join(recovery_base_path,
+                                                                    noise_level,
+                                                                    phase_shift,
+                                                                    f_mod,
+                                                                    f_delta,
+                                                                    self.recovery_file['name'])
+                                    if ( os.path.exists(recovery_file_path) ):
+                                        input_sig_set = np.load(input_file_path)
+                                        output_sig_set = np.load(output_file_path)
+                                        recovery_sig_set = np.load(recovery_file_path)
+                                        dictionary = np.load(dictionary_file_path)
+                                        for idx, output_sig in enumerate(output_sig_set):
+                                            if ( idx < num_sigs_per_set ):
+                                                recovered_signal = recovery_sig_set[idx]
+                                                active_zones = np.zeros_like(recovered_signal)
+                                                pseudo = np.linalg.pinv(0.2*dictionary)
+                                                input_guess = np.dot(pseudo, output_sig)
+                                                input_sig_xf = fft(input_sig_set[idx])
+                                                model_sig_xf_guess = fft(np.dot(dictionary, input_sig_xf))
+                                                output_sig_xf = fft(output_sig)
+                                                input_zones = np.array_split(np.fft.fftshift(np.abs(input_sig_xf)), self.nyfr.get_Zones())
+                                                for i, zone in enumerate(input_zones):
+                                                    if np.any( zone > 500 ):
+                                                        active_zones[i] = 1
+                                                premultiply = fft(np.dot(dictionary, input_sig_xf))
+                                                plt.figure()
+                                                plt.subplot(num_subplots,1,1)
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(input_sig_xf)))
+                                                plt.xlim(-system_params["wbf_cut_freq"],system_params["wbf_cut_freq"])
+                                                plt.subplot(num_subplots,1,2)
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal)))
+                                                plt.xlim(-system_params["wbf_cut_freq"],system_params["wbf_cut_freq"])
+                                                plt.subplot(num_subplots,1,3)
+                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
+                                                plt.subplot(num_subplots,1,4)
+                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess))) 
+                                                plt.show()
 
     def set_nyfr(self, nyfr):
         self.nyfr = nyfr

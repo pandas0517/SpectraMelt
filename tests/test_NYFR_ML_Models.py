@@ -9,7 +9,7 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from NYFR_Test_Harness import NYFR_Test_Harness
     from NYFR_ML_Models import create_mlp1_models
-    from utility import display_test_signals
+    
     load_dotenv()
 
     test_harness = NYFR_Test_Harness(filenames_json=os.getenv('FILENAMES'),
@@ -18,4 +18,4 @@ if __name__ == '__main__':
                                      system_conf_json=os.getenv('SYSTEM_CONF'))
     # create_mlp1_models(test_harness, training_conf=os.getenv('TRAINING_CONF'))
     test_harness.batch_recover()
-    display_test_signals(test_harness)
+    test_harness.display_test_signals()

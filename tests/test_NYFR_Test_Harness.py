@@ -21,4 +21,4 @@ if __name__ == '__main__':
     test_harness.create_dictionaries()
     test_harness.create_dfs()
     test_harness.batch_recover()
-    display_test_signals(test_harness)
+    test_harness.display_test_signals()
