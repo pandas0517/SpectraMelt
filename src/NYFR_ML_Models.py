@@ -72,7 +72,7 @@ def set_training_params(training_params=None, training_conf=None):
     if training_conf is None:
         if training_params is None:
             training_params = {
-                "processing_system": "bedroom",
+                "processing_system": "system1",
                 "modes": [
                     "mag"
                 ],
@@ -108,7 +108,7 @@ def set_test_train(train_size,
                    model_input_size,
                    output_sig_set,
                    use_premultiply,
-                   nyfr,
+                   NYFR_test_harness,
                    dictionary_file_path,
                    training_params,
                    system_params,
@@ -127,10 +127,10 @@ def set_test_train(train_size,
             if ( training_params['pre_omp'] ):
                 original_recovery = system_params['recovery']
                 system_params['recovery'] = 'c_omp'
-                nyfr.set_system_params(system_params=system_params)
-                premultiply_signal = nyfr.recover_signal(training_params['pre_multiply']*dictionary, output_signal)
+                NYFR_test_harness.set_system_params(system_params=system_params)
+                premultiply_signal = NYFR_test_harness.recover_signal(training_params['pre_multiply']*dictionary, output_signal)
                 system_params['recovery'] = original_recovery
-                nyfr.set_system_params(system_params=system_params)
+                NYFR_test_harness.set_system_params(system_params=system_params)
             else:
                 pseudo = np.linalg.pinv( training_params['pre_multiply'] * dictionary)
                 premultiply_signal = np.dot(pseudo,output_signal)
@@ -181,30 +181,32 @@ def create_model(mlp_model_file_path,
                  premultiply_sig_set_train,
                  premultiply_sig_set_test,
                  output_sig_set_train,
-                 output_sig_set_test,
-                 nyfr):
+                 output_sig_set_test):
     if ( os.path.isfile( mlp_model_file_path )):
         mlp_model = tf.keras.models.load_model(mlp_model_file_path)
     else:
         mlp_model = keras.Sequential()
         mlp_model.add(keras.Input(shape=(model_input_size,)))
-        mlp_model.add(layers.Reshape((nyfr.get_Zones(), nyfr.get_K_band()), input_shape=(model_input_size,)))
-        mlp_model.add(layers.Conv1D(filters=nyfr.get_Zones(),
-                                    kernel_size=nyfr.get_K_band(),
-                                    padding='same',
-                                    input_shape=(nyfr.get_Zones(),nyfr.get_K_band()),
-                                    # activity_regularizer=regularizers.l1(0.001),
-                                    name="mlp_model_layer_1"))
-        mlp_model.add(layers.Flatten())
-        # mlp_model.add(layers.Dense(4*model_input_size, name="mlp_model_layer_2"))
+        mlp_model.add(layers.Dense(4*model_input_size, name="mlp_model_layer_1"))
+        mlp_model.add(layers.Dense(model_input_size, name="mlp_model_out"))
+        
+        # mlp_model.add(layers.Reshape((NYFR_test_harness.get_Zones(), NYFR_test_harness.get_K_band()), input_shape=(model_input_size,)))
+        # mlp_model.add(layers.Conv1D(filters=NYFR_test_harness.get_Zones(),
+        #                             kernel_size=NYFR_test_harness.get_K_band(),
+        #                             padding='same',
+        #                             input_shape=(NYFR_test_harness.get_Zones(),NYFR_test_harness.get_K_band()),
+        #                             # activity_regularizer=regularizers.l1(0.001),
+        #                             name="mlp_model_layer_1"))
+        # mlp_model.add(layers.Flatten())
         # mlp_model.add(layers.Dense(model_input_size, activity_regularizer=regularizers.l1(0.01), name="mlp_model_layer_2"))
         # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_3"))
         # mlp_model.add(layers.Dense(model_input_size, name="mlp_model_layer_4"))
-        mlp_model.add(layers.Dense(nyfr.get_Zones(),
-                                    activation='softmax',
-                                #    activity_regularizer=regularizers.l2(0.001),
-                                    name="mlp_model_out"))
+        # mlp_model.add(layers.Dense(NYFR_test_harness.get_Zones(),
+        #                             activation='softmax',
+        #                         #    activity_regularizer=regularizers.l2(0.001),
+        #                             name="mlp_model_out"))
         # mlp_model.add(layers.Activation('relu'))
+        
         mlp_opt = keras.optimizers.Adam(learning_rate=training_params['learning_rate'])
         if training_params['loss_type'] == "root_mean_squared_error":
             mlp_model.compile(optimizer=mlp_opt, loss=root_mean_squared_error)
@@ -295,27 +297,19 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     training_params = set_training_params(training_params=training_params, training_conf=training_conf)
     if training_params['use_fft'] and training_params['use_active_zones']:
         training_params['use_fft'] = False
-    nyfr = NYFR_test_harness.get_nyfr()
-    if nyfr is None:
-        print("NYFR must be initialized")
 
     directories = NYFR_test_harness.get_directories()
     if directories is None:
         print("NYFR Test Harness must be initialized")
     files = NYFR_test_harness.get_filenames()
-    recovery_params = nyfr.get_recovery_params()
-    dictionary_params = nyfr.get_dictionary_params()
-    system_params = nyfr.get_system_params()
-    noise_level_list = ["no_noise", "low_noise", "high_noise"]
-    phase_shift_list = ["no_phase_shift", "low_phase_shift", "high_phase_shift"]
-    f_mod_list = ["f_mod_0_1", "f_mod_0_2", "f_mod_0_25", "f_mod_0_5"]
-    f_delta_list = ["f_delta_0_1", "f_delta_0_8", "f_delta_1_2", "f_delta_9_9"]
-    input_tones_list = ["1_2", "3", "4", "5"]
-
+    recovery_params = NYFR_test_harness.get_recovery_params()
+    dictionary_params = NYFR_test_harness.get_dictionary_params()
+    system_params = NYFR_test_harness.get_system_params()
+    input_set_params = NYFR_test_harness.get_input_set_params()
     for mode in training_params['modes']:
-        for noise_level in noise_level_list:
-            for phase_shift in phase_shift_list:
-                for input_tones in input_tones_list:
+        for noise_level, _ in input_set_params["noise_levels"]:
+            for phase_shift, _ in input_set_params["phase_shifts"]:
+                for input_tones, _ in input_set_params["input_tones"]:
                     fft_file_path = os.path.join(directories['fft'],
                                                  noise_level,
                                                  phase_shift,
@@ -347,7 +341,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                     output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
                                                                                                             fft_file_path,
                                                                                                             active_zones_file_path,
-                                                                                                            nyfr.get_Zones(),
+                                                                                                            NYFR_test_harness.get_Zones(),
                                                                                                             training_params,
                                                                                                             mode)
                     if active_zones_sig_set is not None:
@@ -372,9 +366,8 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                         recovery_log_file_path = os.path.join(directories['recovery'][dictionary_params['version']][recovery_params['type']],
                                                               recovery_mode,
                                                               files['recovery'][recovery_mode][mode][training_params['processing_system']])
-                        
-                    for f_mod in f_mod_list:
-                        for f_delta in f_delta_list:
+                    for f_mod, _ in input_set_params["f_mods"]:
+                        for f_delta, _ in input_set_params["f_deltas"]:
                             dictionary_file_path = os.path.join(directories['dictionary'][dictionary_params['version']],
                                                                 f_mod,
                                                                 f_delta,
@@ -424,7 +417,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                                                     model_input_size,
                                                                                                     output_sig_set,
                                                                                                     use_premultiply,
-                                                                                                    nyfr,
+                                                                                                    NYFR_test_harness,
                                                                                                     dictionary_file_path,
                                                                                                     training_params,
                                                                                                     system_params,
@@ -440,5 +433,4 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                             premultiply_sig_set_train,
                                             premultiply_sig_set_test,
                                             output_sig_set_train,
-                                            output_sig_set_test,
-                                            nyfr)
+                                            output_sig_set_test)

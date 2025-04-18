@@ -369,7 +369,9 @@ class NYFR_Test_Harness:
                                                                       f_mod,
                                                                       f_delta,
                                                                       self.recovery_file['name'])
-                                    found_string_in_file = False
+                                    # disabling checking log for processed files flag for now
+                                    # found_string_in_file = False
+                                    found_string_in_file = True
                                     found_string_in_file_aux = False
                                     with open(recovery_log_file_path, "r") as recovery_log:
                                         for line in recovery_log:
@@ -633,7 +635,7 @@ class NYFR_Test_Harness:
         recovery_params = self.nyfr.get_recovery_params()
         dictionary_params = self.nyfr.get_dictionary_params()
         system_params = self.nyfr.get_system_params()
-        t_test = self.nyfr.get_real_time()
+        t = self.nyfr.get_time()
         complex_tf = self.nyfr.get_frequncy_bins()
         complex_tf_sampled = self.nyfr.get_sampled_freq_bins()
         num_sigs_per_set = 3
@@ -703,6 +705,12 @@ class NYFR_Test_Harness:
 
     def set_nyfr(self, nyfr):
         self.nyfr = nyfr
+
+    def set_system_params(self, system_params=None):
+        self.nyfr.set_system_params(system_params=system_params)
+
+    def recover_signal(self, dictionary, output_signal):
+        return self.nyfr.recover_signal(dictionary, output_signal)
 
     def set_filenames(self, filenames=None):
         if filenames is None:
@@ -958,3 +966,6 @@ class NYFR_Test_Harness:
     
     def get_Zones(self):
         return self.nyfr.get_zones()
+    
+    def get_K_band(self):
+        return self.nyfr.get_K_band()
