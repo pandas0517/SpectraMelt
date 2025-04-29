@@ -160,7 +160,7 @@ class NYFR:
         self.rising_zero_crossings = self.generate_rising_zero_crossings()
         self.wb_nyquist_rate = int ( self.system_params['wbf_cut_freq'] * 2 )
         self.t = self.sample_signals(data=self.real_t,
-                                     sample_rate=self.wb_nyquist_rate,)
+                                     sample_rate=self.wb_nyquist_rate)
         self.tf = np.linspace(-self.wb_nyquist_rate/2, self.wb_nyquist_rate/2, int(self.t.size), endpoint=False)
         self.num_time_points = self.t.size
         self.points_per_second = int( self.num_time_points / self.total_time )
@@ -465,6 +465,12 @@ class NYFR:
         else:
             self.recovery_params = recovery_params           
 
+    def set_adc_clock_freq(self, adc_clock_freq=None):
+        if adc_clock_freq is None:
+            print("No ADC clock frequency provided. Adding new ADC clock frequency")
+            adc_clock_freq = int(input("Enter ADC clock frequency: "))
+        self.system_params['adc_clock_freq'] = adc_clock_freq
+
     def set_LO_params(self, LO_params=None):
         if LO_params is None:
             print("No LO_params provided. Adding new LO parameters")
@@ -606,3 +612,6 @@ class NYFR:
         
     def get_wb_nyquist_rate(self):
         return self.wb_nyquist_rate
+    
+    def get_adc_clock_freq(self):
+        return self.system_params['adc_clock_freq']

@@ -21,6 +21,11 @@ def model_prediction(init_guess, file_path, mode, aux_file_path=None):
     coef_real = 0
     coef_imag = 0
     mlp_model = tf.keras.models.load_model(file_path, custom_objects={'root_mean_squared_error': root_mean_squared_error})
+    use_aux_model = False
+    if aux_file_path is not None:
+        if os.path.isfile(aux_file_path):
+            use_aux_model = True
+            mlp_model_aux = tf.keras.models.load_model(aux_file_path, custom_objects={'root_mean_squared_error': root_mean_squared_error})
     if ( mode == 'complex' ):
         x_pre_real = np.real(init_guess)
         x_pre_imag = np.imag(init_guess)
@@ -31,9 +36,6 @@ def model_prediction(init_guess, file_path, mode, aux_file_path=None):
         coef_real = coef_split[0]
         coef_imag = coef_split[1]
     else:
-        if aux_file_path is not None:
-            mlp_model_aux = tf.keras.models.load_model(aux_file_path)
-        pass
         if ( mode == 'real_imag' ):
             x_pre_real = np.real(init_guess)
             x_pre_imag = np.imag(init_guess)
@@ -41,7 +43,7 @@ def model_prediction(init_guess, file_path, mode, aux_file_path=None):
             x_pre_imag_reshape = x_pre_imag.reshape((1,x_pre_imag.shape[0]))
             coef_predict_real = mlp_model.predict(x_pre_real_reshape)
             coef_real = coef_predict_real.reshape(-1)
-            if aux_file_path is not None:
+            if use_aux_model:
                 coef_predict_imag = mlp_model_aux.predict(x_pre_imag_reshape)
                 coef_imag = coef_predict_imag.reshape(-1)
     
@@ -52,7 +54,7 @@ def model_prediction(init_guess, file_path, mode, aux_file_path=None):
             x_pre_ang_reshape = x_pre_ang.reshape((1,x_pre_ang.shape[0]))
             coef_predict_mag = mlp_model.predict(x_pre_mag_reshape)
             coef_predict_ang = 0
-            if aux_file_path is not None:
+            if use_aux_model:
                 coef_predict_ang = mlp_model_aux.predict(x_pre_ang_reshape)
                 
             coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
@@ -182,13 +184,14 @@ def create_model(mlp_model_file_path,
                  premultiply_sig_set_test,
                  output_sig_set_train,
                  output_sig_set_test):
+
     if ( os.path.isfile( mlp_model_file_path )):
-        mlp_model = tf.keras.models.load_model(mlp_model_file_path)
+        mlp_model = tf.keras.models.load_model(mlp_model_file_path, custom_objects={'root_mean_squared_error': root_mean_squared_error})
     else:
         mlp_model = keras.Sequential()
-        mlp_model.add(keras.Input(shape=(model_input_size,)))
-        mlp_model.add(layers.Dense(4*model_input_size, name="mlp_model_layer_1"))
-        mlp_model.add(layers.Dense(model_input_size, name="mlp_model_out"))
+        mlp_model.add(keras.Input(shape=(premultiply_sig_set_train.shape[1],)))
+        mlp_model.add(layers.Dense(premultiply_sig_set_train.shape[1], name="mlp_model_layer_1"))
+        mlp_model.add(layers.Dense(premultiply_sig_set_train.shape[1], name="mlp_model_out"))
         
         # mlp_model.add(layers.Reshape((NYFR_test_harness.get_Zones(), NYFR_test_harness.get_K_band()), input_shape=(model_input_size,)))
         # mlp_model.add(layers.Conv1D(filters=NYFR_test_harness.get_Zones(),
@@ -233,7 +236,7 @@ def create_model(mlp_model_file_path,
         recovery_log.write(output_file_path + "\n")
     reset_tensforflow_session()
 
-def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path, zones, training_params, mode):
+def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path, zones, training_params, mode, wb_nyquist_rate):
     input_sig_set_total = np.load(input_file_path)
     num_input_sigs_total = input_sig_set_total.shape[0]
     input_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
@@ -244,7 +247,7 @@ def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path,
     recovery_mode = ""
 
     for i, input_sig in enumerate(input_sig_set):
-        input_sig_fft = fft(input_sig)
+        input_sig_fft = fft(input_sig)/(2*wb_nyquist_rate)
         fft_sig_list.append(input_sig_fft)
         input_zones = np.array_split(np.abs(input_sig_fft), zones)
         # non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
@@ -297,7 +300,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
     training_params = set_training_params(training_params=training_params, training_conf=training_conf)
     if training_params['use_fft'] and training_params['use_active_zones']:
         training_params['use_fft'] = False
-
+    training_params["pre_multiply"] = 4 / NYFR_test_harness.get_adc_clock_freq()
     directories = NYFR_test_harness.get_directories()
     if directories is None:
         print("NYFR Test Harness must be initialized")
@@ -343,12 +346,15 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                                                             active_zones_file_path,
                                                                                                             NYFR_test_harness.get_Zones(),
                                                                                                             training_params,
-                                                                                                            mode)
+                                                                                                            mode,
+                                                                                                            NYFR_test_harness.get_wb_nyquist_rate())
                     if active_zones_sig_set is not None:
                         output_sig_set = active_zones_sig_set
                         active_zones_sig_set = None
                     elif fft_sig_set is not None:
-                        output_sig_set = fft_sig_set
+                        # Temp fix for now
+                        if mode != "complex":
+                            output_sig_set = fft_sig_set
                         fft_sig_set = None
 
                     train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
@@ -358,7 +364,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                     output_sig_set = None
 
 
-                    if recovery_mode == "active_zones":
+                    if recovery_mode == "active_zones" or recovery_mode == "complex":
                         recovery_log_file_path = os.path.join(directories['recovery'][dictionary_params['version']][recovery_params['type']],
                                                               recovery_mode,
                                                               files['recovery'][recovery_mode][training_params['processing_system']])

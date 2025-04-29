@@ -29,7 +29,7 @@
     },
     "recovery":{
         "df": "recovery_df.pkl",
-        "name": "recovery_list.txt",
+        "name": "recovered_sigs.npy",
         "mag_ang": {
             "mag": {
                 "system1": "recovery_list_system1_mag.txt",
@@ -43,6 +43,10 @@
         "active_zones": {
             "system1": "recovery_list_system1_active_zones.txt",
             "system2": "recovery_list_system2_active_zones.txt"
+        },
+        "complex": {
+            "system1": "recovery_list_system1_complex.txt",
+            "system2": "recovery_list_system2_complex.txt"
         }
     },
     "mlp_models": {

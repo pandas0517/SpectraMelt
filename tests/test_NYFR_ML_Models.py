@@ -19,9 +19,7 @@ if __name__ == '__main__':
     input_set_params = test_harness.get_input_set_params()
     input_set_params["noise_levels"] = [["no_noise", []]]
     input_set_params["phase_shifts"] = [["no_phase_shift", []]]
-    input_set_params["f_mods"] = [["f_mod_0_5", 0.5]]
-    input_set_params["f_deltas"] = [["f_delta_0_8", 0.8]]
-    input_set_params["input_tones"] = [["5", [5]]]
+    input_set_params["input_tones"] = [["3", [3]], ["4", [4]], ["5", [5]]]
     test_harness.set_input_set_params(input_set_params)
     create_mlp1_models(test_harness, training_conf=os.getenv('TRAINING_CONF'))
     test_harness.batch_recover()

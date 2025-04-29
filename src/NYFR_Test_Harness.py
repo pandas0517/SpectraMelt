@@ -330,7 +330,7 @@ class NYFR_Test_Harness:
                             elif ( mode == 'complex' ):
                                 recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
                                                                     mode,
-                                                                    self.recovery_file[mode]['complex'][processing_system])
+                                                                    self.recovery_file[mode][processing_system])
                                 recovery_log_file_path_aux = None
                             elif ( mode == 'active_zones' ):
                                 recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
@@ -637,9 +637,10 @@ class NYFR_Test_Harness:
         system_params = self.nyfr.get_system_params()
         t = self.nyfr.get_time()
         complex_tf = self.nyfr.get_frequncy_bins()
-        complex_tf_sampled = self.nyfr.get_sampled_freq_bins()
+        t_sampled = self.nyfr.sample_signals(t, points_per_second=self.nyfr.get_points_per_second(),t=t)
+        complex_tf_sampled = np.linspace(-self.nyfr.get_adc_clock_freq()/2, self.nyfr.get_adc_clock_freq()/2, int(t_sampled.size), endpoint=False)
         num_sigs_per_set = 3
-        num_subplots = 4
+        num_subplots = 5
         for processing_system in system_params['processing_systems']:
             for mode in recovery_params['modes']:
                 for noise_level, _ in self.input_set_params["noise_levels"]:
@@ -661,6 +662,12 @@ class NYFR_Test_Harness:
                                                                     f_mod,
                                                                     f_delta,
                                                                     self.input_tones[input_tones]['sigs'])
+                                    premultiply_file_path = os.path.join(self.premultiply_dir[dictionary_params['version']],
+                                                                    noise_level,
+                                                                    phase_shift,
+                                                                    f_mod,
+                                                                    f_delta,
+                                                                    self.input_tones[input_tones]["sigs"])
                                     dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
                                                                         f_mod,
                                                                         f_delta,
@@ -676,32 +683,37 @@ class NYFR_Test_Harness:
                                         output_sig_set = np.load(output_file_path)
                                         recovery_sig_set = np.load(recovery_file_path)
                                         dictionary = np.load(dictionary_file_path)
+                                        premultiply_sig_set = np.load(premultiply_file_path)
+                                        # for idx, premultiply_sig in enumerate(premultiply_sig_set):
+                                        #     premultiply_sig_set[idx] = premultiply_sig / 2
                                         for idx, output_sig in enumerate(output_sig_set):
                                             if ( idx < num_sigs_per_set ):
                                                 recovered_signal = recovery_sig_set[idx]
                                                 active_zones = np.zeros_like(recovered_signal)
-                                                pseudo = np.linalg.pinv(0.2*dictionary)
+                                                pseudo = np.linalg.pinv((4*dictionary)/self.nyfr.get_adc_clock_freq())
                                                 input_guess = np.dot(pseudo, output_sig)
-                                                input_sig_xf = fft(input_sig_set[idx])
+                                                input_sig_xf = fft(input_sig_set[idx])/(2*self.nyfr.get_wb_nyquist_rate())
                                                 model_sig_xf_guess = fft(np.dot(dictionary, input_sig_xf))
                                                 output_sig_xf = fft(output_sig)
                                                 input_zones = np.array_split(np.fft.fftshift(np.abs(input_sig_xf)), self.nyfr.get_Zones())
                                                 for i, zone in enumerate(input_zones):
                                                     if np.any( zone > 500 ):
                                                         active_zones[i] = 1
-                                                premultiply = fft(np.dot(dictionary, input_sig_xf))
                                                 plt.figure()
                                                 plt.subplot(num_subplots,1,1)
                                                 plt.plot(complex_tf, np.fft.fftshift(np.abs(input_sig_xf)))
-                                                plt.xlim(-system_params["wbf_cut_freq"],system_params["wbf_cut_freq"])
                                                 plt.subplot(num_subplots,1,2)
                                                 plt.plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal)))
-                                                plt.xlim(-system_params["wbf_cut_freq"],system_params["wbf_cut_freq"])
                                                 plt.subplot(num_subplots,1,3)
-                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(input_guess)))
+                                                # plt.subplot(num_subplots,1,4)
+                                                # plt.plot(complex_tf, np.fft.fftshift(np.abs(premultiply_sig_set[idx])))
                                                 plt.subplot(num_subplots,1,4)
+                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
+                                                plt.subplot(num_subplots,1,5)
                                                 plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess))) 
                                                 plt.show()
+                                        # np.save(premultiply_file_path, premultiply_sig_set)
 
     def set_nyfr(self, nyfr):
         self.nyfr = nyfr
@@ -965,7 +977,13 @@ class NYFR_Test_Harness:
         return self.nyfr.get_system_params()
     
     def get_Zones(self):
-        return self.nyfr.get_zones()
+        return self.nyfr.get_Zones()
     
     def get_K_band(self):
         return self.nyfr.get_K_band()
+    
+    def get_wb_nyquist_rate(self):
+        return self.nyfr.get_wb_nyquist_rate()
+    
+    def get_adc_clock_freq(self):
+        return self.nyfr.get_adc_clock_freq()

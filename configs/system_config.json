@@ -35,9 +35,9 @@
         "version": "original"
     },
     "recovery_params": {
-        "type": "SPGL1",
+        "type": "MLP1",
         "modes": [
-            "active_zones"
+            "mag_ang"
         ]
     }
 }
