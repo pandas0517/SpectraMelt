@@ -9,7 +9,7 @@
     "test": ["test_sets", "System_Config_1", "Model_Inputs", "test"],
     "fft": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "fft"],
     "active_zones": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Model_Inputs", "active_zones"],
-    "df": ["F:\\", "test_sets"],
+    "df": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery"],
     "dictionary": {
         "enhanced": ["F:\\", "test_sets", "System_Config_1", "Dictionaries", "enhanced"],
         "original": ["F:\\", "test_sets", "System_Config_1", "Dictionaries", "original"]
@@ -18,6 +18,7 @@
         "enhanced": {
         },
         "original": {
+            "IHT": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "IHT", "original"],
             "OMP_Custom": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP_Custom", "original"],
             "OMP": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "OMP", "original"],
             "MLP1": ["F:\\", "test_sets", "System_Config_1", "Input_Config_1", "Recovery", "MLP1", "original"],

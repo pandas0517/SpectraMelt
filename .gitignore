@@ -3,3 +3,7 @@ src/__pycache__/
 *.npy
 test_sets/
 .venv/
+tmp/
+out/
+backup/__pycache__/
+tests/__pycache__/

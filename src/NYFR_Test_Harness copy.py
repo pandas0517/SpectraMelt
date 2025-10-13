@@ -715,7 +715,7 @@ class NYFR_Test_Harness:
         t_sampled = self.nyfr.sample_signals(t, points_per_second=self.nyfr.get_points_per_second(),t=t)
         complex_tf_sampled = np.linspace(-self.nyfr.get_adc_clock_freq()/2, self.nyfr.get_adc_clock_freq()/2, int(t_sampled.size), endpoint=False)
         num_sigs_per_set = 20
-        num_subplots = 6
+        num_subplots = 5
         for processing_system in system_params['processing_systems']:
             for mode in recovery_params['modes']:
                 for noise_level, _ in self.input_set_params["noise_levels"]:
@@ -725,12 +725,10 @@ class NYFR_Test_Harness:
                                                         noise_level,
                                                         phase_shift,
                                                         self.input_tones[input_tones]['sigs'])
-                            recovery_base_path_iht = self.recovery_dir[dictionary_params['version']]['IHT']
-                            recovery_base_path_mlp = self.recovery_dir[dictionary_params['version']]['MLP1']
-                            recovery_base_path_spgl1 = self.recovery_dir[dictionary_params['version']]['SPGL1']
-                            recovery_base_path_mlp = os.path.join(recovery_base_path_mlp,
-                                                            mode)
-                            recovery_base_path_omp = self.recovery_dir[dictionary_params['version']]['OMP_Custom']
+                            recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
+                            if ( recovery_params['type'] == 'MLP1' ):
+                                recovery_base_path = os.path.join(recovery_base_path,
+                                                                mode)
                             for f_mod, _ in self.input_set_params["f_mods"]:
                                 for f_delta, _ in self.input_set_params["f_deltas"]:
                                     output_file_path = os.path.join(self.output_dir,
@@ -749,48 +747,24 @@ class NYFR_Test_Harness:
                                                                         f_mod,
                                                                         f_delta,
                                                                         self.dictionary_file['name'])
-                                    recovery_file_path_iht = os.path.join(recovery_base_path_iht,
+                                    recovery_file_path = os.path.join(recovery_base_path,
                                                                     noise_level,
                                                                     phase_shift,
                                                                     f_mod,
                                                                     f_delta,
                                                                     self.input_tones[input_tones]['sigs'])
-                                    recovery_file_path_mlp = os.path.join(recovery_base_path_mlp,
-                                                                    noise_level,
-                                                                    phase_shift,
-                                                                    f_mod,
-                                                                    f_delta,
-                                                                    self.input_tones[input_tones]['sigs'])
-                                    recovery_file_path_spgl1 = os.path.join(recovery_base_path_spgl1,
-                                                                    noise_level,
-                                                                    phase_shift,
-                                                                    f_mod,
-                                                                    f_delta,
-                                                                    self.input_tones[input_tones]['sigs'])
-                                    recovery_file_path_omp = os.path.join(recovery_base_path_omp,
-                                                                    noise_level,
-                                                                    phase_shift,
-                                                                    f_mod,
-                                                                    f_delta,
-                                                                    self.input_tones[input_tones]['sigs'])
-                                    if ( True ):
+                                    if ( os.path.exists(recovery_file_path) ):
                                         input_sig_set = np.load(input_file_path)
                                         output_sig_set = np.load(output_file_path)
-                                        recovery_sig_set_iht = np.load(recovery_file_path_iht)
-                                        recovery_sig_set_mlp = np.load(recovery_file_path_mlp)
-                                        recovery_sig_set_spgl1 = np.load(recovery_file_path_spgl1)
-                                        recovery_sig_set_omp = np.load(recovery_file_path_omp)
+                                        recovery_sig_set = np.load(recovery_file_path)
                                         dictionary = np.load(dictionary_file_path)
                                         premultiply_sig_set = np.load(premultiply_file_path)
                                         # for idx, premultiply_sig in enumerate(premultiply_sig_set):
                                         #     premultiply_sig_set[idx] = premultiply_sig / 2
                                         for idx, output_sig in enumerate(output_sig_set):
                                             if ( idx < num_sigs_per_set ):
-                                                recovered_signal_iht = recovery_sig_set_iht[idx]
-                                                recovered_signal_mlp = recovery_sig_set_mlp[idx]
-                                                recovered_signal_spgl1 = recovery_sig_set_spgl1[idx]
-                                                recovered_signal_omp = recovery_sig_set_omp[idx]
-                                                active_zones = np.zeros_like(recovered_signal_iht)
+                                                recovered_signal = recovery_sig_set[idx]
+                                                active_zones = np.zeros_like(recovered_signal)
                                                 pseudo = np.linalg.pinv((4*dictionary)/self.nyfr.get_adc_clock_freq())
                                                 input_guess = np.dot(pseudo, output_sig)
                                                 input_sig_xf = fft(input_sig_set[idx])/(2*self.nyfr.get_wb_nyquist_rate())
@@ -800,32 +774,19 @@ class NYFR_Test_Harness:
                                                 for i, zone in enumerate(input_zones):
                                                     if np.any( zone > 500 ):
                                                         active_zones[i] = 1
-                                                fig, axs = plt.subplots(6, 1, figsize=(10, 8))
-                                                axs[0].plot(complex_tf, np.fft.fftshift(np.abs(input_sig_xf)))
-                                                axs[0].set_title(r'Multitone Input Signal: $f_{mod}$ = 0.25   $f_{delta}$ = 0.2' + "\n" + r'$f_0$ = 25Hz  Mag: 0.98,   $f_1$ = 96Hz  Mag: 0.73,   $f_2$ = 167Hz  Mag: 0.56,   $f_3$ = 284Hz  Mag: 0.65,   $f_4$ = 399Hz  Mag: 0.73')
-                                                axs[0].set_xlabel('Frequency (Hz)')
-                                                axs[0].set_ylabel('Magnitude')
-                                                axs[1].plot(complex_tf, np.fft.fftshift(np.abs(input_guess)))
-                                                axs[1].set_title('Input Guess Using Pseudo Inverse')
-                                                axs[1].set_xlabel('Frequency (Hz)')
-                                                axs[1].set_ylabel('Magnitude')
-                                                axs[2].plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal_omp)))
-                                                axs[2].set_title('Recovered Signal OMP')
-                                                axs[2].set_xlabel('Frequency (Hz)')
-                                                axs[2].set_ylabel('Magnitude')
-                                                axs[3].plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal_iht)))
-                                                axs[3].set_title('Recovered Signal IHT')
-                                                axs[3].set_xlabel('Frequency (Hz)')
-                                                axs[3].set_ylabel('Magnitude')
-                                                axs[4].plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal_spgl1)))
-                                                axs[4].set_title('Recovered Signal SPGL1')
-                                                axs[4].set_xlabel('Frequency (Hz)')
-                                                axs[4].set_ylabel('Magnitude')
-                                                axs[5].plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal_mlp)))
-                                                axs[5].set_title('Recovered Signal MLP')
-                                                axs[5].set_xlabel('Frequency (Hz)')
-                                                axs[5].set_ylabel('Magnitude')
-                                                plt.subplots_adjust(wspace=0.2, hspace=1.5)
+                                                plt.figure()
+                                                plt.subplot(num_subplots,1,1)
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(input_sig_xf)))
+                                                plt.subplot(num_subplots,1,2)
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(recovered_signal)))
+                                                plt.subplot(num_subplots,1,3)
+                                                plt.plot(complex_tf, np.fft.fftshift(np.abs(input_guess)))
+                                                # plt.subplot(num_subplots,1,4)
+                                                # plt.plot(complex_tf, np.fft.fftshift(np.abs(premultiply_sig_set[idx])))
+                                                plt.subplot(num_subplots,1,4)
+                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(output_sig_xf)))
+                                                plt.subplot(num_subplots,1,5)
+                                                plt.plot(complex_tf_sampled, np.fft.fftshift(np.abs(model_sig_xf_guess))) 
                                                 plt.show()
                                         # np.save(premultiply_file_path, premultiply_sig_set)
 

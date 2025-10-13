@@ -19,10 +19,10 @@
     "pre_omp": false,
     "early_stopping": {
         "monitor": "val_loss",
-        "min_delta": 0.01,
+        "min_delta": 0.001,
         "patience": 3,
         "verbose": 1,
-        "start_from_epoch": 3,
+        "start_from_epoch": 10,
         "restore_best_weights" :true
     }
 }

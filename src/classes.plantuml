@@ -1,0 +1,81 @@
+@startuml classes
+set namespaceSeparator none
+class "NYFR" as NYFR.NYFR {
+  K_band : int
+  LO : NoneType
+  LO_modulation : NoneType
+  LO_modulation_sampled : NoneType, ndarray
+  LO_params : dict
+  LO_sampled : NoneType, ndarray
+  Real_K_band : NoneType
+  Real_Zones : NoneType, int
+  Zones : int
+  adc_clock_ticks : int
+  adj_spacing : int
+  dictionary_params : dict
+  filt_freq : NoneType, float
+  filter_params : dict
+  num_real_time_points : int
+  num_time_points : NoneType, int
+  points_per_second : int
+  real_points_per_second
+  real_t : NoneType, ndarray
+  real_tf : NoneType, ndarray
+  recovery_params : dict
+  rising_zero_crossings : NoneType, ndarray
+  sampled_t : NoneType, ndarray
+  sampled_tf : NoneType, ndarray
+  sos : NoneType, ndarray, tuple
+  system_config_name
+  system_params : dict
+  t : NoneType, ndarray
+  tf : NoneType, ndarray
+  time_params : dict
+  total_time : int
+  wb_nyquist_rate : int
+  clear_real_time_sigs()
+  create_dict(filt_down, dictionary_params)
+  create_input_signal(wave_params, file_path, t)
+  filter_signal(data, filter_params, t)
+  generate_rising_zero_crossings(t)
+  get_K_band()
+  get_LO()
+  get_LO_modulation()
+  get_LO_params()
+  get_Zones()
+  get_adc_clock_freq()
+  get_adjusted_spacing()
+  get_dictionary_params()
+  get_filter_frequency()
+  get_filter_params()
+  get_frequncy_bins()
+  get_num_time_points()
+  get_points_per_second()
+  get_real_frequncy_bins()
+  get_real_time()
+  get_recovery_params()
+  get_ringing_zero_crossings()
+  get_sampled_LO()
+  get_sampled_freq_bins()
+  get_sampled_time()
+  get_system_config_name()
+  get_system_params()
+  get_time()
+  get_time_params()
+  get_wb_nyquist_rate()
+  initialize(system_params)
+  recover_signal(dictionary, output, file_path, aux_file_path, num_tones, sigma, mode, num_iterations, mlp_inv_mod)
+  sample_signals(data, update_sampled_time, sample_rate, points_per_second, t)
+  set_LO(t)
+  set_LO_params(LO_params)
+  set_adc_clock_freq(adc_clock_freq)
+  set_dictionary_params(dictionary_params)
+  set_filter_params(filter_params)
+  set_real_time(time_params)
+  set_recovery_params(recovery_params)
+  set_system_config_name(system_config_name)
+  set_system_params(system_params)
+  set_time_params(time_params)
+  simulate_system(input_signal, wave_params, file_path)
+}
+@enduml

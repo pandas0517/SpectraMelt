@@ -6,10 +6,11 @@ from scipy.signal import butter, sosfilt, sosfreqz
 from scipy.integrate import trapezoid
 from scipy.fftpack import fft, ifft
 from scipy.linalg import dft
-from NYFR_ML_Models import model_prediction
+# from NYFR_ML_Models import model_prediction
 from sklearn.linear_model import orthogonal_mp
 from OMP import OMP
 from spgl1 import spgl1
+from iht import CIHT
 
 class NYFR:
     def __init__(self, 
@@ -381,28 +382,38 @@ class NYFR:
                        file_path=None,
                        aux_file_path=None, 
                        num_tones=0, 
-                       sigma=0.01, 
+                       sigma=0.001, 
                        mode="mag_ang",
+                       num_iterations=1000,
                        mlp_inv_mod=0.01):
         output_norm = np.linalg.norm(output)
         coef_real = 0
         coef_imag = 0
         match self.recovery_params['type']:
+            case 'IHT':
+                # coef_real, err = AIHT(output, np.abs(dictionary), np.abs(pseudo),
+                #                m=dictionary.shape[1], M=num_tones, thresh=sigma)
+                coef_real = CIHT(dictionary, output, 2*num_tones, learning_rate=sigma)
+                # coef_real = coef_real / self.system_params["adc_clock_freq"]
+                coef_real = (self.time_params["sim_freq"]/2) * coef_real
             case 'OMP':
                 coef_real = orthogonal_mp(np.abs(dictionary),output/output_norm)
                 # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
             case 'OMP_Custom':
-                coef_real = OMP(dictionary,output/output_norm)[0]
+                coef_real = OMP(mlp_inv_mod*dictionary,output/output_norm)[0]
+                coef_real = coef_real / self.system_params["adc_clock_freq"]
                 # coef_imag = orthogonal_mp(np.imag(dictionary),y_sampled/y_sampled_norm,n_nonzero_coefs=(2*num_tones))
             case 'SPGL1':
                 # coef_real,resid,grad,info = spgl1(dictionary,y_sampled/y_sampled_norm)
-                coef_real,_,_,_ = spgl1(dictionary,output/output_norm,sigma=sigma)
+                coef_real,_,_,_ = spgl1(mlp_inv_mod*dictionary,output/output_norm,sigma=sigma)
+                coef_real = coef_real / self.system_params["adc_clock_freq"]
+                pass
                 #coef_real,resid_real,grad_real,info_real = spgl1(np.real(dictionary),y_sampled/y_sampled_norm)
                 #coef_imag,resid_imag,grad_imag,info_imag = spgl1(np.imag(dictionary),y_sampled/y_sampled_norm)
             case 'MLP1':
                 pseudo = np.linalg.pinv(mlp_inv_mod*dictionary)
                 init_guess = np.dot(pseudo,output)
-                coef_real, coef_imag = model_prediction(init_guess, file_path, mode, aux_file_path)
+                # coef_real, coef_imag = model_prediction(init_guess, file_path, mode, aux_file_path)
             case _:
                 print("No recovery performed")
         coef = coef_real + coef_imag*1j
@@ -559,7 +570,7 @@ class NYFR:
     def get_LO_params(self):
         return self.LO_params
     
-    def get_ringing_zero_crossings(self):
+    def get_rising_zero_crossings(self):
         return self.rising_zero_crossings
 
     def get_real_time(self):

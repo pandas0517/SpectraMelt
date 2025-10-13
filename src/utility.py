@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+import shutil
 from pathlib import Path
 
 def load_settings(file_path):
@@ -17,6 +18,28 @@ def load_settings(file_path):
     except IsADirectoryError:
         print("Invalid directory. Please check the file path.")
         sys.exit(1)
+
+def replace_file(old_filepath, new_filepath):
+    """
+    Replaces an existing file with a copy of a new file.
+
+    Args:
+        old_filepath (str): The path to the file to be replaced.
+        new_filepath (str): The path to the new file to copy.
+    """
+    try:
+        # Check if the old file exists
+        if os.path.isfile(old_filepath):
+            os.remove(old_filepath)
+        shutil.copy2(new_filepath, old_filepath)
+    except FileNotFoundError:
+        print(f"Error: File not found: {old_filepath} or {new_filepath}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+def replace_extension(file_path, new_extension):
+    path = Path(file_path)
+    return str(path.with_suffix(f".{new_extension}"))
 
 def get_all_file_names(directory):
     file_names = []

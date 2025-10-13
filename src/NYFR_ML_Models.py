@@ -5,7 +5,7 @@ from keras import losses
 import tensorflow as tf
 from numpy import sin, cos
 import numpy as np
-from utility import load_settings
+from utility import load_settings, replace_extension
 from scipy.fftpack import fft
 import os
 
@@ -106,8 +106,6 @@ def set_training_params(training_params=None, training_conf=None):
     return training_params
 
 def set_test_train(train_size,
-                   test_size,
-                   model_input_size,
                    output_sig_set,
                    use_premultiply,
                    NYFR_test_harness,
@@ -118,11 +116,9 @@ def set_test_train(train_size,
                    premultiply_file_path):
     dictionary = np.load(dictionary_file_path)
     premultiply_sig_set = []
-    premultiply_sig_set_train = np.zeros((train_size, model_input_size))
-    premultiply_sig_set_test = np.zeros((test_size, model_input_size))
-    complex_premultiply_sig_set_train = []
-    complex_premultiply_sig_set_test = []
-    for ij, output_signal in enumerate(output_sig_set):
+    premultiply_sig_set_train = []
+    premultiply_sig_set_test = []
+    for i, output_signal in enumerate(output_sig_set):
         if ( use_premultiply ):
             premultiply_signal = np.copy(output_signal)
         else:
@@ -139,40 +135,27 @@ def set_test_train(train_size,
 
             premultiply_sig_set.append(premultiply_signal)
 
-        if ( ij < train_size ):
-            if ( mode == 'real'):
-                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.real)
-            elif ( mode == 'imag'):
-                premultiply_sig_set_train[ij] = np.copy(premultiply_signal.imag)
-            elif ( mode == 'mag'):
-                premultiply_sig_set_train[ij] = np.abs(premultiply_signal)
-            elif ( mode == 'ang'):
-                premultiply_sig_set_train[ij] = np.angle(premultiply_signal)
-            elif ( mode == 'complex'):
-                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
-                complex_premultiply_sig_set_train.append(premultiply_sig_concat)
+        if ( mode == 'real'):
+            premultiply_sig = np.copy(premultiply_signal.real)
+        elif ( mode == 'imag'):
+            premultiply_sig = np.copy(premultiply_signal.imag)
+        elif ( mode == 'mag'):
+            premultiply_sig = np.abs(premultiply_signal)
+        elif ( mode == 'ang'):
+            premultiply_sig = np.angle(premultiply_signal)
+        elif ( mode == 'complex'):
+            premultiply_sig = np.concatenate((premultiply_signal.real, premultiply_signal.imag))    
+
+        if ( i < train_size ):
+                premultiply_sig_set_train.append(premultiply_sig)
         else:
-            if ( mode == 'real'):
-                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.real)
-            elif ( mode == 'imag'):
-                premultiply_sig_set_test[ij - train_size] = np.copy(premultiply_signal.imag)
-            elif ( mode == 'mag'):
-                premultiply_sig_set_test[ij - train_size] = np.abs(premultiply_signal)
-            elif ( mode == 'ang'):
-                premultiply_sig_set_test[ij - train_size] = np.angle(premultiply_signal)
-            elif ( mode == 'complex'):
-                premultiply_sig_concat = np.concatenate((premultiply_signal.real, premultiply_signal.imag))
-                complex_premultiply_sig_set_test.append(premultiply_sig_concat)
+                premultiply_sig_set_test.append(premultiply_sig)
 
     if ( not use_premultiply and training_params['save_premultiply'] ):
         premultiply_sig_set_array = np.array(premultiply_sig_set)
         np.save(premultiply_file_path, premultiply_sig_set_array)
 
-    if ( mode == 'complex'):
-        premultiply_sig_set_train = np.array(complex_premultiply_sig_set_train)
-        premultiply_sig_set_test = np.array(complex_premultiply_sig_set_test)
-
-    return premultiply_sig_set_train, premultiply_sig_set_test
+    return np.array(premultiply_sig_set_train), np.array(premultiply_sig_set_test)
 
 def create_model(mlp_model_file_path,
                  output_file_path,
@@ -236,65 +219,89 @@ def create_model(mlp_model_file_path,
         recovery_log.write(output_file_path + "\n")
     reset_tensforflow_session()
 
-def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path, zones, training_params, mode, wb_nyquist_rate):
-    input_sig_set_total = np.load(input_file_path)
-    num_input_sigs_total = input_sig_set_total.shape[0]
-    input_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
-    _, input_sig_set = np.vsplit(input_sig_set_total, [input_sigs_not_used])
-    active_zones = np.zeros(zones, dtype="float64")
-    fft_sig_list = []
-    active_zones_sig_list = []
-    recovery_mode = ""
-
-    for i, input_sig in enumerate(input_sig_set):
-        input_sig_fft = fft(input_sig)/(2*wb_nyquist_rate)
-        fft_sig_list.append(input_sig_fft)
-        input_zones = np.array_split(np.abs(input_sig_fft), zones)
-        # non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
-        for i, zone in enumerate(input_zones):
-            if np.any( zone > training_params['active_zones_min_mag'] ):
-                active_zones[i] = 1
-        active_zones_sig_list.append(np.copy(active_zones))
-        active_zones.fill(0)
-
-    fft_sig_set = np.array(fft_sig_list)
-    if ( training_params['save_fft_file'] ):
-        if ( not os.path.exists(fft_file_path) ):
-            np.save(fft_file_path, fft_sig_set)
-    
-    active_zones_sig_set = np.array(active_zones_sig_list)
-    if ( training_params['save_active_zones_file'] ):
-        if ( not os.path.exists(active_zones_file_path) ):
-            np.save(active_zones_file_path, active_zones_sig_set)
-
-    output_sig_set = None
+def set_recovery_mode(training_params, mode):
     recovery_mode = None
     if training_params['use_active_zones']:
-        output_sig_set = active_zones_sig_set
         recovery_mode = "active_zones"
+    elif training_params['use_fft']:
+        if (mode == 'real'):
+            recovery_mode = "real_imag"
+        elif (mode == 'imag'):
+            recovery_mode = "real_imag"
+        elif (mode == 'mag'):
+            recovery_mode = "mag_ang"
+        elif (mode == 'ang'):
+            recovery_mode = "mag_ang"
+        elif (mode == 'complex'):
+            recovery_mode = "complex"
+    return recovery_mode
+
+def create_model_outputs(input_file_path, fft_file_path, active_zones_file_path, zones, training_params, mode, wb_nyquist_rate):
+    fft_sig_set = None
+    if training_params['use_fft']:
+        if ( os.path.isfile(fft_file_path) ):
+            fft_sig_set = np.load(fft_file_path)
+            if fft_sig_set.shape[0] != training_params['total_num_sigs']:
+                fft_sig_set = None
+
+    active_zones_sig_set = None
+    if training_params['use_active_zones']:
+        if ( os.path.isfile(active_zones_file_path) ):
+            active_zones_sig_set = np.load(active_zones_file_path)
+            if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
+                active_zones_sig_set = None
+    
+    output_sig_set = None
+    if ( fft_sig_set is None and active_zones_sig_set is None ):
+        input_sig_set_total = np.load(input_file_path)
+        num_input_sigs_total = input_sig_set_total.shape[0]
+        input_sigs_not_used = num_input_sigs_total - training_params['total_num_sigs']
+        _, input_sig_set = np.vsplit(input_sig_set_total, [input_sigs_not_used])
+        active_zones = np.zeros(zones, dtype="float64")
+        fft_sig_list = []
+        active_zones_sig_list = []
+
+        for i, input_sig in enumerate(input_sig_set):
+            input_sig_fft = fft(input_sig)/(2*wb_nyquist_rate)
+            fft_sig_list.append(input_sig_fft)
+            input_zones = np.array_split(np.abs(input_sig_fft), zones)
+            # non_zero_in_zones = [np.any(zone != 0) for zone in input_zones]
+            for i, zone in enumerate(input_zones):
+                if np.any( zone > training_params['active_zones_min_mag'] ):
+                    active_zones[i] = 1
+            active_zones_sig_list.append(np.copy(active_zones))
+            active_zones.fill(0)
+
+        fft_sig_set = np.array(fft_sig_list)
+        if ( training_params['save_fft_file'] ):
+            if ( not os.path.exists(fft_file_path) ):
+                np.save(fft_file_path, fft_sig_set)
+        
+        active_zones_sig_set = np.array(active_zones_sig_list)
+        if ( training_params['save_active_zones_file'] ):
+            if ( not os.path.exists(active_zones_file_path) ):
+                np.save(active_zones_file_path, active_zones_sig_set)
+
+    if training_params['use_active_zones']:
+        output_sig_set = active_zones_sig_set
     elif training_params['use_fft']:
         output_sig_list = []
         for i, fft_sig in enumerate(fft_sig_set):
             if (mode == 'real'):
                 output_sig_list.append(fft_sig.real)
-                recovery_mode = "real_imag"
             elif (mode == 'imag'):
                 output_sig_list.append(fft_sig.real)
-                recovery_mode = "real_imag"
             elif (mode == 'mag'):
                 output_sig_list.append(np.abs(fft_sig))
-                recovery_mode = "mag_ang"
             elif (mode == 'ang'):
                 output_sig_list.append(np.angle(fft_sig))
-                recovery_mode = "mag_ang"
             elif (mode == 'complex'):
                 output_sig_list.append(np.concatenate((fft_sig.real, fft_sig.imag)))
-                recovery_mode = "complex"
         output_sig_set = np.array(output_sig_list)
 
-    model_input_size = input_sig_set.shape[1]
-    num_input_sigs = input_sig_set.shape[0]
-    return output_sig_set, model_input_size, num_input_sigs, recovery_mode
+    model_input_size = output_sig_set.shape[1]
+    num_input_sigs = output_sig_set.shape[0]
+    return output_sig_set, model_input_size, num_input_sigs
 
 def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=None):
     training_params = set_training_params(training_params=training_params, training_conf=training_conf)
@@ -327,38 +334,18 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                  files["input_tones"][input_tones]["sigs"])
                     model_log_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
                                                        files['mlp_models']['log'][training_params['processing_system']])
-                    fft_sig_set = None
-                    if training_params['use_fft']:
-                        if ( os.path.isfile(fft_file_path) ):
-                            fft_sig_set = np.load(fft_file_path)
-                            if fft_sig_set.shape[0] != training_params['total_num_sigs']:
-                                fft_sig_set = None
 
-                    active_zones_sig_set = None
-                    if training_params['use_active_zones']:
-                        if ( os.path.isfile(active_zones_file_path) ):
-                            active_zones_sig_set = np.load(active_zones_file_path)
-                            if active_zones_sig_set.shape[0] != training_params['total_num_sigs']:
-                                active_zones_sig_set = None
-
-                    output_sig_set, model_input_size, num_input_sigs, recovery_mode = create_model_outputs(input_file_path,
-                                                                                                            fft_file_path,
-                                                                                                            active_zones_file_path,
-                                                                                                            NYFR_test_harness.get_Zones(),
-                                                                                                            training_params,
-                                                                                                            mode,
-                                                                                                            NYFR_test_harness.get_wb_nyquist_rate())
-                    if active_zones_sig_set is not None:
-                        output_sig_set = active_zones_sig_set
-                        active_zones_sig_set = None
-                    elif fft_sig_set is not None:
-                        # Temp fix for now
-                        if mode != "complex":
-                            output_sig_set = fft_sig_set
-                        fft_sig_set = None
+                    output_sig_set, model_input_size, num_input_sigs = create_model_outputs(input_file_path,
+                                                                                            fft_file_path,
+                                                                                            active_zones_file_path,
+                                                                                            NYFR_test_harness.get_Zones(),
+                                                                                            training_params,
+                                                                                            mode,
+                                                                                            NYFR_test_harness.get_wb_nyquist_rate())
+                    recovery_mode = set_recovery_mode(training_params, mode)
 
                     train_size = int(num_input_sigs * training_params['train_test_split_percentage'])
-                    test_size = num_input_sigs - train_size
+                    # test_size = num_input_sigs - train_size
 
                     output_sig_set_train, output_sig_set_test = np.vsplit(output_sig_set, [train_size])
                     output_sig_set = None
@@ -390,12 +377,22 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                                                  f_mod,
                                                                  f_delta,
                                                                  files["input_tones"][input_tones]["sigs"])
-                            mlp_model_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
-                                                               noise_level,
-                                                               phase_shift,
-                                                               f_mod,
-                                                               f_delta,
-                                                               files['mlp_models']['name'])
+                            if ( input_set_params["use_per_signal_model"] ):
+                                mlp_model_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
+                                                                noise_level,
+                                                                phase_shift,
+                                                                f_mod,
+                                                                f_delta,
+                                                                files["input_tones"][input_tones]["sigs"])
+                                mlp_model_file_path = replace_extension(mlp_model_file_path, "keras")
+                            else:
+                                mlp_model_file_path = os.path.join(directories['mlp_models'][dictionary_params['version']][mode],
+                                                                noise_level,
+                                                                phase_shift,
+                                                                f_mod,
+                                                                f_delta,
+                                                                files['mlp_models']['name'])
+                                
                             found_string_in_file = False
                             with open(model_log_file_path, "r") as model_log:
                                 for line in model_log:
@@ -418,9 +415,7 @@ def create_mlp1_models(NYFR_test_harness, training_params=None, training_conf=No
                                     _, output_sig_set = np.vsplit(output_sig_set_total, [output_sigs_not_used])
                                     del output_sig_set_total
 
-                                premultiply_sig_set_train, premultiply_sig_set_test = set_test_train(train_size,                                    
-                                                                                                    test_size,
-                                                                                                    model_input_size,
+                                premultiply_sig_set_train, premultiply_sig_set_test = set_test_train(train_size,
                                                                                                     output_sig_set,
                                                                                                     use_premultiply,
                                                                                                     NYFR_test_harness,

@@ -29,7 +29,6 @@
     },
     "recovery":{
         "df": "recovery_df.pkl",
-        "name": "recovered_sigs.npy",
         "mag_ang": {
             "mag": {
                 "system1": "recovery_list_system1_mag.txt",

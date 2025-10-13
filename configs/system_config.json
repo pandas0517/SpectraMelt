@@ -35,7 +35,9 @@
         "version": "original"
     },
     "recovery_params": {
-        "type": "MLP1",
+        "mag_thresh": 0.5,
+        "set_size": 100,
+        "type": "IHT",
         "modes": [
             "mag_ang"
         ]
