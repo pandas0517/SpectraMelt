@@ -1,0 +1,29 @@
+{
+    "input_sigs_config": "Input_Config_1",
+    "time_params": {
+        "start": -2,
+        "stop": 2,
+        "sim_freq": 1000000,
+        "save_real_time": true
+    },
+    "LO_params": {
+        "amp":1,
+        "freq":100,
+        "phase":0,
+        "phase_delta": 0.4,
+        "phase_freq": 0.5,
+        "phase_offset": 0
+    },
+    "dictionary_params":{
+        "type": "real",
+        "version": "original"
+    },
+    "recovery_params": {
+        "mag_thresh": 0.5,
+        "set_size": 100,
+        "type": "IHT",
+        "modes": [
+            "mag_ang"
+        ]
+    }
+}

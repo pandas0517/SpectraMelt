@@ -151,6 +151,31 @@ def realistic_sample_and_hold(
 
     return output_signal, sh_indices, sampled_values
 
+def sample_signals(self, data=None, update_sampled_time=False, sample_rate=None, points_per_second=None, t=None):
+    if points_per_second is None:
+        points_per_second = self.real_points_per_second
+    if sample_rate is None:
+        sample_rate = self.system_params['adc_clock_freq']
+    if t is None:
+        t = self.real_t
+    clock_ticks = int(points_per_second / sample_rate)
+    sampled_data_list = []
+    sampled_time_list = []
+    for i in range(0, t.size, clock_ticks):
+        if data is not None:
+            sampled_data_list.append(data[i])
+        if update_sampled_time:
+            sampled_time_list.append(t[i])
+    if update_sampled_time:
+        self.sampled_t = np.array(sampled_time_list)
+        self.sampled_tf = np.linspace(-self.system_params['adc_clock_freq']/2,
+                                    self.system_params['adc_clock_freq']/2,
+                                    len(sampled_time_list),
+                                    endpoint=False)
+    sampled_data = np.array(sampled_data_list)
+
+    return sampled_data
+
 # Example Usage:
 if __name__ == "__main__":
     # Signal parameters
