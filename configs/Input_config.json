@@ -1,29 +1,33 @@
 {
-    "input_sigs_config": "Input_Config_1",
+    "input_config_name": "Input_Config_1",
     "time_params": {
         "start": -2,
         "stop": 2,
         "sim_freq": 1000000,
         "save_real_time": true
     },
-    "LO_params": {
-        "amp":1,
-        "freq":100,
-        "phase":0,
-        "phase_delta": 0.4,
-        "phase_freq": 0.5,
-        "phase_offset": 0
+    "system_params": {
+        "adc_samp_freq": 100,
+        "v_ref_max": 5,
+        "v_ref_min": 0,
+        "system_noise_level": 0.02,
+        "attenuation": 0.95,
+        "doppler": 0.001,
+        "delay": 0.0005,
+        "num_echoes": 3,
+        "max_delay": 0.003,
+        "max_doppler": 0.002,
+        "phase_inversion_prob": 0.4
     },
-    "dictionary_params":{
-        "type": "real",
-        "version": "original"
-    },
-    "recovery_params": {
-        "mag_thresh": 0.5,
-        "set_size": 100,
-        "type": "IHT",
-        "modes": [
-            "mag_ang"
+    "wave_params":{
+        "num_waves": 5,
+        "freq_range": [100, 1000],
+        "amp_range": [0.1, 1.0],
+        "phase_random": true,
+        "waves": [
+            {"amp": 1,
+            "freq": 1,
+            "phase": 0}
         ]
     }
 }
