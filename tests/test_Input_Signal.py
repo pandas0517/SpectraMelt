@@ -14,7 +14,7 @@ if __name__ == '__main__':
     from scipy.fftpack import fft
     import numpy as np
 
-    input_signal_1 = Input_Signal(config_file_path=Path(os.getenv('INPUT_CONF')))
+    input_signal_1 = Input_Signal(config_file_path=Path(os.getenv('SYSTEM_CONF')))
     input_signal_1.create_analog()
     input_signal_1.create_input_signal()
     real_time_1 = input_signal_1.get_analog_signals().get('time')

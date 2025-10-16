@@ -1,45 +1,51 @@
 {
     "system_config_name": "System_Config_1",
-    "filter_params": {
+    "adc_params": {
+        "adc_samp_freq": 100,
+        "allow_clipping": true,
+        "v_ref_range": [0, 5],
+        "num_bits": 8,
+        "thermal_noise_std_dev": 0.0,
+        "non_linearity_mode": null,
+        "alpha": 0.05,
+        "threshold": 1.0,
+        "jitter_std": 0.0,
+        "acquisition_time_constant": 0.0,
+        "hold_noise_std": 0.0
+    },
+    "lp_filter_params": {
         "type": "butter",
         "order": 6,
-        "cutoff_freq": 50,
-        "angle": 45,
-        "window_size": 150
+        "cutoff_freq": 50
     },
-    "system_params": {
-        "wbf_cut_mod": 4,
-        "wbf_cut_freq": 400,
-        "adc_clock_freq": 100,
-        "processing_systems": [
-            "system1"
-        ],
-        "system_noise_level": 0
+    "wb_filter_params":{
+        "type": "butter",
+        "order": 6,
+        "cutoff_freq": 1000
     },
     "time_params": {
-        "start": -2,
-        "stop": 2,
-        "sim_freq": 1000000,
-        "save_real_time": true
+        "time_range": [-2, 2],
+        "sim_freq": 1000000
     },
-    "LO_params": {
-        "amp":1,
-        "freq":100,
-        "phase":0,
-        "phase_delta": 0.4,
-        "phase_freq": 0.5,
-        "phase_offset": 0
+    "env_params": {
+        "noise_level": 0.02,
+        "attenuation": 0.95,
+        "doppler": 0.001,
+        "delay": 0.0005,
+        "num_echoes": 3,
+        "max_delay": 0.003,
+        "max_doppler": 0.002,
+        "phase_inversion_prob": 0.4
     },
-    "dictionary_params":{
-        "type": "real",
-        "version": "original"
-    },
-    "recovery_params": {
-        "mag_thresh": 0.5,
-        "set_size": 100,
-        "type": "IHT",
-        "modes": [
-            "mag_ang"
+    "wave_params":{
+        "num_waves": 5,
+        "freq_range": [100, 1000],
+        "amp_range": [0.1, 1.0],
+        "phase_random": true,
+        "waves": [
+            {"amp": 1,
+            "freq": 1,
+            "phase": 0}
         ]
     }
 }
