@@ -1,58 +1,220 @@
 import numpy as np
+from utility import load_settings
 
-class LocalOscillator:
+class Local_Oscillator:
+    """
+    Represents a realistic local oscillator (LO) with optional modulation, noise,
+    frequency drift, and harmonic distortion.
+    """
+
     def __init__(self,
-                 freq_hz: float,
-                 amplitude: float = 1.0,
-                 phase_offset: float = 0.0,
-                 phase_noise_std: float = 1e-3,
-                 amp_noise_std: float = 1e-3,
-                 freq_drift_ppm: float = 0.0,
-                 harmonic_distortion: float = 0.0):
+                 real_time=None,
+                 lo_params=None,
+                 time_params=None,
+                 adc_params=None,
+                 lo_config_name=None,
+                 config_file_path=None) -> None:
         """
-        Simulates a realistic local oscillator.
-
         Parameters
         ----------
-        freq_hz : float
-            Nominal LO frequency.
-        amplitude : float
-            LO amplitude.
-        phase_offset : float
-            Static phase offset (radians).
-        phase_noise_std : float
-            Std dev of random phase noise (radians).
-        amp_noise_std : float
-            Std dev of amplitude noise (fraction of amplitude).
-        freq_drift_ppm : float
-            Frequency drift in parts per million.
-        harmonic_distortion : float
-            Fractional 2nd harmonic distortion amplitude.
+        lo_params : dict
+            {
+                'freq': carrier frequency (Hz),
+                'amp': amplitude,
+                'phase': initial phase (radians),
+                'mod_enable': bool,                     # enable phase modulation
+                'phase_freq': modulation frequency (Hz),
+                'phase_delta': phase deviation (radians),
+                'phase_offset': phase offset (radians),
+
+                'phase_noise_std': float,                # std dev of random phase noise (radians)
+                'amp_noise_std': float,                  # std dev of amplitude noise (fraction of amplitude)
+                'freq_drift_ppm': float,                 # frequency drift in parts per million
+                'harmonic_distortion': float             # fractional 2nd harmonic amplitude
+            }
+        t : np.ndarray
+            Time vector for signal generation.
         """
-        self.freq_hz = freq_hz
-        self.amplitude = amplitude
-        self.phase_offset = phase_offset
-        self.phase_noise_std = phase_noise_std
-        self.amp_noise_std = amp_noise_std
-        self.freq_drift_ppm = freq_drift_ppm
-        self.harmonic_distortion = harmonic_distortion
+        if config_file_path is not None:
+            self.set_config_from_file(config_file_path)
+        else:
+            self.set_lo_params(lo_params)
+            self.set_adc_params(adc_params)
+            self.set_time_params(time_params)
+            if ( time_params is None and
+                adc_params is None and
+                lo_params is None):
+                lo_config_name = "Default_LO_Config"
+            self.set_lo_config_name(lo_config_name)
+        if real_time is None:
+            real_time = self._create_analog().get('time')
+        self.real_time = real_time
+        self.signal = self._generate_signal()
+ 
+    # -------------------------------
+    # Setters
+    # -------------------------------
+       
+    def set_config_from_file(self, config_file_path=None):
+        print("Loading Local Oscillator configuration from file: ", config_file_path)
+        lo_config = load_settings(config_file_path)
+        lo_params = lo_config.get('time_params', None)
+        self.set_lo_params(lo_params)
+        
+    def set_lo_config_name(self, lo_config_name=None):
+        if lo_config_name is None:
+            lo_config_name = "LO_Config_1"
+        self.lo_config_name = lo_config_name        
+        
+    def set_lo_params(self, lo_params=None):
+        if lo_params is None:
+            lo_params = {
+                "amp": 1,
+                "freq": 100,
+                "phase": 0,
+                "mod_enabled": True,
+                "phase_delta": 0.4,
+                "phase_freq": 0.5,
+                "phase_offset": 0,
+                "phase_noise_std": 0.0,
+                "amp_noise_std": 0.0,
+                "freq_drift_ppm": 0.0,
+                "harmonic_distortion": 0.0
+            }           
+        self.lo_params = lo_params
+        
+    def set_time_params(self, time_params=None):
+        if time_params is None:
+            time_params = {
+                'time_range': (0, 1),
+                'sim_freq': 1000000
+            }
+        self.time_params = time_params
+        
+    def set_adc_params(self, adc_params=None):
+        if adc_params is None:
+            adc_params = {
+                "adc_samp_freq": 100,
+                "allow_clipping": True,
+                "v_ref_range": (0, 1),
+                "num_bits": 8,
+                "thermal_noise_std_dev": 0.0,
+                "non_linearity_mode": False,
+                "alpha": 0.0,
+                "threshold": 1.0,
+                "jitter_std": 0.0,
+                "acquisition_time_constant": 0.0,
+                "hold_noise_std": 0.0
+            }           
+        self.adc_params = adc_params
+        
+    # -------------------------------
+    # Core functional methods
+    # -------------------------------
+    
+    def _create_analog(self):
+        analog = {}
+        points_per_second = round(self.time_params['sim_freq'])
+        # Adjust to be evenly divisible by adc_clock_freq
+        band = int(points_per_second / self.adc_params['adc_samp_freq'])
+        band_remainder = int(points_per_second % self.adc_params['adc_samp_freq'])
+        if band_remainder != 0:
+            points_per_second -= band_remainder
+        # K_band must be even
+        if band % 2 != 0:
+            points_per_second += int(self.adc_params['adc_samp_freq'])
+        time_range = tuple(self.time_params.get('time_range', (0, 1)))
+        analog['points_per_second'] = points_per_second
+        analog['adj_spacing'] = 1 / points_per_second
+        analog['total_time'] = abs(time_range[1] - time_range[0])
+        analog['num_points'] = int(analog['total_time'] * points_per_second)
+        analog['time'] = np.linspace(time_range[0],
+                                  time_range[1],
+                                  analog['num_points'],
+                                  endpoint=False)
+        analog['frequency'] = np.linspace(-points_per_second / 2,
+                                   points_per_second / 2,
+                                   int(analog['time'].size),
+                                   endpoint=False)
+        return analog
 
-    def generate(self, t: np.ndarray) -> np.ndarray:
-        """Generate the LO waveform with imperfections."""
-        # Frequency drift (slow variation)
-        drift = self.freq_hz * (1 + np.random.normal(0, self.freq_drift_ppm * 1e-6))
+    def _generate_signal(self) -> np.ndarray:
+        # --- Base frequency and amplitude ---
+        f0 = self.lo_params['freq']
+        A = self.lo_params['amp']
 
-        # Phase noise
-        phase_noise = np.cumsum(np.random.normal(0, self.phase_noise_std, len(t)))
+        # --- Frequency drift (ppm → fractional offset) ---
+        freq_drift = f0 * (self.lo_params.get('freq_drift_ppm', 0.0) * 1e-6)
 
-        # Amplitude noise
-        amp_noise = 1 + np.random.normal(0, self.amp_noise_std, len(t))
+        # --- Compute pre-start time for edge case handling ---
+        dt = self.real_time[1] - self.real_time[0]
+        pre_start_time = self.real_time[0] - dt
 
-        # Base LO waveform
-        lo = self.amplitude * amp_noise * np.sin(2 * np.pi * drift * t + self.phase_offset + phase_noise)
+        # --- Optional phase modulation ---
+        if self.lo_params.get('mod_enable', False):
+            phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
+                        np.sin(2 * np.pi * self.lo_params['phase_freq'] * self.real_time +
+                            self.lo_params.get('phase_offset', 0))
+            pre_phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
+                            np.sin(2 * np.pi * self.lo_params['phase_freq'] * pre_start_time +
+                                self.lo_params.get('phase_offset', 0))
+        else:
+            phase_mod = 0.0
+            pre_phase_mod = 0.0
 
-        # Add harmonic distortion
-        if self.harmonic_distortion > 0:
-            lo += self.harmonic_distortion * np.sin(4 * np.pi * drift * t + self.phase_offset)
+        # --- Phase noise (white, Gaussian) ---
+        phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0), len(self.real_time))
+        pre_phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0))  # single value
+
+        # --- Amplitude noise (white, Gaussian) ---
+        amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0), len(self.real_time))
+        pre_amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0))
+        amp = A * (1 + amp_noise)
+        pre_amp = A * (1 + pre_amp_noise)
+
+        # --- Instantaneous phase (includes drift, modulation, and noise) ---
+        phase = 2 * np.pi * (f0 + freq_drift) * self.real_time + \
+                self.lo_params.get('phase', 0.0) + phase_mod + phase_noise
+
+        pre_phase = 2 * np.pi * (f0 + freq_drift) * pre_start_time + \
+                    self.lo_params.get('phase', 0.0) + pre_phase_mod + pre_phase_noise
+
+        # --- Fundamental signal ---
+        lo = amp * np.sin(phase)
+        pre_start_lo = pre_amp * np.sin(pre_phase)
+
+        # --- Add 2nd harmonic distortion ---
+        harmonic_amp = self.lo_params.get('harmonic_distortion', 0.0) * A
+        if harmonic_amp != 0:
+            lo += harmonic_amp * np.sin(2 * phase)
+            pre_start_lo += harmonic_amp * np.sin(2 * pre_phase)
+
+        # --- Store pre-start LO value for later use (e.g., zero-cross detection) ---
+        self.pre_start_lo = pre_start_lo
 
         return lo
+
+    # -------------------------------
+    # Getters
+    # -------------------------------
+    
+    def get_lo_config_name(self):
+        return self.lo_config_name
+    
+    def get_lo_signal(self):
+        return self.signal
+    
+    def get_real_time(self):
+        return self.real_time
+    
+    def get_lo_params(self):
+        return self.lo_params
+    
+    def get_time_params(self):
+        return self.time_params
+    
+    def get_adc_params(self):
+        return self.adc_params
+    
+    def get_pre_start_lo(self):
+        return self.pre_start_lo

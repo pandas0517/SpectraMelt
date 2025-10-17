@@ -13,6 +13,19 @@
         "acquisition_time_constant": 0.0,
         "hold_noise_std": 0.0
     },
+    "lo_params": {
+        "amp": 1,
+        "freq": 100,
+        "phase": 0,
+        "mod_enabled": true,
+        "phase_delta": 0.4,
+        "phase_freq": 0.5,
+        "phase_offset": 0,
+        "phase_noise_std": 0.0,
+        "amp_noise_std": 0.0,
+        "freq_drift_ppm": 0.0,
+        "harmonic_distortion": 0.0
+    },
     "lp_filter_params": {
         "type": "butter",
         "order": 6,
