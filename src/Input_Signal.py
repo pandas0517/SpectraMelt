@@ -23,13 +23,14 @@ class Input_Signal:
                 input_config_name = "Default_Input_Config"
             self.set_input_config_name(input_config_name)
 
-        self.analog = None
-        self.input_signal = None
         self.effects = None
+        self.analog = self._create_analog()
+        self.input_signal = self._create_input_signal()
 
     # -------------------------------
     # Setters
     # -------------------------------
+    
     def set_config_from_file(self, config_file_path):
         print("Loading input configuration from file: ", config_file_path)
         input_config = load_settings(config_file_path)
@@ -113,8 +114,8 @@ class Input_Signal:
     # Core functional methods
     # -------------------------------
     
-    def create_analog(self):
-        self.analog = {}
+    def _create_analog(self):
+        analog = {}
         points_per_second = round(self.time_params['sim_freq'])
         # Adjust to be evenly divisible by adc_clock_freq
         band = int(points_per_second / self.adc_params['adc_samp_freq'])
@@ -125,20 +126,21 @@ class Input_Signal:
         if band % 2 != 0:
             points_per_second += int(self.adc_params['adc_samp_freq'])
         time_range = tuple(self.time_params.get('time_range', (0, 1)))
-        self.analog['points_per_second'] = points_per_second
-        self.analog['adj_spacing'] = 1 / points_per_second
-        self.analog['total_time'] = abs(time_range[1] - time_range[0])
-        self.analog['num_points'] = int(self.analog['total_time'] * points_per_second)
-        self.analog['time'] = np.linspace(time_range[0],
+        analog['points_per_second'] = points_per_second
+        analog['adj_spacing'] = 1 / points_per_second
+        analog['total_time'] = abs(time_range[1] - time_range[0])
+        analog['num_points'] = int(analog['total_time'] * points_per_second)
+        analog['time'] = np.linspace(time_range[0],
                                   time_range[1],
-                                  self.analog['num_points'],
+                                  analog['num_points'],
                                   endpoint=False)
-        self.analog['frequency'] = np.linspace(-points_per_second / 2,
+        analog['frequency'] = np.linspace(-points_per_second / 2,
                                    points_per_second / 2,
-                                   int(self.analog['time'].size),
+                                   int(analog['time'].size),
                                    endpoint=False)
+        return analog
 
-    def create_input_signal(self):
+    def _create_input_signal(self):
         """
         Generate composite signal with environmental effects and random wave generation.
         """
@@ -167,21 +169,23 @@ class Input_Signal:
             ]
         waves = self.wave_params['waves']
 
-        self.generate_signal(waves)
+        input_signal = self._generate_signal(waves)
             # --- Adjust to midpoint ---
         midpoint = (v_ref_range[1] + v_ref_range[0]) / 2
-        self.input_signal = self.input_signal + midpoint  # shift signal to midpoint
+        input_signal = input_signal + midpoint  # shift signal to midpoint
 
-        # --- Scale or clip signal ---
+        # --- Scale signal ---
         if not allow_clipping:
             # Prevent clipping by scaling amplitude
-            max_abs_val = max(abs(self.input_signal.min() - midpoint), abs(self.input_signal.max() - midpoint))
+            max_abs_val = max(abs(input_signal.min() - midpoint), abs(input_signal.max() - midpoint))
             max_allowed_amp = (v_ref_range[1] + v_ref_range[0]) / 2
             if max_abs_val > 0:
                 scale = max_allowed_amp / max_abs_val
-                self.input_signal = (self.input_signal - midpoint) * scale + midpoint
+                input_signal = (input_signal - midpoint) * scale + midpoint
+                
+        return input_signal
 
-    def generate_signal(self, waves):
+    def _generate_signal(self, waves):
         self.effects = {}
         amps = np.array([wave['amp'] for wave in waves])
         freqs = np.array([wave['freq'] for wave in waves])
@@ -248,7 +252,7 @@ class Input_Signal:
                 self.effects['local_doppler'].append(local_doppler)
                 self.effects['phase_inversion'] = phase_inversion
 
-        self.input_signal = signal
+        return signal
 
     # -------------------------------
     # Getters
@@ -263,11 +267,22 @@ class Input_Signal:
     def get_analog_signals(self):
         return self.analog
     
+    def get_analog_signal_params(self):
+        exclude = ["time", "frequency"]
+        analog_signal_params = {k: v for k, v in self.analog.items() if k not in exclude}
+        return analog_signal_params
+    
+    def get_analog_time(self):
+        return self.analog['time']
+    
+    def get_analog_frequency(self):
+        return self.analog['frequency']
+    
     def get_time_params(self):
         return self.time_params
     
     def get_adc_params(self):
-        return self.system_params
+        return self.adc_params
     
     def get_env_params(self):
         return self.env_params

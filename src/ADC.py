@@ -3,6 +3,8 @@ from utility import load_settings
 
 class ADC:
     def __init__(self,
+                 input_signal=None,
+                 start_time=None,
                  adc_params=None,
                  time_params=None,
                  adc_config_name=None,
@@ -15,8 +17,12 @@ class ADC:
             if ( adc_params is None ):
                 adc_config_name = "Default_ADC_Config"
             self.set_adc_config_name(adc_config_name)
+
         self.sh_signals = None
         self.quantizer_signals = None
+        
+        if input_signal is not None:
+            self.quantizer_signals = self._analog_to_digital(input_signal, start_time)
             
     # -------------------------------
     # Setters
@@ -69,7 +75,7 @@ class ADC:
     # Core functional methods
     # -------------------------------
        
-    def quantizer(self, sim_freq=1000000, start_time=0):
+    def _quantizer(self, sim_freq=1000000, start_time=0):
         """
         Simulates a realistic ADC quantizer by sampling the S&H output at
         the midpoint of each hold interval, and returns both quantized values
@@ -90,7 +96,7 @@ class ADC:
                 - mid_times (np.ndarray): Time points corresponding to each quantized value.
                 - adc_indices (np.ndarray): Integer n-bit ADC codes for each sample.
         """
-        self.quantizer_signals = {}
+        quantizer_signals = {}
         v_ref_range = self.adc_params.get('v_ref_range', (0, 1))
         num_levels = 2**self.adc_params.get('num_bits', 8)
         self.sh_signals.get('output_signal')
@@ -132,11 +138,13 @@ class ADC:
         if start_time != 0:
             mid_times += start_time
 
-        self.quantizer_signals['mid_times'] = mid_times
-        self.quantizer_signals['quantized_values'] = quantized_values
-        self.quantizer_signals['adc_indices'] = adc_indices
+        quantizer_signals['mid_times'] = mid_times
+        quantizer_signals['quantized_values'] = quantized_values
+        quantizer_signals['adc_indices'] = adc_indices
+        
+        return quantizer_signals
 
-    def sample_and_hold(self, signal, sim_freq=1000000, adc_samp_freq=100):
+    def _sample_and_hold(self, signal, sim_freq=1000000, adc_samp_freq=100):
         """
         Simulates a realistic sample-and-hold circuit with optional voltage-preserving non-linearity.
 
@@ -156,7 +164,7 @@ class ADC:
         Returns:
             tuple: (output_signal, sh_indices, sampled_values)
         """
-        self.sh_signals = {}
+        sh_signals = {}
         v_min = np.min(signal)
         v_max = np.max(signal)
 
@@ -212,15 +220,20 @@ class ADC:
             if hold_noise_std > 0:
                 noise = np.random.normal(0, hold_noise_std)
                 output_signal[start_index:end_index] += noise
-        self.sh_signals['output_signal'] = output_signal
-        self.sh_signals['indices'] = sh_indices
-        self.sh_signals['sampled_values'] = sampled_values
+        sh_signals['output_signal'] = output_signal
+        sh_signals['indices'] = sh_indices
+        sh_signals['sampled_values'] = sampled_values
+        
+        return sh_signals
 
-    def analog_to_digital(self, signal, time=None):
+    def _analog_to_digital(self, signal, start_time=None):
         sim_freq = self.time_params.get('sim_freq', 10000000)
         adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
-        self.sample_and_hold(signal, sim_freq, adc_samp_freq)
-        self.quantizer(sim_freq, time)
+        
+        self.sh_signals = self._sample_and_hold(signal, sim_freq, adc_samp_freq)
+        quantizer_signals = self._quantizer(sim_freq, start_time)
+        
+        return quantizer_signals
         
  
     # -------------------------------
