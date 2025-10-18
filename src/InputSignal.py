@@ -1,7 +1,7 @@
 from utility import load_settings
 import numpy as np
 
-class Input_Signal:
+class InputSignal:
     def __init__(self,
                  time_params=None,
                  adc_params=None,

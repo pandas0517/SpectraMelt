@@ -1,7 +1,7 @@
 import numpy as np
 from utility import load_settings
 
-class Local_Oscillator:
+class LocalOscillator:
     """
     Represents a realistic local oscillator (LO) with optional modulation, noise,
     frequency drift, and harmonic distortion.
@@ -49,7 +49,7 @@ class Local_Oscillator:
         if real_time is None:
             real_time = self._create_analog().get('time')
         self.real_time = real_time
-        self.signal = self._generate_signal()
+        self.signal = self.generate_signal()
  
     # -------------------------------
     # Setters
@@ -58,8 +58,15 @@ class Local_Oscillator:
     def set_config_from_file(self, config_file_path=None):
         print("Loading Local Oscillator configuration from file: ", config_file_path)
         lo_config = load_settings(config_file_path)
-        lo_params = lo_config.get('time_params', None)
+        lo_params = lo_config.get('lo_params', None)
+        time_params = lo_config.get('time_params', None)
+        adc_params = lo_config.get('adc_params', None)
+        lo_config_name = lo_config.get('system_config_name', None)
+
         self.set_lo_params(lo_params)
+        self.set_time_params(time_params)
+        self.set_adc_params(adc_params)
+        self.set_lo_config_name(lo_config_name)
         
     def set_lo_config_name(self, lo_config_name=None):
         if lo_config_name is None:
@@ -138,7 +145,10 @@ class Local_Oscillator:
                                    endpoint=False)
         return analog
 
-    def _generate_signal(self) -> np.ndarray:
+    def generate_signal(self, real_time=None) -> np.ndarray:
+        if real_time is None:
+            real_time = self.real_time
+
         # --- Base frequency and amplitude ---
         f0 = self.lo_params['freq']
         A = self.lo_params['amp']
@@ -147,13 +157,13 @@ class Local_Oscillator:
         freq_drift = f0 * (self.lo_params.get('freq_drift_ppm', 0.0) * 1e-6)
 
         # --- Compute pre-start time for edge case handling ---
-        dt = self.real_time[1] - self.real_time[0]
-        pre_start_time = self.real_time[0] - dt
+        dt = real_time[1] - real_time[0]
+        pre_start_time = real_time[0] - dt
 
         # --- Optional phase modulation ---
         if self.lo_params.get('mod_enable', False):
             phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
-                        np.sin(2 * np.pi * self.lo_params['phase_freq'] * self.real_time +
+                        np.sin(2 * np.pi * self.lo_params['phase_freq'] * real_time +
                             self.lo_params.get('phase_offset', 0))
             pre_phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
                             np.sin(2 * np.pi * self.lo_params['phase_freq'] * pre_start_time +
@@ -163,17 +173,17 @@ class Local_Oscillator:
             pre_phase_mod = 0.0
 
         # --- Phase noise (white, Gaussian) ---
-        phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0), len(self.real_time))
+        phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0), len(real_time))
         pre_phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0))  # single value
 
         # --- Amplitude noise (white, Gaussian) ---
-        amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0), len(self.real_time))
+        amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0), len(real_time))
         pre_amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0))
         amp = A * (1 + amp_noise)
         pre_amp = A * (1 + pre_amp_noise)
 
         # --- Instantaneous phase (includes drift, modulation, and noise) ---
-        phase = 2 * np.pi * (f0 + freq_drift) * self.real_time + \
+        phase = 2 * np.pi * (f0 + freq_drift) * real_time + \
                 self.lo_params.get('phase', 0.0) + phase_mod + phase_noise
 
         pre_phase = 2 * np.pi * (f0 + freq_drift) * pre_start_time + \
