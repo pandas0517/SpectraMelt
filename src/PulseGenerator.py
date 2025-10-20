@@ -71,7 +71,7 @@ class PulseGenerator:
         pulse_params = pulse_config.get('pulse_params', None)
         time_params = pulse_config.get('time_params', None)
         adc_params = pulse_config.get('adc_params', None)
-        pulse_config_name = pulse_config.get('system_config_name', None)
+        pulse_config_name = pulse_config.get('config_name', None)
 
         self.set_pulse_params(pulse_params)
         self.set_time_params(time_params)
@@ -96,8 +96,7 @@ class PulseGenerator:
                 "baseline_offset": 0.0,
                 "seed": None               
             }
-        if pulse_params['seed'] is not None:
-            np.random.seed(pulse_params['seed'])
+        self.rng = np.random.default_rng(pulse_params.get('seed', None))
         self.pulse_params = pulse_params
 
     def set_time_params(self, time_params=None):
@@ -164,14 +163,19 @@ class PulseGenerator:
         pulses : np.ndarray
             Generated pulse train with realistic imperfections.
         """
-        jitter_std = self.pulse_params.get('jitter_std', 0.0)
+        # --- Set Pulse Generator Parameters ---
         pulse_width = self.pulse_params.get('pulse_width', None)
         amplitude = self.pulse_params.get('amplitude', 1.0)
-        amp_noise_std = self.pulse_params.get('amp_noise_std', 0.0)
         rise_time = self.pulse_params.get('rise_time', 0.0)
         fall_time = self.pulse_params.get('fall_time', 0.0)
-        droop_coeff = self.pulse_params.get('droop_coeff', 0.0)
         baseline_offset = self.pulse_params.get('baseline_offset', 0.0)
+        
+        # --- Set Pulse Generator Nonidealities
+        jitter_std = self.pulse_params.get('jitter_std', 0.0)
+        amp_noise_std = self.pulse_params.get('amp_noise_std', 0.0)
+        droop_coeff = self.pulse_params.get('droop_coeff', 0.0)
+
+        
         if real_time is None:
             real_time = self.real_time
         if pulse_width is None:
@@ -182,7 +186,7 @@ class PulseGenerator:
 
         # --- Apply timing jitter ---
         if jitter_std > 0:
-            jitter = np.random.normal(0, jitter_std, num_pulses)
+            jitter = self.rng.normal(0, jitter_std, num_pulses)
             pulse_times = ideal_pulse_times + jitter
         else:
             pulse_times = ideal_pulse_times
@@ -196,7 +200,7 @@ class PulseGenerator:
                 continue
 
             # Amplitude noise and droop
-            amp = amplitude * (1 + np.random.normal(0, amp_noise_std))
+            amp = amplitude * (1 + self.rng.normal(0, amp_noise_std))
             amp *= np.exp(-droop_coeff * t0)
 
             # Generate trapezoidal pulse (finite rise/fall)
@@ -242,7 +246,7 @@ class PulseGenerator:
 
         # Handle edge at the start of the time vector
         if pre_start_val is not None:
-            if pre_start_val * signal[0] < 0 and pre_start_val < signal[0]:
+            if np.signbit(pre_start_val) != np.signbit(signal[0]) and pre_start_val < signal[0]:
                 pulses[0] = 1
 
         # Find zero crossings

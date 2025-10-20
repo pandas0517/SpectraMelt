@@ -10,7 +10,8 @@ if __name__ == '__main__':
     load_dotenv()
     from pathlib import Path
     from InputSignal import InputSignal
-    from ADC import ADC
+    from LocalOscillator import LocalOscillator
+    from PulseGenerator import PulseGenerator
     import matplotlib.pyplot as plt
     from scipy.fftpack import fft
     import numpy as np
@@ -30,7 +31,7 @@ if __name__ == '__main__':
     total_time_2 = input_signal_2.get_analog_signal_params().get('total_time')
     sim_freq_2 = input_signal_2.get_time_params().get('sim_freq')
     real_input_freq_2 = np.fft.fftshift(np.abs(fft(real_input_2))) / (sim_freq_2*total_time_2)
-    
+       
     fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
     axes[0,0].plot(real_time_1, real_input_1)
     axes[0,0].set_title("Time (File)")
@@ -46,26 +47,41 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.show()
     
-    adc_1 = ADC(real_input_1,real_time_1[0],config_file_path=Path(os.getenv('SYSTEM_CONF')))
-    bits_adc_1 = adc_1.get_adc_params().get('num_bits')
-    sh_output_adc_1 = adc_1.get_sh_signals().get('output_signal')
-    mid_times_adc_1 = adc_1.get_quantizer_signals().get('mid_times')
-    quantized_adc_1 = adc_1.get_quantizer_signals().get('quantized_values')
-    adc_2 = ADC(real_input_2, real_time_2[0])
-    bits_adc_2 = adc_2.get_adc_params().get('num_bits')
-    sh_output_adc_2 = adc_2.get_sh_signals().get('output_signal')
-    mid_times_adc_2 = adc_2.get_quantizer_signals().get('mid_times')
-    quantized_adc_2 = adc_2.get_quantizer_signals().get('quantized_values')
+    lo_1 = LocalOscillator(real_time_1, config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    lo_signal_1 = lo_1.get_lo_signal()
+    lo_pre_start_1 = lo_1.get_pre_start_lo()
+    pulse_gen_1 = PulseGenerator(lo_signal_1, real_time_1, lo_pre_start_1,
+                                 config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    pulse_signal_1 = pulse_gen_1.get_pulses()
+    lo_freq_1 = np.fft.fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
+    pulse_freq_1 = np.fft.fftshift(np.abs(fft(pulse_signal_1))) / (sim_freq_1*total_time_1)
+    lo_2 = LocalOscillator()
+    lo_signal_2 = lo_2.get_lo_signal()
+    lo_pre_start_2 = lo_2.get_pre_start_lo()
+    pulse_gen_2 = PulseGenerator(lo_signal_2, pre_start_val=lo_pre_start_2)
+    pulse_signal_2 = pulse_gen_2.get_pulses()
+    lo_freq_2 = np.fft.fftshift(np.abs(fft(lo_signal_2))) / (sim_freq_2*total_time_2)
+    pulse_freq_2 = np.fft.fftshift(np.abs(fft(pulse_signal_2))) / (sim_freq_2*total_time_2)
     
-    fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-    axes[0,0].plot(real_time_1, sh_output_adc_1)
-    axes[0,0].set_title("Sample and Hold - Time (File)")
-    axes[0,1].step(mid_times_adc_1, quantized_adc_1, color='green', where='mid')
-    axes[0,1].set_title(f"{bits_adc_1}-bit quantizer (File)")
-    axes[1,0].plot(real_time_2, sh_output_adc_2)
-    axes[1,0].set_title("Sample and Hold - Time (Default)")
-    axes[1,1].step(mid_times_adc_2, quantized_adc_2, color='green', where='mid')
-    axes[1,1].set_title(f"{bits_adc_2}-bit quantizer (Default)")
-    fig.suptitle("ADC Signals")
+    fig, axes = plt.subplots(2, 3, figsize=(8,4))  # 2 rows, 3 columns
+    axes[0,0].plot(real_time_1, lo_signal_1)
+    axes[0,0].plot(real_time_1, pulse_signal_1)
+    axes[0,0].set_title("Time (File)")
+    axes[0,0].set_xlim(-0.05, 0.05)
+    axes[0,1].plot(real_freq_1, lo_freq_1)
+    axes[0,1].set_title("LO Frequency (File)")
+    axes[0,1].set_xlim(-120, 120)
+    axes[0,2].plot(real_freq_1, pulse_freq_1)
+    axes[0,2].set_title("Pulse Frequency (File)")
+    axes[1,0].plot(real_time_2, lo_signal_2)
+    axes[1,0].plot(real_time_2, pulse_signal_2)
+    axes[1,0].set_title("Time (Default)")
+    axes[1,0].set_xlim(0, 0.05)
+    axes[1,1].plot(real_freq_2, lo_freq_2)
+    axes[1,1].set_title("LO Frequency (Default)")
+    axes[1,1].set_xlim(-120, 120)
+    axes[1,2].plot(real_freq_2, pulse_freq_2)
+    axes[1,2].set_title("Pulse Frequency (File)")
+    fig.suptitle("LO and Pulse Signals")
     fig.tight_layout()
     plt.show()

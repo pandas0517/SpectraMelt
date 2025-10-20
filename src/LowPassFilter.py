@@ -52,7 +52,7 @@ class LowPassFilter:
         lpf_config = load_settings(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)
         time_params = lpf_config.get('time_params', None)
-        lpf_config_name = lpf_config.get('system_config_name', None)
+        lpf_config_name = lpf_config.get('config_name', None)
 
         self.set_lpf_params(lpf_params)
         self.set_time_params(time_params)
@@ -71,8 +71,10 @@ class LowPassFilter:
                 "cutoff_freq": 10000,         # Hz
                 "ripple_db": 1.0,             # Used for cheby/ellip
                 "atten_db": 40.0,             # Stopband attenuation (cheby2/ellip)
-                "noise_std": 0.0
+                "noise_std": 0.0,
+                "seed": None
             }
+        self.rng = np.random.default_rng(lpf_params.get('seed', None))
         self.lpf_params = lpf_params
 
     def set_time_params(self, time_params=None):
@@ -89,10 +91,13 @@ class LowPassFilter:
 
     def apply_filter(self, signal_in: np.ndarray) -> np.ndarray:
         """Apply the configured low-pass filter to the input signal."""
+        # --- Set Filter Parameters ---
         fs = self.time_params.get('sim_freq', 1000000)
         fc = self.lpf_params.get('cutoff_freq', 10000)
         filter_type = self.lpf_params.get('filter_type', "butter")
         order = self.lpf_params.get('order', 4)
+        
+        # --- Set Filter Nonidealities ---
         ripple_db = self.lpf_params.get('ripple_db', 1.0)
         atten_db = self.lpf_params.get('atten_db', 40.0)
         noise_std = self.lpf_params.get('noise_std', 0.0)
@@ -119,7 +124,7 @@ class LowPassFilter:
 
         # Add optional Gaussian noise
         if noise_std > 0:
-            filtered += np.random.normal(0, noise_std, size=filtered.shape)
+            filtered += self.rng.normal(0, noise_std, size=filtered.shape)
 
         return filtered
 

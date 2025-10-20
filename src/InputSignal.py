@@ -25,7 +25,7 @@ class InputSignal:
 
         self.effects = None
         self.analog = self._create_analog()
-        self.input_signal = self._create_input_signal()
+        self.input_signal = self.create_input_signal()
 
     # -------------------------------
     # Setters
@@ -38,7 +38,7 @@ class InputSignal:
         adc_params = input_config.get('adc_params', None)
         env_params = input_config.get('env_params', None)
         wave_params = input_config.get('wave_params', None)
-        input_config_name = input_config.get('system_config_name', None)
+        input_config_name = input_config.get('config_name', None)
         
         self.set_time_params(time_params)
         self.set_env_params(env_params)
@@ -91,8 +91,9 @@ class InputSignal:
                 "num_echoes": 0,
                 "max_delay": 0.0,
                 "max_doppler": 0.0,
-                "phase_inversion_prob": 0.0
+                "seed": None
             }
+        self.rng = np.random.default_rng(env_params.get('seed', None))
         self.env_params = env_params
 
     def set_wave_params(self, wave_params=None):
@@ -140,7 +141,7 @@ class InputSignal:
                                    endpoint=False)
         return analog
 
-    def _create_input_signal(self):
+    def create_input_signal(self):
         """
         Generate composite signal with environmental effects and random wave generation.
         """
@@ -155,10 +156,10 @@ class InputSignal:
 
         # === Wave parameter setup ===
         if 'waves' not in self.wave_params or not self.wave_params['waves']:
-            amps = np.random.uniform(amp_range[0], amp_range[1], num_waves)
-            freqs = np.random.uniform(freq_range[0], freq_range[1], num_waves)
+            amps = self.rng.uniform(amp_range[0], amp_range[1], num_waves)
+            freqs = self.rng.uniform(freq_range[0], freq_range[1], num_waves)
             if phase_random:
-                t_shift = np.random.uniform(0, 1/freqs)  # seconds
+                t_shift = self.rng.uniform(0, 1/freqs)  # seconds
                 phases = 2 * np.pi * freqs * t_shift
             else:
                 phases = np.zeros(num_waves)
@@ -186,60 +187,65 @@ class InputSignal:
         return input_signal
 
     def _generate_signal(self, waves):
-        self.effects = {}
+        effects = {
+            "noise": 0.0,
+            "delay": [],
+            "echo_att": [],
+            "local_doppler": [],
+            "phase_inversion": []
+        }
         amps = np.array([wave['amp'] for wave in waves])
         freqs = np.array([wave['freq'] for wave in waves])
         phases = np.array([wave['phase'] for wave in waves])
-            # === Apply system-level Doppler and delay ===
+        real_time = self.analog.get('time')
+        
+        # --- Set Evironment Nonidealities
         doppler = self.env_params.get('doppler', 0.0)
-        freqs = freqs * (1 + doppler)
-
         delay = self.env_params.get('delay', 0.0)
-        self.analog['time'] = self.analog['time'] + delay
+        attenuation = self.env_params.get('attenuation', 1.0)
+        noise_level = self.env_params.get('noise_level', 0.0)
+        num_echoes = self.env_params.get('num_echoes', 0)
+        max_delay = self.env_params.get('max_delay', 0.01)
+        max_doppler = self.env_params.get('max_doppler', 0.002)
+        phase_inversion_prob = self.env_params.get('phase_inversion_prob', 0.5)
+        
+        # === Apply system-level Doppler and delay ===
+        freqs = freqs * (1 + doppler)
+        real_time = real_time + delay
 
         # === Generate base composite signal ===
-        signals = amps[:, None] * np.sin(2 * np.pi * freqs[:, None] * self.analog['time'] + phases[:, None])
+        signals = amps[:, None] * np.sin(2 * np.pi * freqs[:, None] * real_time + phases[:, None])
         signal = np.sum(signals, axis=0)
 
         # === Environmental attenuation ===
-        attenuation = self.env_params.get('attenuation', 1.0)
         signal *= attenuation
 
         # === Add Gaussian noise ===
-        noise_level = self.env_params.get('noise_level', 0.0)
-        self.effects['noise'] = 0.0
         if noise_level > 0:
-            self.effects['noise'] = np.random.normal(0, noise_level, signal.shape)
-            signal += self.effects['noise']
+            effects['noise'] = self.rng.normal(0, noise_level, signal.shape)
+            signal += effects['noise']
 
         # === Multipath reflections (with Doppler + phase inversion) ===
-        num_echoes = self.env_params.get('num_echoes', 0)
-        self.effects['delay'] = []
-        self.effects['echo_att'] = []
-        self.effects['local_doppler'] = []
-        self.effects['phase_inversion'] = []
         if num_echoes > 0:
-            dt = self.analog['time'][1] - self.analog['time'][0]
-            max_delay = self.env_params.get('max_delay', 0.01)
-            max_doppler = self.env_params.get('max_doppler', 0.002)
-            phase_inversion_prob = self.env_params.get('phase_inversion_prob', 0.5)
+            dt = real_time[1] - real_time[0]
+
 
             for _ in range(num_echoes):
                 # Random propagation delay
                 phase_inversion = False
-                delay = np.random.uniform(0, max_delay)
+                delay = self.rng.uniform(0, max_delay)
                 shift = int(delay / dt)
 
                 # Random attenuation
-                echo_att = np.random.uniform(0.2, 0.8)
+                echo_att = self.rng.uniform(0.2, 0.8)
 
                 # Random Doppler shift
-                local_doppler = 1 + np.random.uniform(-max_doppler, max_doppler)
-                real_time_echo = self.analog['time'] * local_doppler
-                echo = np.interp(self.analog['time'], real_time_echo, signal, left=0, right=0) * echo_att
+                local_doppler = 1 + self.rng.uniform(-max_doppler, max_doppler)
+                real_time_echo = real_time * local_doppler
+                echo = np.interp(real_time, real_time_echo, signal, left=0, right=0) * echo_att
 
                 # Optional phase inversion
-                if np.random.rand() < phase_inversion_prob:
+                if self.rng.random() < phase_inversion_prob:
                     phase_inversion = True
                     echo = -echo
 
@@ -247,11 +253,12 @@ class InputSignal:
                 echo = np.roll(echo, shift)
                 echo[:shift] = 0
                 signal += echo
-                self.effects['delay'].append(delay)
-                self.effects['echo_att'].append(echo_att)
-                self.effects['local_doppler'].append(local_doppler)
-                self.effects['phase_inversion'] = phase_inversion
-
+                effects['delay'].append(delay)
+                effects['echo_att'].append(echo_att)
+                effects['local_doppler'].append(local_doppler)
+                effects['phase_inversion'].append(phase_inversion)
+                
+        self.effects = effects
         return signal
 
     # -------------------------------

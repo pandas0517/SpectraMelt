@@ -61,7 +61,7 @@ class LocalOscillator:
         lo_params = lo_config.get('lo_params', None)
         time_params = lo_config.get('time_params', None)
         adc_params = lo_config.get('adc_params', None)
-        lo_config_name = lo_config.get('system_config_name', None)
+        lo_config_name = lo_config.get('config_name', None)
 
         self.set_lo_params(lo_params)
         self.set_time_params(time_params)
@@ -79,15 +79,17 @@ class LocalOscillator:
                 "amp": 1,
                 "freq": 100,
                 "phase": 0,
-                "mod_enabled": True,
-                "phase_delta": 0.4,
-                "phase_freq": 0.5,
-                "phase_offset": 0,
+                "mod_enabled": False,
+                "phase_delta": 0.08,
+                "phase_freq": 0.1,
+                "phase_offset": 0.0,
                 "phase_noise_std": 0.0,
                 "amp_noise_std": 0.0,
                 "freq_drift_ppm": 0.0,
-                "harmonic_distortion": 0.0
-            }           
+                "harmonic_distortion": 0.0,
+                "seed": None
+            }
+        self.rng = np.random.default_rng(lo_params.get('seed', None))           
         self.lo_params = lo_params
         
     def set_time_params(self, time_params=None):
@@ -148,53 +150,65 @@ class LocalOscillator:
     def generate_signal(self, real_time=None) -> np.ndarray:
         if real_time is None:
             real_time = self.real_time
-
-        # --- Base frequency and amplitude ---
-        f0 = self.lo_params['freq']
-        A = self.lo_params['amp']
-
+    
+        # --- Local Oscillator Base Signal ---
+        f0 = self.lo_params.get('freq', 100)
+        A = self.lo_params.get('amp', 1)
+        phase = self.lo_params.get('phase', 0)
+        pre_phase = phase
+        
+        # --- Local Oscillator Modulation Parameters ---
+        mod_enabled = self.lo_params.get('mod_enabled', False)
+        phase_delta = self.lo_params.get('phase_delta', 0.08)
+        phase_freq = self.lo_params.get('phase_freq', 0.1)
+        phase_offset = self.lo_params.get('phase_offset', 0.0)
+        
+        # --- Set Local Oscillator Nonidealities ---
+        freq_drift_ppm = self.lo_params.get('freq_drift_ppm', 0.0)
+        phase_noise_std = self.lo_params.get('phase_noise_std', 0.0)
+        amp_noise_std = self.lo_params.get('amp_noise_std', 0.0)
+        harmonic_distortion = self.lo_params.get('harmonic_distortion', 0.0)
+        
         # --- Frequency drift (ppm → fractional offset) ---
-        freq_drift = f0 * (self.lo_params.get('freq_drift_ppm', 0.0) * 1e-6)
+        freq_drift = f0 * (freq_drift_ppm * 1e-6)
 
         # --- Compute pre-start time for edge case handling ---
         dt = real_time[1] - real_time[0]
         pre_start_time = real_time[0] - dt
 
         # --- Optional phase modulation ---
-        if self.lo_params.get('mod_enable', False):
-            phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
-                        np.sin(2 * np.pi * self.lo_params['phase_freq'] * real_time +
-                            self.lo_params.get('phase_offset', 0))
-            pre_phase_mod = (self.lo_params['phase_delta'] / self.lo_params['phase_freq']) * \
-                            np.sin(2 * np.pi * self.lo_params['phase_freq'] * pre_start_time +
-                                self.lo_params.get('phase_offset', 0))
+        if mod_enabled:
+            phase_mod = (phase_delta / phase_freq) * \
+                        np.sin(2 * np.pi * phase_freq * real_time + phase_offset)
+            pre_phase_mod = (phase_delta / phase_freq) * \
+                            np.sin(2 * np.pi * phase_freq * pre_start_time + phase_offset)
         else:
             phase_mod = 0.0
             pre_phase_mod = 0.0
 
         # --- Phase noise (white, Gaussian) ---
-        phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0), len(real_time))
-        pre_phase_noise = np.random.normal(0, self.lo_params.get('phase_noise_std', 0.0))  # single value
+        phase_noise = self.rng.normal(0, phase_noise_std, len(real_time))
+        pre_phase_noise = self.rng.normal(0, phase_noise_std)  # single value
 
         # --- Amplitude noise (white, Gaussian) ---
-        amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0), len(real_time))
-        pre_amp_noise = np.random.normal(0, self.lo_params.get('amp_noise_std', 0.0))
+        amp_noise = self.rng.normal(0, amp_noise_std, len(real_time))
+        pre_amp_noise = self.rng.normal(0, amp_noise_std)
         amp = A * (1 + amp_noise)
         pre_amp = A * (1 + pre_amp_noise)
 
         # --- Instantaneous phase (includes drift, modulation, and noise) ---
         phase = 2 * np.pi * (f0 + freq_drift) * real_time + \
-                self.lo_params.get('phase', 0.0) + phase_mod + phase_noise
+                phase + phase_mod + phase_noise
 
         pre_phase = 2 * np.pi * (f0 + freq_drift) * pre_start_time + \
-                    self.lo_params.get('phase', 0.0) + pre_phase_mod + pre_phase_noise
+                    pre_phase + pre_phase_mod + pre_phase_noise
 
         # --- Fundamental signal ---
         lo = amp * np.sin(phase)
         pre_start_lo = pre_amp * np.sin(pre_phase)
 
         # --- Add 2nd harmonic distortion ---
-        harmonic_amp = self.lo_params.get('harmonic_distortion', 0.0) * A
+        harmonic_amp = harmonic_distortion * A
         if harmonic_amp != 0:
             lo += harmonic_amp * np.sin(2 * phase)
             pre_start_lo += harmonic_amp * np.sin(2 * pre_phase)

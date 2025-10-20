@@ -22,7 +22,7 @@ class ADC:
         self.quantizer_signals = None
         
         if input_signal is not None:
-            self.quantizer_signals = self._analog_to_digital(input_signal, start_time)
+            self.quantizer_signals = self.analog_to_digital(input_signal, start_time)
             
     # -------------------------------
     # Setters
@@ -33,7 +33,7 @@ class ADC:
         adc_config = load_settings(config_file_path)
         time_params = adc_config.get('time_params', None)
         adc_params = adc_config.get('adc_params', None)
-        adc_config_name = adc_config.get('system_config_name', None)
+        adc_config_name = adc_config.get('config_name', None)
         
         self.set_time_params(time_params)
         self.set_adc_params(adc_params)
@@ -67,15 +67,17 @@ class ADC:
                 "threshold": 1.0,
                 "jitter_std": 0.0,
                 "acquisition_time_constant": 0.0,
-                "hold_noise_std": 0.0
-            }           
+                "hold_noise_std": 0.0,
+                "seed": None
+            }
+        self.rng = np.random.default_rng(adc_params.get('seed', None))          
         self.adc_params = adc_params
 
     # -------------------------------
     # Core functional methods
     # -------------------------------
        
-    def _quantizer(self, sim_freq=1000000, start_time=0):
+    def _quantizer(self, sim_freq=None, start_time=None):
         """
         Simulates a realistic ADC quantizer by sampling the S&H output at
         the midpoint of each hold interval, and returns both quantized values
@@ -97,30 +99,42 @@ class ADC:
                 - adc_indices (np.ndarray): Integer n-bit ADC codes for each sample.
         """
         quantizer_signals = {}
+        if sim_freq is None:
+            sim_freq = self.time_params.get('sim_freq', 1000000)
+        if start_time is None:
+            time_range = self.time_params.get('time_range', (0, 1))
+            start_time = time_range[0]
+        
+        # --- Internal Sample and Hold Signals ---
+        output_signal = self.sh_signals.get('output_signal')
+        indices = self.sh_signals.get('indices')
+        
+        # --- Quantizer Parameters ---
         v_ref_range = self.adc_params.get('v_ref_range', (0, 1))
         num_levels = 2**self.adc_params.get('num_bits', 8)
-        self.sh_signals.get('output_signal')
+        
+        # --- Quantizer Nonidealities ---
         thermal_noise_std_dev = self.adc_params.get('thermal_noise_std_dev', 0)
         
         quantization_step = (v_ref_range[1] - v_ref_range[0]) / num_levels
 
-        quantized_values = np.zeros(len(self.sh_signals['indices']))
-        mid_times = np.zeros(len(self.sh_signals['indices']))
-        adc_indices = np.zeros(len(self.sh_signals['indices']), dtype=int)
+        quantized_values = np.zeros(len(indices))
+        mid_times = np.zeros(len(indices))
+        adc_indices = np.zeros(len(indices), dtype=int)
 
-        for i in range(len(self.sh_signals['indices'])):
-            start_index = self.sh_signals['indices'][i]
-            end_index = (self.sh_signals['indices'][i+1]
-                         if i <len(self.sh_signals['indices'])-1
-                         else len(self.sh_signals['output_signal']))
+        for i in range(len(indices)):
+            start_index = indices[i]
+            end_index = (indices[i+1]
+                         if i <len(indices)-1
+                         else len(output_signal))
             mid_index = start_index + (end_index - start_index)//2
 
             mid_times[i] = mid_index / sim_freq
-            sample_value = self.sh_signals.get('output_signal')[mid_index]
+            sample_value = output_signal[mid_index]
 
             # Add thermal noise if specified
             if thermal_noise_std_dev > 0:
-                sample_value += np.random.normal(0, thermal_noise_std_dev)
+                sample_value += self.rng.normal(0, thermal_noise_std_dev)
 
             # Clip to ADC range
             sample_value = np.clip(sample_value, v_ref_range[0], v_ref_range[1])
@@ -144,7 +158,7 @@ class ADC:
         
         return quantizer_signals
 
-    def _sample_and_hold(self, signal, sim_freq=1000000, adc_samp_freq=100):
+    def _sample_and_hold(self, signal, sim_freq=None, adc_samp_freq=None):
         """
         Simulates a realistic sample-and-hold circuit with optional voltage-preserving non-linearity.
 
@@ -168,17 +182,24 @@ class ADC:
         v_min = np.min(signal)
         v_max = np.max(signal)
 
+        if sim_freq is None:
+            sim_freq = self.time_params.get('sim_freq', 1000000)
+        if adc_samp_freq is None:
+            adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
+            
+        # --- Sample and Hold Nonidealities ---
         jitter_std = self.adc_params.get('jitter_std', 0.0)
         non_linearity_mode = self.adc_params.get('non_linearity_mode', None)
         alpha = self.adc_params.get('alpha', 0)
         threshold = self.adc_params.get('threshold', 1.0)
         acquisition_time_constant = self.adc_params.get('acquisition_time_constant', 0.0)
         hold_noise_std = self.adc_params.get('hold_noise_std', 0.0)
+        
         num_samples_sh = int(np.floor(len(signal) * adc_samp_freq / sim_freq))
 
         # Jittered sampling indices
         ideal_sh_indices = np.arange(num_samples_sh) * (sim_freq / adc_samp_freq)
-        jitter_indices = np.random.normal(0, jitter_std * sim_freq, num_samples_sh)
+        jitter_indices = self.rng.normal(0, jitter_std * sim_freq, num_samples_sh)
         sh_indices = np.clip(ideal_sh_indices + jitter_indices, 0, len(signal) - 1).astype(int)
 
         # Sample values at jittered points
@@ -218,7 +239,7 @@ class ADC:
 
             # Add hold noise once per hold interval
             if hold_noise_std > 0:
-                noise = np.random.normal(0, hold_noise_std)
+                noise = self.rng.normal(0, hold_noise_std)
                 output_signal[start_index:end_index] += noise
         sh_signals['output_signal'] = output_signal
         sh_signals['indices'] = sh_indices
@@ -226,14 +247,9 @@ class ADC:
         
         return sh_signals
 
-    def _analog_to_digital(self, signal, start_time=None):
-        sim_freq = self.time_params.get('sim_freq', 10000000)
-        adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
-        
+    def analog_to_digital(self, signal, start_time=None, sim_freq=None, adc_samp_freq=None):       
         self.sh_signals = self._sample_and_hold(signal, sim_freq, adc_samp_freq)
-        quantizer_signals = self._quantizer(sim_freq, start_time)
-        
-        return quantizer_signals
+        return self._quantizer(sim_freq, start_time) 
         
  
     # -------------------------------

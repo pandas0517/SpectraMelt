@@ -47,7 +47,7 @@ class Mixer:
         print("Loading Mixer configuration from file: ", config_file_path)
         mixer_config = load_settings(config_file_path)
         mixer_params = mixer_config.get('mixer_params', None)
-        mixer_config_name = mixer_config.get('system_config_name', None)
+        mixer_config_name = mixer_config.get('config_name', None)
 
         self.set_mixer_params(mixer_params)
         self.set_mixer_config_name(mixer_config_name)
@@ -64,8 +64,10 @@ class Mixer:
                 "lo_leakage": 0.0,
                 "rf_leakage": 0.0,
                 "nonlinearity_coeff": 0.0,
-                "noise_std": 0.0
-            }           
+                "noise_std": 0.0,
+                "seed": None
+            }
+        self.rng = np.random.default_rng(mixer_params.get('seed', None))         
         self.mixer_params = mixer_params
         
     # -------------------------------
@@ -75,16 +77,22 @@ class Mixer:
     def mix(self, rf_signal: np.ndarray, lo_signal: np.ndarray) -> np.ndarray:
         """Mix RF input with LO, including imperfections."""
         # Ideal mixing
-        mixed = self.conversion_gain * rf_signal * lo_signal
+        conversion_gain = self.mixer_params.get('conversion_gain', 1.0)
+        lo_leakage = self.mixer_params.get('lo_leakage', 0.0)
+        rf_leakage = self.mixer_params.get('rf_leakage', 0.0)
+        nonlinearity_coeff = self.mixer_params.get('nonlinearity_coeff', 0.0)
+        noise_std = self.mixer_params.get('noise_std', 0.0)
+        
+        mixed = conversion_gain * rf_signal * lo_signal
 
         # Add imperfections
-        mixed += self.lo_leakage * lo_signal
-        mixed += self.rf_leakage * rf_signal
-        mixed += self.nonlinearity_coeff * (rf_signal ** 3)
+        mixed += lo_leakage * lo_signal
+        mixed += rf_leakage * rf_signal
+        mixed += nonlinearity_coeff * (rf_signal ** 3)
 
         # Add random noise
-        if self.noise_std > 0:
-            mixed += np.random.normal(0, self.noise_std, size=mixed.shape)
+        if noise_std > 0:
+            mixed += self.rng.normal(0, noise_std, size=mixed.shape)
 
         return mixed
 
