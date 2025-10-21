@@ -3,6 +3,7 @@ import numpy as np
 
 class InputSignal:
     def __init__(self,
+                 input_params=None,
                  time_params=None,
                  adc_params=None,
                  env_params=None,
@@ -12,6 +13,13 @@ class InputSignal:
         if config_file_path is not None:
             self.set_config_from_file(config_file_path)
         else:
+            if input_params is not None:
+                time_params = input_params.get('time_params', None)
+                adc_params = input_params.get('adc_params', None)
+                env_params = input_params.get('env_params', None)
+                wave_params = input_params.get('wave_params', None)
+                input_config_name = input_params.get('config_name', None)
+                
             self.set_time_params(time_params)
             self.set_adc_params(adc_params)
             self.set_env_params(env_params)
@@ -23,7 +31,6 @@ class InputSignal:
                 input_config_name = "Default_Input_Config"
             self.set_input_config_name(input_config_name)
 
-        self.effects = None
         self.analog = self._create_analog()
         self.input_signal = self.create_input_signal()
 
@@ -67,23 +74,16 @@ class InputSignal:
     def set_adc_params(self, adc_params=None):
         if adc_params is None:
             adc_params = {
-                "adc_samp_freq": 100,
-                "allow_clipping": True,
+                "adc_samp_freq": None,
                 "v_ref_range": (0, 1),
-                "num_bits": 8,
-                "thermal_noise_std_dev": 0.0,
-                "non_linearity_mode": False,
-                "alpha": 0.0,
-                "threshold": 1.0,
-                "jitter_std": 0.0,
-                "acquisition_time_constant": 0.0,
-                "hold_noise_std": 0.0
+                "allow_clipping": False
             }           
         self.adc_params = adc_params
         
     def set_env_params(self, env_params=None):
         if env_params is None:
             env_params = {
+                "store_internal_sigs": True,
                 "noise_level": 0.0,
                 "attenuation": 1.0,
                 "doppler": 0.0,
@@ -104,8 +104,11 @@ class InputSignal:
                 "amp_range": (0.1, 1.0),
                 "phase_random": True,
                 "waves": [
-                    {"amp": 0.5,
-                    "freq": 4,
+                    {"amp": 1,
+                    "freq": 150,
+                    "phase": 0},
+                    {"amp": 1,
+                    "freq": 300,
                     "phase": 0}
                 ]
             }
@@ -117,17 +120,23 @@ class InputSignal:
     
     def _create_analog(self):
         analog = {}
-        points_per_second = round(self.time_params['sim_freq'])
-        # Adjust to be evenly divisible by adc_clock_freq
-        band = int(points_per_second / self.adc_params['adc_samp_freq'])
-        band_remainder = int(points_per_second % self.adc_params['adc_samp_freq'])
-        if band_remainder != 0:
-            points_per_second -= band_remainder
-        # K_band must be even
-        if band % 2 != 0:
-            points_per_second += int(self.adc_params['adc_samp_freq'])
+        sim_freq = self.time_params.get('sim_freq', 1000000)
+        adc_samp_freq = self.adc_params.get('adc_samp_freq', None)
         time_range = tuple(self.time_params.get('time_range', (0, 1)))
-        analog['points_per_second'] = points_per_second
+        
+        points_per_second = round(sim_freq)
+        
+        # Adjust to be evenly divisible by adc_clock_freq
+        if adc_samp_freq is not None:
+            band = int(points_per_second / adc_samp_freq)
+            band_remainder = int(points_per_second % adc_samp_freq)
+            if band_remainder != 0:
+                points_per_second -= band_remainder
+            # K_band must be even
+            if band % 2 != 0:
+                points_per_second += int(adc_samp_freq)
+                
+        analog['sim_freq'] = points_per_second
         analog['adj_spacing'] = 1 / points_per_second
         analog['total_time'] = abs(time_range[1] - time_range[0])
         analog['num_points'] = int(analog['total_time'] * points_per_second)
@@ -151,7 +160,7 @@ class InputSignal:
         freq_range = tuple(self.wave_params.get('freq_range', (100, 1000)))
         amp_range = tuple(self.wave_params.get('amp_range', (0.1, 1.0)))
         phase_random = self.wave_params.get('phase_random', True)
-        allow_clipping = self.adc_params.get('allow_clipping', True)
+        allow_clipping = self.adc_params.get('allow_clipping', False)
         v_ref_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
 
         # === Wave parameter setup ===
@@ -187,6 +196,7 @@ class InputSignal:
         return input_signal
 
     def _generate_signal(self, waves):
+        store_internal_sigs = self.env_params.get('store_internal_sigs', True)
         effects = {
             "noise": 0.0,
             "delay": [],
@@ -258,7 +268,10 @@ class InputSignal:
                 effects['local_doppler'].append(local_doppler)
                 effects['phase_inversion'].append(phase_inversion)
                 
-        self.effects = effects
+        self.effects = None
+        if store_internal_sigs:
+            self.effects = effects
+            
         return signal
 
     # -------------------------------

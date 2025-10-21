@@ -4,7 +4,7 @@ from utility import replace_file
 from utility import replace_extension
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft
-from NYFR import NYFR
+from NYFR_old import NYFR
 import numpy as np
 import pandas as pd
 import os

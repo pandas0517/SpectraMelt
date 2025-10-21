@@ -1,23 +1,25 @@
 {
-    "input_config_name": "Input_Config_1",
+    "config_name": "Input_Config_1",
     "time_params": {
-        "start": -2,
-        "stop": 2,
-        "sim_freq": 1000000,
-        "save_real_time": true
+        "time_range": [-0.01, 0.01],
+        "sim_freq": 10000000
     },
-    "system_params": {
-        "adc_samp_freq": 100,
-        "allow_clipping": true,
+    "adc_params": {
+        "adc_samp_freq": 10000,
         "v_ref_range": [0, 5],
-        "system_noise_level": 0.02,
-        "attenuation": 0.95,
-        "doppler": 0.001,
-        "delay": 0.0005,
-        "num_echoes": 3,
-        "max_delay": 0.003,
-        "max_doppler": 0.002,
-        "phase_inversion_prob": 0.4
+        "allow_clipping": true
+    },
+    "env_params": {
+        "store_internal_sigs": true,
+        "noise_level": 0.0,
+        "attenuation": 1.0,
+        "doppler": 0.0,
+        "delay": 0.0,
+        "num_echoes": 0,
+        "max_delay": 0.0,
+        "max_doppler": 0.0,
+        "phase_inversion_prob": 0.0,
+        "seed": null
     },
     "wave_params":{
         "num_waves": 5,
@@ -25,8 +27,14 @@
         "amp_range": [0.1, 1.0],
         "phase_random": true,
         "waves": [
-            {"amp": 1,
-            "freq": 1,
+            {"amp": 0.25,
+            "freq": 11000,
+            "phase": 0},
+            {"amp": 0.25,
+            "freq": 20000,
+            "phase": 0},
+            {"amp": 0.25,
+            "freq": 150000,
             "phase": 0}
         ]
     }

@@ -32,10 +32,7 @@ class Mixer:
                 mixer_config_name = "Default_Mixer_Config"
             self.set_mixer_config_name(mixer_config_name)
         
-        self.rf_signal = rf_signal
-        self.lo_signal = lo_signal
         self.mixed_signal = None
-
         if rf_signal is not None and lo_signal is not None:
             self.mixed_signal = self.mix(rf_signal, lo_signal)
             
@@ -76,13 +73,14 @@ class Mixer:
     
     def mix(self, rf_signal: np.ndarray, lo_signal: np.ndarray) -> np.ndarray:
         """Mix RF input with LO, including imperfections."""
-        # Ideal mixing
+        # --- Mixer Nonidealities ---
         conversion_gain = self.mixer_params.get('conversion_gain', 1.0)
         lo_leakage = self.mixer_params.get('lo_leakage', 0.0)
         rf_leakage = self.mixer_params.get('rf_leakage', 0.0)
         nonlinearity_coeff = self.mixer_params.get('nonlinearity_coeff', 0.0)
         noise_std = self.mixer_params.get('noise_std', 0.0)
         
+        # Ideal mixing
         mixed = conversion_gain * rf_signal * lo_signal
 
         # Add imperfections
@@ -108,9 +106,3 @@ class Mixer:
     
     def get_mixer_params(self):
         return self.mixer_params
-    
-    def get_rf_signal(self):
-        return self.rf_signal
-    
-    def get_lo_signal(self):
-        return self.lo_signal

@@ -12,8 +12,8 @@ class LowPassFilter:
 
     def __init__(self,
                  signal_in=None,
+                 real_time=None,
                  lpf_params=None,
-                 time_params=None,
                  lpf_config_name=None,
                  config_file_path=None) -> None:
         """
@@ -32,16 +32,13 @@ class LowPassFilter:
             self.set_config_from_file(config_file_path)
         else:
             self.set_lpf_params(lpf_params)
-            self.set_time_params(time_params)
             if lpf_config_name is None:
                 lpf_config_name = "Default_LPF_Config"
             self.set_lpf_config_name(lpf_config_name)
 
-        self.signal_in = signal_in
         self.signal_out = None
-
-        if signal_in is not None:
-            self.signal_out = self.apply_filter(signal_in)
+        if signal_in is not None and real_time is not None:
+            self.signal_out = self.apply_filter(signal_in, real_time)
 
     # -------------------------------
     # Setters
@@ -51,11 +48,9 @@ class LowPassFilter:
         print("Loading LPF configuration from file:", config_file_path)
         lpf_config = load_settings(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)
-        time_params = lpf_config.get('time_params', None)
         lpf_config_name = lpf_config.get('config_name', None)
 
         self.set_lpf_params(lpf_params)
-        self.set_time_params(time_params)
         self.set_lpf_config_name(lpf_config_name)
 
     def set_lpf_config_name(self, lpf_config_name=None):
@@ -68,7 +63,7 @@ class LowPassFilter:
             lpf_params = {
                 "filter_type": "butter",      # 'butter', 'cheby1', 'cheby2', 'bessel', 'ellip'
                 "order": 4,
-                "cutoff_freq": 10000,         # Hz
+                "cutoff_freq": 100,         # Hz
                 "ripple_db": 1.0,             # Used for cheby/ellip
                 "atten_db": 40.0,             # Stopband attenuation (cheby2/ellip)
                 "noise_std": 0.0,
@@ -77,23 +72,17 @@ class LowPassFilter:
         self.rng = np.random.default_rng(lpf_params.get('seed', None))
         self.lpf_params = lpf_params
 
-    def set_time_params(self, time_params=None):
-        if time_params is None:
-            time_params = {
-                'time_range': (0, 1),
-                'sim_freq': 1000000
-            }
-        self.time_params = time_params
-
     # -------------------------------
     # Core Functional Methods
     # -------------------------------
 
-    def apply_filter(self, signal_in: np.ndarray) -> np.ndarray:
+    def apply_filter(self, signal_in: np.ndarray, real_time: np.ndarray) -> np.ndarray:
         """Apply the configured low-pass filter to the input signal."""
+        # --- Get Real Time Sample Frequency ---
+        dt = np.mean(np.diff(real_time))  # average time step
+        sim_freq = 1.0 / dt
         # --- Set Filter Parameters ---
-        fs = self.time_params.get('sim_freq', 1000000)
-        fc = self.lpf_params.get('cutoff_freq', 10000)
+        fc = self.lpf_params.get('cutoff_freq', 100)
         filter_type = self.lpf_params.get('filter_type', "butter")
         order = self.lpf_params.get('order', 4)
         
@@ -103,7 +92,7 @@ class LowPassFilter:
         noise_std = self.lpf_params.get('noise_std', 0.0)
 
         # Normalize cutoff (Nyquist = fs/2)
-        wn = fc / (fs / 2)
+        wn = fc / (sim_freq / 2)
 
         # Select filter design
         if filter_type == 'butter':
@@ -134,9 +123,6 @@ class LowPassFilter:
 
     def get_lpf_params(self):
         return self.lpf_params
-
-    def get_signal_in(self):
-        return self.signal_in
 
     def get_signal_out(self):
         return self.signal_out

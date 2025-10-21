@@ -1,13 +1,15 @@
 {
-    "config_name": "System_Config_1",
+    "config_name": "NYFR_Config_1",
+    "store_internal_sigs": true,
     "adc_params": {
-        "adc_samp_freq": 100,
+        "store_internal_sigs": true,
+        "adc_samp_freq": 10000,
         "allow_clipping": true,
         "v_ref_range": [0, 5],
         "num_bits": 8,
         "thermal_noise_std_dev": 0.0,
         "non_linearity_mode": null,
-        "alpha": 0.05,
+        "alpha": 0.0,
         "threshold": 1.0,
         "jitter_std": 0.0,
         "acquisition_time_constant": 0.0,
@@ -24,11 +26,11 @@
     },
     "lo_params": {
         "amp": 1,
-        "freq": 100,
+        "freq": 10000,
         "phase": 0,
         "mod_enabled": true,
-        "phase_delta": 0.4,
-        "phase_freq": 0.5,
+        "phase_delta": 400,
+        "phase_freq": 500,
         "phase_offset": 0,
         "phase_noise_std": 0.0,
         "amp_noise_std": 0.0,
@@ -38,7 +40,7 @@
     },
     "lpf_params": {
         "filter_type": "butter",
-        "order": 4,
+        "order": 6,
         "cutoff_freq": 10000,
         "ripple_db": 1.0,
         "atten_db": 40.0,
@@ -48,7 +50,7 @@
     "wbf_params": {
         "filter_type": "butter",
         "order": 4,
-        "cutoff_freq": 10000,
+        "cutoff_freq": 100000,
         "ripple_db": 1.0,
         "atten_db": 40.0,
         "noise_std": 0.0,
@@ -64,31 +66,5 @@
         "droop_coeff": 0.0,
         "baseline_offset": 0.0,
         "seed": null             
-    },
-    "time_params": {
-        "time_range": [-2, 2],
-        "sim_freq": 1000000
-    },
-    "env_params": {
-        "noise_level": 0.02,
-        "attenuation": 0.95,
-        "doppler": 0.001,
-        "delay": 0.0005,
-        "num_echoes": 3,
-        "max_delay": 0.003,
-        "max_doppler": 0.002,
-        "phase_inversion_prob": 0.4,
-        "seed": null
-    },
-    "wave_params":{
-        "num_waves": 5,
-        "freq_range": [100, 1000],
-        "amp_range": [0.1, 1.0],
-        "phase_random": true,
-        "waves": [
-            {"amp": 1,
-            "freq": 1,
-            "phase": 0}
-        ]
     }
 }

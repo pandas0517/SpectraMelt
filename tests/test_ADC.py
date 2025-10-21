@@ -15,7 +15,7 @@ if __name__ == '__main__':
     from scipy.fftpack import fft
     import numpy as np
 
-    input_signal_1 = InputSignal(config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    input_signal_1 = InputSignal(config_file_path=Path(os.getenv('INPUT_CONF')))
     real_time_1 = input_signal_1.get_analog_time()
     real_input_1 = input_signal_1.get_input_signal()
     real_freq_1 = input_signal_1.get_analog_frequency()
@@ -46,12 +46,12 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.show()
     
-    adc_1 = ADC(real_input_1,real_time_1[0],config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    adc_1 = ADC(real_input_1,real_time_1,config_file_path=Path(os.getenv('NYFR_CONF')))
     bits_adc_1 = adc_1.get_adc_params().get('num_bits')
     sh_output_adc_1 = adc_1.get_sh_signals().get('output_signal')
     mid_times_adc_1 = adc_1.get_quantizer_signals().get('mid_times')
     quantized_adc_1 = adc_1.get_quantizer_signals().get('quantized_values')
-    adc_2 = ADC(real_input_2, real_time_2[0])
+    adc_2 = ADC(real_input_2, real_time_2)
     bits_adc_2 = adc_2.get_adc_params().get('num_bits')
     sh_output_adc_2 = adc_2.get_sh_signals().get('output_signal')
     mid_times_adc_2 = adc_2.get_quantizer_signals().get('mid_times')

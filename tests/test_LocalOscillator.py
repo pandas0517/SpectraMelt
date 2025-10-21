@@ -15,7 +15,7 @@ if __name__ == '__main__':
     from scipy.fftpack import fft
     import numpy as np
 
-    input_signal_1 = InputSignal(config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    input_signal_1 = InputSignal(config_file_path=Path(os.getenv('INPUT_CONF')))
     real_time_1 = input_signal_1.get_analog_time()
     real_input_1 = input_signal_1.get_input_signal()
     real_freq_1 = input_signal_1.get_analog_frequency()
@@ -46,10 +46,10 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.show()
     
-    lo_1 = LocalOscillator(real_time_1, config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    lo_1 = LocalOscillator(real_time_1, config_file_path=Path(os.getenv('NYFR_CONF')))
     lo_signal_1 = lo_1.get_lo_signal()
     lo_freq_1 = np.fft.fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
-    lo_2 = LocalOscillator()
+    lo_2 = LocalOscillator(real_time_2)
     lo_signal_2 = lo_2.get_lo_signal()
     lo_freq_2 = np.fft.fftshift(np.abs(fft(lo_signal_2))) / (sim_freq_2*total_time_2)
     

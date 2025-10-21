@@ -4,15 +4,13 @@ from utility import load_settings
 class ADC:
     def __init__(self,
                  input_signal=None,
-                 start_time=None,
+                 real_time=None,
                  adc_params=None,
-                 time_params=None,
                  adc_config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
             self.set_config_from_file(config_file_path)
         else:
-            self.set_time_params(time_params)
             self.set_adc_params(adc_params)
             if ( adc_params is None ):
                 adc_config_name = "Default_ADC_Config"
@@ -21,8 +19,8 @@ class ADC:
         self.sh_signals = None
         self.quantizer_signals = None
         
-        if input_signal is not None:
-            self.quantizer_signals = self.analog_to_digital(input_signal, start_time)
+        if input_signal is not None and real_time is not None:
+            self.quantizer_signals = self.analog_to_digital(input_signal, real_time)
             
     # -------------------------------
     # Setters
@@ -31,11 +29,9 @@ class ADC:
     def set_config_from_file(self, config_file_path):
         print("Loading adc configuration from file: ", config_file_path)
         adc_config = load_settings(config_file_path)
-        time_params = adc_config.get('time_params', None)
         adc_params = adc_config.get('adc_params', None)
         adc_config_name = adc_config.get('config_name', None)
         
-        self.set_time_params(time_params)
         self.set_adc_params(adc_params)
         if ( adc_params is None ):
             adc_config_name = "Default_ADC_Config"
@@ -46,17 +42,10 @@ class ADC:
             adc_config_name = "ADC_Config_1"
         self.adc_config_name = adc_config_name
 
-    def set_time_params(self, time_params=None):
-        if time_params is None:
-            time_params = {
-                'time_range': (0, 1),
-                'sim_freq': 1000000
-            }
-        self.time_params = time_params
-
     def set_adc_params(self, adc_params=None):
         if adc_params is None:
             adc_params = {
+                "store_internal_sigs": True,
                 "adc_samp_freq": 100,
                 "allow_clipping": True,
                 "v_ref_range": (0, 1),
@@ -77,7 +66,7 @@ class ADC:
     # Core functional methods
     # -------------------------------
        
-    def _quantizer(self, sim_freq=None, start_time=None):
+    def _quantizer(self, sh_signals, real_time):
         """
         Simulates a realistic ADC quantizer by sampling the S&H output at
         the midpoint of each hold interval, and returns both quantized values
@@ -99,15 +88,16 @@ class ADC:
                 - adc_indices (np.ndarray): Integer n-bit ADC codes for each sample.
         """
         quantizer_signals = {}
-        if sim_freq is None:
-            sim_freq = self.time_params.get('sim_freq', 1000000)
-        if start_time is None:
-            time_range = self.time_params.get('time_range', (0, 1))
-            start_time = time_range[0]
+        
+        # --- Get Real Time Sample Frequency ---
+        dt = np.mean(np.diff(real_time))  # average time step
+        sim_freq = 1.0 / dt
+        
+        start_time = real_time[0]
         
         # --- Internal Sample and Hold Signals ---
-        output_signal = self.sh_signals.get('output_signal')
-        indices = self.sh_signals.get('indices')
+        output_signal = sh_signals.get('output_signal')
+        indices = sh_signals.get('indices')
         
         # --- Quantizer Parameters ---
         v_ref_range = self.adc_params.get('v_ref_range', (0, 1))
@@ -158,7 +148,7 @@ class ADC:
         
         return quantizer_signals
 
-    def _sample_and_hold(self, signal, sim_freq=None, adc_samp_freq=None):
+    def _sample_and_hold(self, signal, real_time):
         """
         Simulates a realistic sample-and-hold circuit with optional voltage-preserving non-linearity.
 
@@ -181,12 +171,12 @@ class ADC:
         sh_signals = {}
         v_min = np.min(signal)
         v_max = np.max(signal)
-
-        if sim_freq is None:
-            sim_freq = self.time_params.get('sim_freq', 1000000)
-        if adc_samp_freq is None:
-            adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
-            
+        adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
+        
+        # --- Get Real Time Sample Frequency ---
+        dt = np.mean(np.diff(real_time))  # average time step
+        sim_freq = 1.0 / dt
+                    
         # --- Sample and Hold Nonidealities ---
         jitter_std = self.adc_params.get('jitter_std', 0.0)
         non_linearity_mode = self.adc_params.get('non_linearity_mode', None)
@@ -247,17 +237,17 @@ class ADC:
         
         return sh_signals
 
-    def analog_to_digital(self, signal, start_time=None, sim_freq=None, adc_samp_freq=None):       
-        self.sh_signals = self._sample_and_hold(signal, sim_freq, adc_samp_freq)
-        return self._quantizer(sim_freq, start_time) 
+    def analog_to_digital(self, signal, real_time):
+        sh_signals = self._sample_and_hold(signal, real_time)
+        store_internal_sigs = self.adc_params.get('store_internal_sigs', True)
+        if store_internal_sigs:
+            self.sh_signals = sh_signals
+        return self._quantizer(sh_signals, real_time) 
         
  
     # -------------------------------
     # Getters
     # -------------------------------
-        
-    def get_time_params(self):
-        return self.time_params
     
     def get_adc_params(self):
         return self.adc_params
@@ -265,8 +255,26 @@ class ADC:
     def get_sh_signals(self):
         return self.sh_signals
     
+    def get_sh_output_signal(self):
+        return self.sh_signals.get('output_signal', None)
+    
+    def get_sh_indicies(self):
+        return self.sh_signals.get('sh_indicies', None)
+    
+    def get_sh_sampled_values(self):
+        return self.sh_signals.get('sh_sampled_values', None)
+    
     def get_quantizer_signals(self):
         return self.quantizer_signals
+    
+    def get_quantizer_output(self):
+        return self.quantizer_signals.get('quantized_values', None)
+    
+    def get_quantizer_midtimes(self):
+        return self.quantizer_signals.get('mid_times', None)
+    
+    def get_adc_indices(self):
+        return self.quantizer_signals.get('adc_indices', None)
     
     def get_adc_config_name(self):
         return self.adc_config_name
