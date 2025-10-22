@@ -16,6 +16,7 @@ class ADC:
                 adc_config_name = "Default_ADC_Config"
             self.set_adc_config_name(adc_config_name)
 
+        self.conditioned_signal = None
         self.sh_signals = None
         self.quantizer_signals = None
         
@@ -65,7 +66,59 @@ class ADC:
     # -------------------------------
     # Core functional methods
     # -------------------------------
-       
+    
+    def _condition_adc_input(self, filtered_signal, v_range=None):
+        """
+        Simulated Front-End Conditioning Stage
+
+        This function models the analog front-end (AFE) that prepares a signal 
+        for ADC sampling. It recenters the waveform around the ADC's midpoint 
+        voltage (v_mid) and rescales the amplitude to span the available input 
+        range (v_min → v_max) without clipping.
+
+        Args:
+            filtered_signal (np.ndarray): 
+                The low-pass filtered input signal (typically centered around 0 V).
+            v_min (float, optional): 
+                Minimum ADC input voltage (lower rail). Defaults to 0.0.
+            v_max (float, optional): 
+                Maximum ADC input voltage (upper rail). Defaults to 5.0.
+
+        Returns:
+            np.ndarray: 
+                The conditioned signal, centered at v_mid and scaled to nearly 
+                fill the ADC input range.
+
+        Notes:
+            - This simulates analog gain and DC bias circuits that shift and 
+            scale the waveform before digitization.
+            - Amplitude normalization ensures maximum dynamic range without 
+            exceeding ADC limits.
+        """
+        if v_range is None:
+            v_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
+        v_min = v_range[0]
+        v_max = v_range[1]
+        # Compute the ADC mid-point voltage (bias reference)
+        v_mid = (v_max + v_min) / 2.0
+
+        # Remove any DC offset so signal is centered around 0 V
+        centered = filtered_signal - np.mean(filtered_signal)
+
+        # Find the largest absolute amplitude (peak)
+        max_amp = np.max(np.abs(centered))
+
+        if max_amp > 0:
+            # Scale signal so its maximum amplitude fits half the ADC range
+            scaled = centered * ((v_max - v_min) / 2.0) / max_amp
+        else:
+            # If signal is constant (flat line), just copy it
+            scaled = centered.copy()
+
+        # Re-center the waveform around the ADC midpoint voltage
+        return scaled + v_mid
+
+
     def _quantizer(self, sh_signals, real_time):
         """
         Simulates a realistic ADC quantizer by sampling the S&H output at
@@ -238,9 +291,11 @@ class ADC:
         return sh_signals
 
     def analog_to_digital(self, signal, real_time):
-        sh_signals = self._sample_and_hold(signal, real_time)
+        conditioned_signal = self._condition_adc_input(signal)
+        sh_signals = self._sample_and_hold(conditioned_signal, real_time)
         store_internal_sigs = self.adc_params.get('store_internal_sigs', True)
         if store_internal_sigs:
+            self.conditioned_signal = conditioned_signal
             self.sh_signals = sh_signals
         return self._quantizer(sh_signals, real_time) 
         
@@ -251,6 +306,9 @@ class ADC:
     
     def get_adc_params(self):
         return self.adc_params
+    
+    def get_conditioned_signal(self):
+        return self.conditioned_signal
      
     def get_sh_signals(self):
         return self.sh_signals

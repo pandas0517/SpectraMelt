@@ -49,7 +49,7 @@
     },
     "wbf_params": {
         "filter_type": "butter",
-        "order": 4,
+        "order": 6,
         "cutoff_freq": 100000,
         "ripple_db": 1.0,
         "atten_db": 40.0,

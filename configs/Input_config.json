@@ -28,10 +28,10 @@
         "phase_random": true,
         "waves": [
             {"amp": 0.25,
-            "freq": 11000,
+            "freq": 5000,
             "phase": 0},
             {"amp": 0.25,
-            "freq": 20000,
+            "freq": 15000,
             "phase": 0},
             {"amp": 0.25,
             "freq": 150000,

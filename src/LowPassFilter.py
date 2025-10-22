@@ -63,7 +63,7 @@ class LowPassFilter:
             lpf_params = {
                 "filter_type": "butter",      # 'butter', 'cheby1', 'cheby2', 'bessel', 'ellip'
                 "order": 4,
-                "cutoff_freq": 100,         # Hz
+                "cutoff_freq": 1000,         # Hz
                 "ripple_db": 1.0,             # Used for cheby/ellip
                 "atten_db": 40.0,             # Stopband attenuation (cheby2/ellip)
                 "noise_std": 0.0,

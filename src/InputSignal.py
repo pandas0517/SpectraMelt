@@ -105,11 +105,14 @@ class InputSignal:
                 "phase_random": True,
                 "waves": [
                     {"amp": 1,
-                    "freq": 150,
+                    "freq": 50,
                     "phase": 0},
                     {"amp": 1,
-                    "freq": 300,
-                    "phase": 0}
+                    "freq": 500,
+                    "phase": 0},
+                    {"amp": 1,
+                    "freq": 1500,
+                    "phase": 0}                    
                 ]
             }
         self.wave_params = wave_params
