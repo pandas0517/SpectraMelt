@@ -37,10 +37,12 @@ class LocalOscillator:
             self.set_config_from_file(config_file_path)
         else:
             self.set_lo_params(lo_params)
-            if ( lo_params is None ):
+            if lo_params is None:
                 lo_config_name = "Default_LO_Config"
             self.set_lo_config_name(lo_config_name)
-            
+
+        self.pre_start_lo = None
+        self.phase_mod = None 
         self.signal = None
         if real_time is not None:
             self.signal = self.generate_signal(real_time)
@@ -53,14 +55,15 @@ class LocalOscillator:
         print("Loading Local Oscillator configuration from file: ", config_file_path)
         lo_config = load_settings(config_file_path)
         lo_params = lo_config.get('lo_params', None)
-        lo_config_name = lo_config.get('config_name', None)
-
+        lo_config_name = lo_config.get('config_name', "LO_Config_1")
+        
+        if lo_params is None:
+            lo_config_name = "Default_LO_Config"
+        
         self.set_lo_params(lo_params)
         self.set_lo_config_name(lo_config_name)
         
-    def set_lo_config_name(self, lo_config_name=None):
-        if lo_config_name is None:
-            lo_config_name = "LO_Config_1"
+    def set_lo_config_name(self, lo_config_name):
         self.lo_config_name = lo_config_name        
         
     def set_lo_params(self, lo_params=None):
@@ -151,7 +154,10 @@ class LocalOscillator:
 
         # --- Store pre-start LO value for later use (e.g., zero-cross detection) ---
         self.pre_start_lo = pre_start_lo
-
+        
+        # --- Store phase modulation for NYFR dictionary
+        self.phase_mod = phase_mod
+        
         return lo
 
     # -------------------------------
@@ -166,6 +172,9 @@ class LocalOscillator:
     
     def get_lo_params(self):
         return self.lo_params
+    
+    def get_phase_mod(self):
+        return self.phase_mod
     
     def get_pre_start_lo(self):
         return self.pre_start_lo

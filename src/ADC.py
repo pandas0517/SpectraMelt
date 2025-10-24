@@ -12,11 +12,11 @@ class ADC:
             self.set_config_from_file(config_file_path)
         else:
             self.set_adc_params(adc_params)
-            if ( adc_params is None ):
+            if adc_params is None:
                 adc_config_name = "Default_ADC_Config"
             self.set_adc_config_name(adc_config_name)
 
-        self.conditioned_signal = None
+        self.conditioned_signals = None
         self.sh_signals = None
         self.quantizer_signals = None
         
@@ -31,11 +31,12 @@ class ADC:
         print("Loading adc configuration from file: ", config_file_path)
         adc_config = load_settings(config_file_path)
         adc_params = adc_config.get('adc_params', None)
-        adc_config_name = adc_config.get('config_name', None)
-        
-        self.set_adc_params(adc_params)
-        if ( adc_params is None ):
+        adc_config_name = adc_config.get('config_name', None)  
+
+        if adc_params is None:
             adc_config_name = "Default_ADC_Config"
+            
+        self.set_adc_params(adc_params)
         self.set_adc_config_name(adc_config_name)
         
     def set_adc_config_name(self, adc_config_name=None):
@@ -58,6 +59,11 @@ class ADC:
                 "jitter_std": 0.0,
                 "acquisition_time_constant": 0.0,
                 "hold_noise_std": 0.0,
+                "transient_mode": "none",
+                "truncate_transients": False,
+                "transient_fraction": 0.1,
+                "detection_window": 0.05,
+                "stability_threshold": 0.01,
                 "seed": None
             }
         self.rng = np.random.default_rng(adc_params.get('seed', None))          
@@ -66,58 +72,127 @@ class ADC:
     # -------------------------------
     # Core functional methods
     # -------------------------------
-    
-    def _condition_adc_input(self, filtered_signal, v_range=None):
+
+    def _condition_adc_input(self, filtered_signal: np.ndarray, real_time: np.ndarray) -> np.ndarray:
         """
         Simulated Front-End Conditioning Stage
 
-        This function models the analog front-end (AFE) that prepares a signal 
-        for ADC sampling. It recenters the waveform around the ADC's midpoint 
-        voltage (v_mid) and rescales the amplitude to span the available input 
-        range (v_min → v_max) without clipping.
+        Centers and scales the filtered signal for ADC input, with optional
+        transient suppression (auto or fixed).
 
-        Args:
-            filtered_signal (np.ndarray): 
-                The low-pass filtered input signal (typically centered around 0 V).
-            v_min (float, optional): 
-                Minimum ADC input voltage (lower rail). Defaults to 0.0.
-            v_max (float, optional): 
-                Maximum ADC input voltage (upper rail). Defaults to 5.0.
+        ADC config parameters:
+        ----------------------
+        v_ref_range : (float, float)  → (v_min, v_max)
+        transient_mode : "auto" | "fixed" | "none"
+        transient_fraction : float    → used if mode="fixed"
+        detection_window : float      → used if mode="auto"
+        stability_threshold : float   → used if mode="auto"
+        truncate_transients : bool
 
-        Returns:
-            np.ndarray: 
-                The conditioned signal, centered at v_mid and scaled to nearly 
-                fill the ADC input range.
-
-        Notes:
-            - This simulates analog gain and DC bias circuits that shift and 
-            scale the waveform before digitization.
-            - Amplitude normalization ensures maximum dynamic range without 
-            exceeding ADC limits.
+        Returns
+        -------
+        np.ndarray:
+            Fully conditioned signal matching input length.
         """
-        if v_range is None:
-            v_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
-        v_min = v_range[0]
-        v_max = v_range[1]
-        # Compute the ADC mid-point voltage (bias reference)
+
+        if not isinstance(filtered_signal, np.ndarray):
+            raise TypeError("filtered_signal must be a NumPy array")
+
+        n = filtered_signal.size
+        if n == 0:
+            return filtered_signal
+
+        # === ADC Voltage Range & Settings ===
+        v_min, v_max = self.adc_params.get('v_ref_range', (0.0, 1.0))
+        transient_mode = self.adc_params.get('transient_mode', 'none').lower()
+        transient_fraction = self.adc_params.get('transient_fraction', 0.05)
+        detection_window = self.adc_params.get('detection_window', 0.05)
+        stability_threshold = self.adc_params.get('stability_threshold', 0.01)
+        truncate_transients = self.adc_params.get('truncate_transients', False)
+
+        # Make a safe working copy
+        signal = filtered_signal.copy()
+
+        # =================================================================
+        # === Determine Transient Region Based on Selected Mode ===
+        # =================================================================
+        if transient_mode == "none":
+            skip_start = 0
+            skip_end = 0
+
+        elif transient_mode == "fixed":
+            skip = int(n * transient_fraction)
+            skip_start = skip_end = min(skip, n // 2)
+
+        elif transient_mode == "auto":
+            window_len = max(1, int(n * detection_window))
+            num_windows = n // window_len
+
+            variances = np.array([
+                np.var(signal[i*window_len:(i+1)*window_len])
+                for i in range(num_windows)
+            ])
+
+            mean_var = np.mean(variances[-3:])  # assume last windows are steady
+            relative_change = np.abs(np.diff(variances) / (mean_var + 1e-12))
+
+            start_idx = np.argmax(relative_change < stability_threshold)
+            end_idx = num_windows - np.argmax(relative_change[::-1] < stability_threshold) - 1
+
+            skip_start = int(start_idx * window_len)
+            skip_end = int(n - end_idx * window_len)
+
+            skip_start = min(skip_start, n // 2)
+            skip_end = min(skip_end, n // 2)
+
+        else:
+            raise ValueError("transient_mode must be 'auto', 'fixed', or 'none'")
+
+        # =================================================================
+        # === Conditioning Based Only on Steady-State Region ===
+        # =================================================================
+        steady = signal[skip_start:n - skip_end] if skip_start < n - skip_end else signal
+        if steady.size == 0:
+            steady = signal.copy()
+
         v_mid = (v_max + v_min) / 2.0
-
-        # Remove any DC offset so signal is centered around 0 V
-        centered = filtered_signal - np.mean(filtered_signal)
-
-        # Find the largest absolute amplitude (peak)
+        centered = steady - np.mean(steady)
         max_amp = np.max(np.abs(centered))
 
         if max_amp > 0:
-            # Scale signal so its maximum amplitude fits half the ADC range
-            scaled = centered * ((v_max - v_min) / 2.0) / max_amp
+            scale_factor = ((v_max - v_min) / 2.0) / max_amp
+            scaled_centered = centered * scale_factor
         else:
-            # If signal is constant (flat line), just copy it
-            scaled = centered.copy()
+            scaled_centered = centered.copy()
 
-        # Re-center the waveform around the ADC midpoint voltage
-        return scaled + v_mid
+        # =================================================================
+        # === Reconstruct Full Output Signal ===
+        # =================================================================
+        if truncate_transients:
+            conditioned_signal = scaled_centered + v_mid
+            corresponding_time = real_time[skip_start:n - skip_end]
+        else:
+            conditioned_signal = np.full_like(signal, v_mid)
+            conditioned_signal[skip_start:n - skip_end] = scaled_centered + v_mid
+            corresponding_time = real_time
+            
+        # --- Compute corresponding frequency axis (for FFT-based analysis) ---
+        num_samples = len(corresponding_time)
+        total_time = corresponding_time[-1] - corresponding_time[0]
+        corresponding_freq = np.linspace(
+            -0.5 * num_samples / total_time,
+            0.5 * num_samples / total_time,
+            num_samples,
+            endpoint=False
+        )
 
+        conditioned = {
+            "signal": conditioned_signal,
+            "time": corresponding_time,
+            "freq": corresponding_freq,
+            "total_time": total_time
+        }
+        return conditioned
 
     def _quantizer(self, sh_signals, real_time):
         """
@@ -195,9 +270,22 @@ class ADC:
         if start_time != 0:
             mid_times += start_time
 
+        # --- Compute sampled frequency axis (for FFT-based analysis) ---
+        num_samples = len(mid_times)
+        total_time = mid_times[-1] - mid_times[0]
+        if total_time <= 0:
+            total_time = 1.0 / sim_freq  # fallback if single sample
+        sampled_freq = np.linspace(
+            -0.5 * num_samples / total_time,
+             0.5 * num_samples / total_time,
+             num_samples,
+             endpoint=False
+        )
+
         quantizer_signals['mid_times'] = mid_times
         quantizer_signals['quantized_values'] = quantized_values
         quantizer_signals['adc_indices'] = adc_indices
+        quantizer_signals['sampled_frequency'] = sampled_freq
         
         return quantizer_signals
 
@@ -291,13 +379,16 @@ class ADC:
         return sh_signals
 
     def analog_to_digital(self, signal, real_time):
-        conditioned_signal = self._condition_adc_input(signal)
-        sh_signals = self._sample_and_hold(conditioned_signal, real_time)
+        conditioned_signals = self._condition_adc_input(signal, real_time)
+        conditioned_signal = conditioned_signals.get('signal')
+        conditioned_time = conditioned_signals.get('time')
+        sh_signals = self._sample_and_hold(conditioned_signal, conditioned_time)
         store_internal_sigs = self.adc_params.get('store_internal_sigs', True)
         if store_internal_sigs:
-            self.conditioned_signal = conditioned_signal
+            self.conditioned_signals = conditioned_signals
+            self.conditioned_time = conditioned_time
             self.sh_signals = sh_signals
-        return self._quantizer(sh_signals, real_time) 
+        return self._quantizer(sh_signals, conditioned_time) 
         
  
     # -------------------------------
@@ -307,32 +398,35 @@ class ADC:
     def get_adc_params(self):
         return self.adc_params
     
-    def get_conditioned_signal(self):
-        return self.conditioned_signal
+    def get_conditioned_signals(self):
+        return self.conditioned_signals
      
     def get_sh_signals(self):
         return self.sh_signals
     
     def get_sh_output_signal(self):
-        return self.sh_signals.get('output_signal', None)
+        return self.sh_signals.get('output_signal') if self.sh_signals else None
     
     def get_sh_indicies(self):
-        return self.sh_signals.get('sh_indicies', None)
+        return self.sh_signals.get('sh_indicies') if self.sh_signals else None
     
     def get_sh_sampled_values(self):
-        return self.sh_signals.get('sh_sampled_values', None)
+        return self.sh_signals.get('sh_sampled_values') if self.sh_signals else None
     
     def get_quantizer_signals(self):
         return self.quantizer_signals
     
+    def get_sampled_frequency(self):
+        return self.quantizer_signals.get('sampled_frequency') if self.quantizer_signals else None
+    
     def get_quantizer_output(self):
-        return self.quantizer_signals.get('quantized_values', None)
+        return self.quantizer_signals.get('quantized_values') if self.quantizer_signals else None
     
     def get_quantizer_midtimes(self):
-        return self.quantizer_signals.get('mid_times', None)
+        return self.quantizer_signals.get('mid_times') if self.quantizer_signals else None
     
     def get_adc_indices(self):
-        return self.quantizer_signals.get('adc_indices', None)
+        return self.quantizer_signals.get('adc_indices') if self.quantizer_signals else None
     
     def get_adc_config_name(self):
         return self.adc_config_name

@@ -1,7 +1,7 @@
 {
     "config_name": "Input_Config_1",
     "time_params": {
-        "time_range": [-0.01, 0.01],
+        "time_range": [-0.002, 0.002],
         "sim_freq": 10000000
     },
     "adc_params": {
@@ -31,7 +31,7 @@
             "freq": 5000,
             "phase": 0},
             {"amp": 0.25,
-            "freq": 15000,
+            "freq": 16000,
             "phase": 0},
             {"amp": 0.25,
             "freq": 150000,

@@ -42,7 +42,7 @@ class PulseGenerator:
             self.set_config_from_file(config_file_path)
         else:
             self.set_pulse_params(pulse_params)
-            if ( pulse_params is None ):
+            if pulse_params is None:
                 pulse_config_name = "Default_Pulse_Config"
             self.set_pulse_config_name(pulse_config_name)
 
@@ -59,14 +59,15 @@ class PulseGenerator:
         print("Loading Pulse Generator configuration from file: ", config_file_path)
         pulse_config = load_settings(config_file_path)
         pulse_params = pulse_config.get('pulse_params', None)
-        pulse_config_name = pulse_config.get('config_name', None)
+        pulse_config_name = pulse_config.get('config_name', "Pulse_Config_1")
+        
+        if pulse_params is None:
+            pulse_config_name = "Default_Pulse_Config"
 
         self.set_pulse_params(pulse_params)
         self.set_pulse_config_name(pulse_config_name)
 
-    def set_pulse_config_name(self, pulse_config_name=None):
-        if pulse_config_name is None:
-            pulse_config_name = "Pulse_Config_1"
+    def set_pulse_config_name(self, pulse_config_name):
         self.pulse_config_name = pulse_config_name  
 
     def set_pulse_params(self, pulse_params=None):

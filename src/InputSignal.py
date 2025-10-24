@@ -11,56 +11,48 @@ class InputSignal:
                  input_config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
-            self.set_config_from_file(config_file_path)
-        else:
-            if input_params is not None:
-                time_params = input_params.get('time_params', None)
-                adc_params = input_params.get('adc_params', None)
-                env_params = input_params.get('env_params', None)
-                wave_params = input_params.get('wave_params', None)
-                input_config_name = input_params.get('config_name', None)
-                
-            self.set_time_params(time_params)
-            self.set_adc_params(adc_params)
-            self.set_env_params(env_params)
-            self.set_wave_params(wave_params)
-            if ( time_params is None and
-                    adc_params is None and
-                    env_params is None and
-                    wave_params is None):
-                input_config_name = "Default_Input_Config"
-            self.set_input_config_name(input_config_name)
-
-        self.analog = self._create_analog()
+            print("Loading input configuration from file: ", config_file_path)
+            input_params = load_settings(config_file_path)
+        elif input_params is None:
+            input_params = {}
+            input_params['time_params'] = time_params
+            input_params['adc_params'] = adc_params
+            input_params['env_params'] =env_params
+            input_params['wave_params'] = wave_params
+            input_params['config_name'] = input_config_name
+        
+        self.set_input_params(input_params)
+        self.effects = None
+        self.analog = self.create_analog()
         self.input_signal = self.create_input_signal()
 
     # -------------------------------
     # Setters
     # -------------------------------
-    
-    def set_config_from_file(self, config_file_path):
-        print("Loading input configuration from file: ", config_file_path)
-        input_config = load_settings(config_file_path)
-        time_params = input_config.get('time_params', None)
-        adc_params = input_config.get('adc_params', None)
-        env_params = input_config.get('env_params', None)
-        wave_params = input_config.get('wave_params', None)
-        input_config_name = input_config.get('config_name', None)
+    def set_input_params(self, input_params=None):
+        if input_params is None:
+            input_params = {}
         
-        self.set_time_params(time_params)
-        self.set_env_params(env_params)
-        self.set_adc_params(adc_params)
-        self.set_wave_params(wave_params)
+        time_params = input_params.get('time_params', None)
+        adc_params = input_params.get('adc_params', None)
+        env_params = input_params.get('env_params', None)
+        wave_params = input_params.get('wave_params', None)
+        input_config_name = input_params.get('config_name', None)
         if ( time_params is None and
                 adc_params is None and
                 env_params is None and
-                wave_params is None):
+                wave_params is None ):
             input_config_name = "Default_Input_Config"
+        else:
+            input_config_name = input_params.get('config_name', "NYFR_Config_1")
+                
+        self.set_time_params(time_params)
+        self.set_adc_params(adc_params)
+        self.set_env_params(env_params)
+        self.set_wave_params(wave_params)
         self.set_input_config_name(input_config_name)
         
-    def set_input_config_name(self, input_config_name=None):
-        if input_config_name is None:
-            input_config_name = "Input_Config_1"
+    def set_input_config_name(self, input_config_name):
         self.input_config_name = input_config_name
 
     def set_time_params(self, time_params=None):
@@ -121,7 +113,7 @@ class InputSignal:
     # Core functional methods
     # -------------------------------
     
-    def _create_analog(self):
+    def create_analog(self):
         analog = {}
         sim_freq = self.time_params.get('sim_freq', 1000000)
         adc_samp_freq = self.adc_params.get('adc_samp_freq', None)
@@ -271,7 +263,6 @@ class InputSignal:
                 effects['local_doppler'].append(local_doppler)
                 effects['phase_inversion'].append(phase_inversion)
                 
-        self.effects = None
         if store_internal_sigs:
             self.effects = effects
             
@@ -300,6 +291,15 @@ class InputSignal:
     
     def get_analog_frequency(self):
         return self.analog['frequency']
+    
+    def get_input_params(self):
+        input_params = {
+            "time_params": self.time_params,
+            "adc_params": self.adc_params,
+            "env_params": self.env_params,
+            "wave_params": self.wave_params
+        }
+        return input_params       
     
     def get_time_params(self):
         return self.time_params

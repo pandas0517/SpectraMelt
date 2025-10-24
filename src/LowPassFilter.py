@@ -32,7 +32,7 @@ class LowPassFilter:
             self.set_config_from_file(config_file_path)
         else:
             self.set_lpf_params(lpf_params)
-            if lpf_config_name is None:
+            if lpf_params is None:
                 lpf_config_name = "Default_LPF_Config"
             self.set_lpf_config_name(lpf_config_name)
 
@@ -48,14 +48,15 @@ class LowPassFilter:
         print("Loading LPF configuration from file:", config_file_path)
         lpf_config = load_settings(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)
-        lpf_config_name = lpf_config.get('config_name', None)
+        lpf_config_name = lpf_config.get('config_name', "LPF_Config_1")
+        
+        if lpf_params is None:
+            lpf_config_name = "Default_LPF_Config"
 
         self.set_lpf_params(lpf_params)
         self.set_lpf_config_name(lpf_config_name)
 
-    def set_lpf_config_name(self, lpf_config_name=None):
-        if lpf_config_name is None:
-            lpf_config_name = "LPF_Config_1"
+    def set_lpf_config_name(self, lpf_config_name):
         self.lpf_config_name = lpf_config_name
 
     def set_lpf_params(self, lpf_params=None):
@@ -64,6 +65,7 @@ class LowPassFilter:
                 "filter_type": "butter",      # 'butter', 'cheby1', 'cheby2', 'bessel', 'ellip'
                 "order": 4,
                 "cutoff_freq": 1000,         # Hz
+                "mode": "lfilter",
                 "ripple_db": 1.0,             # Used for cheby/ellip
                 "atten_db": 40.0,             # Stopband attenuation (cheby2/ellip)
                 "noise_std": 0.0,
@@ -77,45 +79,60 @@ class LowPassFilter:
     # -------------------------------
 
     def apply_filter(self, signal_in: np.ndarray, real_time: np.ndarray) -> np.ndarray:
-        """Apply the configured low-pass filter to the input signal."""
-        # --- Get Real Time Sample Frequency ---
-        dt = np.mean(np.diff(real_time))  # average time step
+        """Apply a low-pass filter with selectable implementation ('sos' or 'filtfilt')."""
+
+        # --- Determine sampling frequency from the time vector ---
+        dt = np.mean(np.diff(real_time))
         sim_freq = 1.0 / dt
-        # --- Set Filter Parameters ---
-        fc = self.lpf_params.get('cutoff_freq', 100)
-        filter_type = self.lpf_params.get('filter_type', "butter")
+        nyquist = sim_freq / 2.0
+
+        # --- Filter parameter extraction ---
+        fc = self.lpf_params.get('cutoff_freq', 100.0)
         order = self.lpf_params.get('order', 4)
-        
-        # --- Set Filter Nonidealities ---
+        filter_type = self.lpf_params.get('filter_type', "butter").lower()
+        mode = self.lpf_params.get('mode', "sos").lower()  # "sos" "filtfilt" or "lfilter"
+
         ripple_db = self.lpf_params.get('ripple_db', 1.0)
         atten_db = self.lpf_params.get('atten_db', 40.0)
         noise_std = self.lpf_params.get('noise_std', 0.0)
 
-        # Normalize cutoff (Nyquist = fs/2)
-        wn = fc / (sim_freq / 2)
+        # Normalized cutoff frequency
+        wn = fc / nyquist
 
-        # Select filter design
-        if filter_type == 'butter':
-            b, a = signal.butter(order, wn, btype='low', analog=False)
-        elif filter_type == 'cheby1':
+        # --- Filter design selection ---
+        if filter_type == "butter":
+            b, a = signal.butter(order, wn, btype='low')
+        elif filter_type == "cheby1":
             b, a = signal.cheby1(order, ripple_db, wn, btype='low')
-        elif filter_type == 'cheby2':
+        elif filter_type == "cheby2":
             b, a = signal.cheby2(order, atten_db, wn, btype='low')
-        elif filter_type == 'ellip':
+        elif filter_type == "ellip":
             b, a = signal.ellip(order, ripple_db, atten_db, wn, btype='low')
-        elif filter_type == 'bessel':
+        elif filter_type == "bessel":
             b, a = signal.bessel(order, wn, btype='low', norm='phase')
         else:
             raise ValueError(f"Unsupported filter type: {filter_type}")
 
-        # Apply zero-phase filtering to avoid group delay
-        filtered = signal.filtfilt(b, a, signal_in)
+        # --- Choose filtering method ---
+        if mode == "sos":
+            # Convert to second-order-sections for stability
+            sos = signal.tf2sos(b, a)
+            filtered = signal.sosfilt(sos, signal_in)
+        elif mode == "filtfilt":
+            # Ideal zero-phase filtering
+            filtered = signal.filtfilt(b, a, signal_in)
+        elif mode == "lfilter":
+            # Real world filtering
+            filtered = signal.lfilter(b, a, signal_in)
+        else:
+            raise ValueError("Filter mode must be either 'sos', 'filtfilt', or 'lfilter'")
 
-        # Add optional Gaussian noise
+        # --- Optional noise injection ---
         if noise_std > 0:
-            filtered += self.rng.normal(0, noise_std, size=filtered.shape)
+            filtered += self.rng.normal(0, noise_std, filtered.shape)
 
         return filtered
+
 
     # -------------------------------
     # Getters

@@ -1,5 +1,6 @@
 import numpy as np
 from utility import load_settings
+from scipy.linalg import dft
 from LowPassFilter import LowPassFilter
 from PulseGenerator import PulseGenerator
 from LocalOscillator import LocalOscillator
@@ -20,8 +21,10 @@ class NYFR:
                  wbf_params=None,
                  lpf_params=None,
                  adc_params=None,
+                 dict_type="real",
                  nyfr_config_name="NYFR_Config_1",
                  store_internal_sigs=True,
+                 create_dict=False,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -41,10 +44,12 @@ class NYFR:
             nyfr_params['mixer_params'] = mixer_params
             nyfr_params['config_name'] = nyfr_config_name
             nyfr_params['store_internal_sigs'] = store_internal_sigs
+            nyfr_params['dict_type'] = dict_type
+            nyfr_params['create_dict'] = create_dict
 
         self.set_nyfr_params(nyfr_params)
         
-        self.conditioned_signal = None
+        self.conditioned_signals = None
         self.wbf_signal = None
         self.lo_signal = None
         self.pulse_signal = None
@@ -52,52 +57,76 @@ class NYFR:
         self.lpf_signal = None
         self.sh_signals = None
         self.output_signals = None
+        self.lo_phase_mod_mid = None
+        self.nyfr_dict = None
+        self.Zones = None
+        self.K_band = None
+        self.decimated_time = None
+        self.decimated_freq = None
         
         if input_signal is not None and real_time is not None:
             self.output_signals = self.create_output_signal(input_signal, real_time)
+            if create_dict:
+                self.nyfr_dict = self.create_dictionary(real_time, self.lo_phase_mod_mid)
  
     # -------------------------------
     # Setters
     # -------------------------------
         
-    def set_nyfr_params(self, nyfr_config=None):
-        if nyfr_config is None:
-            nyfr_config = {}
-        lo_params = nyfr_config.get('lo_params', None)
-        adc_params = nyfr_config.get('adc_params', None)
-        pulse_params = nyfr_config.get('pulse_params', None)
-        lpf_params = nyfr_config.get('lpf_params', None)
-        wbf_params = nyfr_config.get('wbf_params', None)
-        mixer_params = nyfr_config.get('mixer_params', None)
-        store_internal_sigs = nyfr_config.get('store_internal_sigs', True)
+    def set_nyfr_params(self, nyfr_params=None):
+        if nyfr_params is None:
+            nyfr_params = {}
+        lo_params = nyfr_params.get('lo_params', None)
+        adc_params = nyfr_params.get('adc_params', None)
+        pulse_params = nyfr_params.get('pulse_params', None)
+        lpf_params = nyfr_params.get('lpf_params', None)
+        wbf_params = nyfr_params.get('wbf_params', None)
+        mixer_params = nyfr_params.get('mixer_params', None)
+        store_internal_sigs = nyfr_params.get('store_internal_sigs', True)
+        nyfr_config_name = nyfr_params.get('config_name', "Input_Config_1")
+        dict_type = nyfr_params.get('dict_type', "real")
+        create_dict = nyfr_params.get('create_dict', True)
+        
         if ( lo_params is None and 
             adc_params is None and
             pulse_params is None and
             lpf_params is None and
             wbf_params is None and
-            mixer_params is None):
-            nyfr_config_name = "Default_NYFR_Config"
-        else:
-            nyfr_config_name = nyfr_config.get('config_name', "NYFR_Config_1")
+            mixer_params is None ):
+            nyfr_config_name = "Default_Input_Config"
                     
         self.set_lo_params(lo_params)
         self.set_pulse_params(pulse_params)
         self.set_store_internal_sigs(store_internal_sigs)
+        self.set_dict_type(dict_type)
         self.set_adc_params(adc_params)
         self.set_nyfr_config_name(nyfr_config_name)
         self.set_lpf_params(lpf_params)
         self.set_wbf_params(wbf_params)
         self.set_mixer_params(mixer_params)
+        self.set_create_dict(create_dict)
 
         
     def set_nyfr_config_name(self, nyfr_config_name):
         self.nyfr_config_name = nyfr_config_name
+        
+    def set_dict_type(self, dict_type):
+        # Set Dictionary Type: Real or Complex
+        dict_type = dict_type.lower()
+
+        if dict_type not in ("real", "complex"):
+            raise ValueError(f"Invalid dict_type '{dict_type}'. Must be 'real' or 'complex'.")
+
+        self.dict_type = dict_type
         
     def set_store_internal_sigs(self, store_internal_sigs):
         self.store_internal_sigs = store_internal_sigs
         
     def set_lo_params(self, lo_params):         
         self.lo_params = lo_params
+        
+    def set_create_dict(self, create_dict):
+        self.create_dict = create_dict
         
     def set_adc_params(self, adc_params):
         if adc_params is not None:
@@ -121,6 +150,129 @@ class NYFR:
     # Core functional methods
     # -------------------------------
     
+    def create_dictionary(self, real_time, lo_phase_mod_mid):
+        """Create a real or complex dictionary matrix efficiently."""
+        
+        real_dt = np.mean(np.diff(real_time))
+        sim_freq = 1.0 / real_dt
+        wbf_cuttoff_freq = self.wbf_params.get('cutoff_freq')
+        
+        # Find Decimation factor between Real Time vector and Wide-Band Filter Cuttoff Frequency
+        decimation_factor = int(round( sim_freq / wbf_cuttoff_freq ))
+
+        # Shift to mid-point of decimated time
+        decimated_start = int(round( decimation_factor / 2 ))
+        
+        # Decimate Real Time vector by Decimation Factor
+        self.decimated_time = real_time[decimated_start::decimation_factor]
+
+        num_time_points = self.decimated_time.size
+        dt = np.mean(np.diff(self.decimated_time))
+        points_per_second = 1.0 / dt
+        
+        # --- Compute Decimated frequency axis (for FFT-based analysis) ---
+        num_samples = len(self.decimated_time)
+        total_time = self.decimated_time[-1] - self.decimated_time[0]
+        if total_time <= 0:
+            total_time = 1.0 / points_per_second  # fallback if single sample
+        self.decimated_freq = np.linspace(
+            -0.5 * num_samples / total_time,
+             0.5 * num_samples / total_time,
+             num_samples,
+             endpoint=False
+        )
+        
+        adc_clock_freq = self.adc_params.get('adc_samp_freq', 100)
+
+        # Core band and zone parameters
+        self.K_band = round((num_time_points * adc_clock_freq) / points_per_second)
+        self.Zones = int(num_time_points / self.K_band)
+
+        if self.dict_type == 'real':
+            self.Zones *= 2
+            self.K_band //= 2
+
+        R_init = np.eye(self.K_band, dtype=complex)
+        dft_matrix = dft(self.K_band)
+
+        # Build M_index pattern vectorized
+        half_zones = self.Zones // 2
+        M_index = np.empty(2 * half_zones, dtype=int)
+        M_index[0::2] = np.arange(half_zones)
+        M_index[1::2] = -np.arange(1, half_zones + 1)
+
+        # Choose real or complex dictionary construction
+        if self.dict_type == 'complex':
+            R, S, PSI = self._create_complex_dict(R_init, M_index, dft_matrix, lo_phase_mod_mid)
+        else:
+            R, S, PSI = self._create_real_dict(R_init, M_index, dft_matrix, lo_phase_mod_mid)
+
+        # Final dictionary multiplication
+        return R @ S @ PSI
+
+
+    def _create_complex_dict(self, R_init, M_index, dft_matrix, lo_phase_mod_mid):
+        """
+        Vectorized complex dictionary creation.
+        This version has not been tested yet
+        """
+        K_band = self.K_band
+        Zones = self.Zones
+        lo_mod = lo_phase_mod_mid[:len(M_index)]
+
+        idft_norm = np.conjugate(dft_matrix.T) / (Zones * K_band)
+        R = np.tile(R_init, (1, Zones))
+        R_row, R_col = R.shape
+
+        # Vectorized exponential diagonal blocks
+        exp_factors = np.exp(1j * np.multiply(M_index, lo_mod))
+        exp_blocks = np.repeat(exp_factors, K_band)
+
+        S = np.eye(R_col, dtype=complex)
+        S *= np.tile(exp_blocks, int(R_col / len(exp_blocks)))[:R_col]
+
+        PSI = np.kron(np.eye(Zones, dtype=complex), idft_norm)
+        return R, S, PSI
+
+
+    def _create_real_dict(self, R_init, M_index, dft_matrix, lo_phase_mod_mid):
+        """Vectorized real dictionary creation."""
+        K_band = self.K_band
+        Zones = self.Zones
+
+        idft_norm = np.conjugate(dft_matrix.T) / (2 * Zones * K_band)
+        R = np.tile(R_init, (1, 2 * Zones))
+        R_row, R_col = R.shape
+
+        # Build UL_idft matrix (upper/lower split)
+        idft_split = np.hsplit(idft_norm, 2)
+        zero_fill = np.zeros_like(idft_split[0])
+        UL_idft = np.block([
+            [idft_split[0], zero_fill],
+            [zero_fill, idft_split[1]]
+        ])
+
+        # Precompute modulation terms
+        M_index_rev = [-m for m in reversed(M_index)]
+        double_M_index = np.array(M_index + M_index_rev)
+        lo_mod_concat = np.tile(lo_phase_mod_mid, Zones)
+        double_lo_mod = np.tile(lo_mod_concat, 2)
+
+        # Vectorized block-diagonal exponential construction
+        S = np.zeros((R_col, R_col), dtype=complex)
+        PSI = np.zeros((R_col, R_col // 2), dtype=complex)
+
+        block_indices = np.arange(0, R_col, K_band)
+        for idx, i in enumerate(block_indices[:len(double_M_index)]):
+            LO_mod = double_lo_mod[i:i + R_row]
+            exp_diag = np.exp(1j * double_M_index[idx] * LO_mod)
+            S[i:i + R_row, i:i + R_row] = np.diag(exp_diag)
+
+        for i in range(0, R_col, 2 * K_band):
+            PSI[i:i + 2 * K_band, i // 2:i // 2 + K_band] = UL_idft
+
+        return R, S, PSI
+    
     def create_output_signal(self, input_signal, real_time):
         wbf = LowPassFilter(input_signal, real_time, lpf_params=self.wbf_params)
         if self.wbf_params is None:
@@ -132,6 +284,7 @@ class NYFR:
             self.lo_params = lo.get_lo_params()
         lo_signal = lo.get_lo_signal()
         lo_pre_start = lo.get_pre_start_lo()
+        lo_phase_mod = lo.get_phase_mod()
         
         pulse_gen = PulseGenerator(lo_signal, real_time, lo_pre_start,
                                     pulse_params=self.pulse_params)
@@ -154,17 +307,24 @@ class NYFR:
         if self.adc_params is None:
             self.adc_params = adc.get_adc_params()
             
+        quantized_signals = adc.get_quantizer_signals()
+
+        # Find closest indices of ADC quantizer mid_times in real_time
+        sampled_indicies = np.searchsorted(real_time, quantized_signals.get('mid_times'))
+        
+        if isinstance(lo_phase_mod, np.ndarray):
+            # Extract the corresponding lo_phase_mod values
+            self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
+          
         if self.store_internal_sigs:
             self.wbf_signal = wbf_signal
             self.lo_signal = lo_signal
             self.pulse_signal = pulse_signal
             self.mixed_signal = mixed_signal
             self.lpf_signal = lpf_signal
-            self.conditioned_signal = adc.get_conditioned_signal()
+            self.conditioned_signals = adc.get_conditioned_signals()
             self.sh_signals = adc.get_sh_signals()
             
-        quantized_signals = adc.get_quantizer_signals()
-        
         return quantized_signals
     
     # -------------------------------
@@ -179,8 +339,7 @@ class NYFR:
             "lpf_params": self.lpf_params,
             "pulse_params": self.pulse_params,
             "adc_params": self.adc_params,
-            "store_interal_sigs": self.store_internal_sigs,
-            "nyfr_config_name": self.nyfr_config_name
+            "store_interal_sigs": self.store_internal_sigs
         }
         return nyfr_params
     
@@ -217,14 +376,35 @@ class NYFR:
     def get_lpf_signal(self):
         return self.lpf_signal
     
-    def get_conditioned_signal(self):
-        return self.conditioned_signal
+    def get_conditioned_signals(self):
+        return self.conditioned_signals
     
     def get_sh_signals(self):
         return self.sh_signals
     
+    def get_lo_phase_mod_mid(self):
+        return self.lo_phase_mod_mid
+    
+    def get_decimated_time(self):
+        return self.decimated_time
+    
+    def get_decimated_freq(self):
+        return self.decimated_freq
+    
+    def get_nyfr_dict(self):
+        return self.nyfr_dict
+    
+    def get_nyfr_zones(self):
+        return self.Zones
+    
+    def get_nyfr_k_bands(self):
+        return self.K_band
+    
     def get_output_signals(self):
         return self.output_signals
+    
+    def get_dict_type(self):
+        return self.dict_type
     
     def get_nyfr_config_name(self):
         return self.nyfr_config_name

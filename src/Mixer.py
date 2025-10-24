@@ -28,7 +28,7 @@ class Mixer:
             self.set_config_from_file(config_file_path)
         else:
             self.set_mixer_params(mixer_params)
-            if ( mixer_params is None):
+            if mixer_params is None:
                 mixer_config_name = "Default_Mixer_Config"
             self.set_mixer_config_name(mixer_config_name)
         
@@ -44,14 +44,15 @@ class Mixer:
         print("Loading Mixer configuration from file: ", config_file_path)
         mixer_config = load_settings(config_file_path)
         mixer_params = mixer_config.get('mixer_params', None)
-        mixer_config_name = mixer_config.get('config_name', None)
+        mixer_config_name = mixer_config.get('config_name', "Mixer_Config_1")
+        
+        if mixer_params is None:
+            mixer_config_name = "Default_Mixer_Config"
 
         self.set_mixer_params(mixer_params)
         self.set_mixer_config_name(mixer_config_name)
         
-    def set_mixer_config_name(self, mixer_config_name=None):
-        if mixer_config_name is None:
-            mixer_config_name = "Mixer_Config_1"
+    def set_mixer_config_name(self, mixer_config_name):
         self.mixer_config_name = mixer_config_name        
         
     def set_mixer_params(self, mixer_params=None):
