@@ -24,7 +24,7 @@ class NYFR:
                  dict_type="real",
                  nyfr_config_name="NYFR_Config_1",
                  store_internal_sigs=True,
-                 create_dict=False,
+                 create_dict=True,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -61,13 +61,14 @@ class NYFR:
         self.nyfr_dict = None
         self.Zones = None
         self.K_band = None
-        self.decimated_time = None
-        self.decimated_freq = None
+        self.wbf_time = None
+        self.wbf_freq = None
         
         if input_signal is not None and real_time is not None:
             self.output_signals = self.create_output_signal(input_signal, real_time)
-            if create_dict:
-                self.nyfr_dict = self.create_dictionary(real_time, self.lo_phase_mod_mid)
+            if self.create_dict:
+                conditioned_time = self.conditioned_signals.get('time', None)
+                self.nyfr_dict = self.create_dictionary(conditioned_time, self.lo_phase_mod_mid)
  
     # -------------------------------
     # Setters
@@ -152,45 +153,31 @@ class NYFR:
     
     def create_dictionary(self, real_time, lo_phase_mod_mid):
         """Create a real or complex dictionary matrix efficiently."""
-        
-        real_dt = np.mean(np.diff(real_time))
-        sim_freq = 1.0 / real_dt
-        wbf_cuttoff_freq = self.wbf_params.get('cutoff_freq')
-        
-        # Find Decimation factor between Real Time vector and Wide-Band Filter Cuttoff Frequency
-        decimation_factor = int(round( sim_freq / wbf_cuttoff_freq ))
 
-        # Shift to mid-point of decimated time
-        decimated_start = int(round( decimation_factor / 2 ))
-        
-        # Decimate Real Time vector by Decimation Factor
-        self.decimated_time = real_time[decimated_start::decimation_factor]
+        wbf_cutoff_freq = self.wbf_params.get('cutoff_freq')
+        total_time = abs(real_time[-1] - real_time[0])
+        points_per_second = round(wbf_cutoff_freq)
+        num_time_points = int(round(total_time * points_per_second))        
 
-        num_time_points = self.decimated_time.size
-        dt = np.mean(np.diff(self.decimated_time))
-        points_per_second = 1.0 / dt
-        
-        # --- Compute Decimated frequency axis (for FFT-based analysis) ---
-        num_samples = len(self.decimated_time)
-        total_time = self.decimated_time[-1] - self.decimated_time[0]
-        if total_time <= 0:
-            total_time = 1.0 / points_per_second  # fallback if single sample
-        self.decimated_freq = np.linspace(
-            -0.5 * num_samples / total_time,
-             0.5 * num_samples / total_time,
-             num_samples,
-             endpoint=False
+        self.wbf_time = np.linspace(
+            real_time[0],
+            real_time[-1],
+            num_time_points,
+            endpoint=False
         )
-        
+
+        self.wbf_freq = np.linspace(
+            -points_per_second / 2,
+            points_per_second / 2,
+            num_time_points,
+            endpoint=False
+        )
+
         adc_clock_freq = self.adc_params.get('adc_samp_freq', 100)
 
         # Core band and zone parameters
         self.K_band = round((num_time_points * adc_clock_freq) / points_per_second)
         self.Zones = int(num_time_points / self.K_band)
-
-        if self.dict_type == 'real':
-            self.Zones *= 2
-            self.K_band //= 2
 
         R_init = np.eye(self.K_band, dtype=complex)
         dft_matrix = dft(self.K_band)
@@ -298,7 +285,7 @@ class NYFR:
         mixed_signal = mixed.get_mixed_signal()
         
         if self.lpf_params is None:
-            self.lpf_params = self.wbf_params
+            self.lpf_params = self.wbf_params.copy()
             self.lpf_params['cutoff_freq'] = 100
         lpf = LowPassFilter(mixed_signal, real_time, lpf_params=self.lpf_params)
         lpf_signal = lpf.get_signal_out()
@@ -385,11 +372,11 @@ class NYFR:
     def get_lo_phase_mod_mid(self):
         return self.lo_phase_mod_mid
     
-    def get_decimated_time(self):
-        return self.decimated_time
+    def get_wbf_time(self):
+        return self.wbf_time
     
-    def get_decimated_freq(self):
-        return self.decimated_freq
+    def get_wbf_freq(self):
+        return self.wbf_freq
     
     def get_nyfr_dict(self):
         return self.nyfr_dict

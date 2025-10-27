@@ -10,7 +10,7 @@ from scipy.linalg import dft
 from sklearn.linear_model import orthogonal_mp
 from OMP import OMP
 from spgl1 import spgl1
-from iht import CIHT
+from IHT import CIHT
 
 class NYFR:
     def __init__(self, 

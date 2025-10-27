@@ -44,7 +44,7 @@ class LowPassFilter:
     # Setters
     # -------------------------------
 
-    def set_config_from_file(self, config_file_path=None):
+    def set_config_from_file(self, config_file_path):
         print("Loading LPF configuration from file:", config_file_path)
         lpf_config = load_settings(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)

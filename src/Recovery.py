@@ -1,0 +1,181 @@
+import numpy as np
+import os
+from utility import load_settings
+from spgl1 import spgl1
+from IHT import CIHT
+from OMP import OMP
+from NYFR_ML_Models import model_prediction
+
+class Recovery:
+
+    def __init__(self,
+                signal=None,
+                dictionary=None,
+                recovery_params=None,
+                recovery_config_name=None,
+                num_waves=1,
+                config_file_path=None) -> None:
+        if config_file_path is not None:
+            self.set_config_from_file(config_file_path)
+        else:
+            self.set_recovery_params(recovery_params)
+            if recovery_params is None:
+                recovery_config_name = "Default_Recovery_Config"
+            self.set_recovery_config_name(recovery_config_name)
+
+        self.recovered_coefs = None
+        if signal is not None and dictionary is not None:
+            self.recovered_coefs = self.recover_signal(signal, dictionary, num_waves)
+    # -------------------------------
+    # Setters
+    # -------------------------------
+
+    def set_config_from_file(self, config_file_path):
+        print("Loading Recovery configuration from file: ", config_file_path)
+        recovery_config = load_settings(config_file_path)
+        recovery_params = recovery_config.get('recovery_params', None)
+        recovery_config_name = recovery_config.get('config_name', "Recovery_Config_1")
+        
+        if recovery_params is None:
+            recovery_config_name = "Default_Recovery_Config"
+
+        self.set_recovery_params(recovery_params)
+        self.set_recovery_config_name(recovery_config_name)
+
+    def set_recovery_config_name(self, recovery_config_name):
+        self.recovery_config_name = recovery_config_name  
+
+    def set_recovery_params(self, recovery_params=None):
+        if recovery_params is None:
+            recovery_params = {
+                "method": "SPGL1",
+                "threshold_frac": 0.05,
+                "auto_threshold": False,
+                "recovery_type": "complex",
+                "model_file_path": None,
+                "sigma": 0.001,
+                "dict_mag_adj": 1.0
+            }
+        self.recovery_params = recovery_params
+
+              
+    # -------------------------------
+    # Core functional methods
+    # -------------------------------
+
+    def _sparse_fft(self, signal):
+        """
+        Compute sparse magnitude and phase of a time-domain signal using time vector.
+
+        Parameters
+        ----------
+        signal : array_like
+            Input time-domain signal (real or complex)
+        threshold_frac : float, optional
+            Keep bins with magnitude > threshold_frac * max(magnitude)
+            Default = 0.05 (5%). Ignored if auto_threshold=True
+        auto_threshold : bool, optional
+            If True, automatically determine threshold using median + 2*std method
+
+        Returns
+        -------
+        magnitude_sparse : ndarray
+            Magnitude spectrum with zeroed values below threshold
+        phase_sparse : ndarray
+            Phase spectrum with zeroed values below threshold
+        mask : ndarray
+            Boolean mask of where significant tones are kept
+        """                      
+        threshold_frac = self.recovery_params.get('threshold_frac', 0.05)
+        auto_threshold = self.recovery_params.get('auto_threshold', False)
+
+        fft_vals = np.fft.fft(signal)
+
+        # Magnitude + Phase
+        magnitude = np.abs(fft_vals)
+        phase = np.angle(fft_vals)
+
+        # Determine threshold
+        if auto_threshold:
+            # Automatic threshold: median + 2*std (adjust factor as needed)
+            threshold = np.median(magnitude) + 2*np.std(magnitude)
+        else:
+            threshold = np.max(magnitude) * threshold_frac
+
+        # Significant bin mask
+        mask = magnitude > threshold
+
+        # Zero output outside mask
+        magnitude_sparse = magnitude * mask
+        phase_sparse = phase * mask
+
+        return magnitude_sparse, phase_sparse, mask
+
+
+    def recover_signal(self, signal, dictionary, num_waves=1):
+        sigma = self.recovery_params.get('sigma', 0.001)
+        dict_mag_adj = self.recovery_params.get('dict_mag_adj', 1.0)
+        model_file_path = self.recovery_params.get('model_file_path', None)
+        recovery_method = self.recovery_params.get('method', "splg1").lower()
+        recovery_type = self.recovery_params.get('recovery_type', "complex").lower()
+
+        recovered_coef = None
+        sparse_signal = None
+
+        magnitude_sparse, phase_sparse, _ = self._sparse_fft(signal)
+        complex_sparse = magnitude_sparse * np.exp(1j * phase_sparse)
+
+        match recovery_type:
+            case 'complex':
+                if np.iscomplexobj(dictionary):
+                        if recovery_method == "mlp1":
+                            sparse_signal = np.concatenate([magnitude_sparse, phase_sparse])
+                        else:
+                            sparse_signal = complex_sparse
+                else:
+                    raise ValueError("Dictionary is not complex")
+            case 'real':
+                sparse_signal = complex_sparse.real
+            case 'imag':
+                if np.iscomplexobj(dictionary):
+                        sparse_signal = complex_sparse.imag
+                else:
+                    raise ValueError("Dictionary is not complex")
+            case 'mag':
+                sparse_signal = magnitude_sparse
+            case 'phase':
+                if np.iscomplexobj(dictionary):
+                        sparse_signal = phase_sparse
+                else:
+                    raise ValueError("Dictionary is not complex")
+
+        match recovery_method:
+            case 'iht':
+                recovered_coef = CIHT(dict_mag_adj * dictionary, sparse_signal, 2*num_waves, learning_rate=sigma)
+            case 'omp':
+                signal_norm = np.linalg.norm(sparse_signal)
+                recovered_coef = OMP(dict_mag_adj * dictionary, sparse_signal/signal_norm)[0]
+            case 'spgl1':
+                signal_norm = np.linalg.norm(sparse_signal)
+                recovered_coef,_,_,_ = spgl1(dict_mag_adj * dictionary, sparse_signal/signal_norm, sigma=sigma)
+            case 'mlp1':
+                if not os.path.exists(model_file_path):
+                    raise FileNotFoundError(f"File not found: {model_file_path}")
+                pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
+                init_guess = np.dot(pseudo,sparse_signal)
+                recovered_coef = model_prediction(init_guess, model_file_path)
+
+        return recovered_coef
+
+    # -------------------------------
+    # Getters
+    # -------------------------------
+
+    def get_recovery_config_name(self):
+        return self.recovery_config_name
+    
+    def get_recovered_coefs(self):
+        return self.recovered_coefs
+    
+    def get_recovery_params(self):
+        return self.recovery_params

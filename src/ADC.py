@@ -59,9 +59,9 @@ class ADC:
                 "jitter_std": 0.0,
                 "acquisition_time_constant": 0.0,
                 "hold_noise_std": 0.0,
-                "transient_mode": "none",
-                "truncate_transients": False,
-                "transient_fraction": 0.1,
+                "transient_mode": "fixed",
+                "truncate_transients": True,
+                "transient_fraction": 0.05,
                 "detection_window": 0.05,
                 "stability_threshold": 0.01,
                 "seed": None

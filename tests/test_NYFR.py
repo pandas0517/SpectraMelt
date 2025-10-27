@@ -12,8 +12,9 @@ if __name__ == '__main__':
     from utility import load_settings
     from InputSignal import InputSignal
     from NYFR import NYFR
+    from Recovery import Recovery
     import matplotlib.pyplot as plt
-    from scipy.fftpack import fft
+    from scipy.fftpack import fft, ifft
     import numpy as np
     import time
 
@@ -42,7 +43,8 @@ if __name__ == '__main__':
     
     wbf_signal_1 = nyfr_1.get_wbf_signal()
     wbf_params_1 = nyfr_1.get_wbf_params()
-    wbf_freq_1 = np.fft.fftshift(np.abs(fft(wbf_signal_1))) / (sim_freq_1*total_time_1)
+    wbf_samp_freq_1 = wbf_params_1.get('cutoff_freq')
+    wbf_sig_freq_1 = np.fft.fftshift(np.abs(fft(wbf_signal_1))) / (sim_freq_1*total_time_1)
     lo_signal_1 = nyfr_1.get_lo_signal()
     lo_freq_1 = np.fft.fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
     pulse_signal_1 = nyfr_1.get_pulse_signal()
@@ -62,7 +64,17 @@ if __name__ == '__main__':
     sh_output_nyfr_1 = nyfr_1.get_sh_signals().get('output_signal')
     mid_times_nyfr_1 = nyfr_1.get_output_signals().get('mid_times')
     quantized_nyfr_1 = nyfr_1.get_output_signals().get('quantized_values')
-    
+    dictionary_1 = nyfr_1.get_nyfr_dict()
+    wbf_time_1 = nyfr_1.get_wbf_time()
+    wbf_freq_1 = nyfr_1.get_wbf_freq()
+    recovery_config_path = Path(os.getenv('RECOVERY_CONF'))
+    recovery_1 = Recovery(quantized_nyfr_1, dictionary_1, config_file_path=recovery_config_path)
+    recovery_params_1 = recovery_1.get_recovery_params()
+    recovery_method_1 = recovery_params_1.get('method')
+    recovered_freq_1 = recovery_1.get_recovered_coefs()
+    recovered_sig_freq_1 = np.fft.fftshift(np.abs(fft(recovered_freq_1))) / (wbf_samp_freq_1*lpf_cond_total_time_1)
+    recovered_signal_1 = ifft(recovered_freq_1)
+
     start = time.time()
     nyfr_2 = NYFR(real_input_2, real_time_2)
     end = time.time()
@@ -70,7 +82,8 @@ if __name__ == '__main__':
     
     wbf_signal_2 = nyfr_2.get_wbf_signal()
     wbf_params_2 = nyfr_2.get_wbf_params()
-    wbf_freq_2 = np.fft.fftshift(np.abs(fft(wbf_signal_2))) / (sim_freq_2*total_time_2)
+    wbf_samp_freq_2 = wbf_params_2.get('cutoff_freq')
+    wbf_sig_freq_2 = np.fft.fftshift(np.abs(fft(wbf_signal_2))) / (sim_freq_2*total_time_2)
     lo_signal_2 = nyfr_2.get_lo_signal()
     lo_freq_2 = np.fft.fftshift(np.abs(fft(lo_signal_2))) / (sim_freq_2*total_time_2)
     pulse_signal_2 = nyfr_2.get_pulse_signal()
@@ -90,7 +103,17 @@ if __name__ == '__main__':
     sh_output_nyfr_2 = nyfr_2.get_sh_signals().get('output_signal')
     mid_times_nyfr_2 = nyfr_2.get_output_signals().get('mid_times')
     quantized_nyfr_2 = nyfr_2.get_output_signals().get('quantized_values')
-    
+    dictionary_2 = nyfr_2.get_nyfr_dict()
+    wbf_time_2 = nyfr_2.get_wbf_time()
+    wbf_freq_2 = nyfr_2.get_wbf_freq()
+
+    recovery_2 = Recovery(quantized_nyfr_2, dictionary_2)
+    recovery_params_2 = recovery_2.get_recovery_params()
+    recovery_method_2 = recovery_params_2.get('method')
+    recovered_freq_2 = recovery_2.get_recovered_coefs()
+    recovered_sig_freq_2 = np.fft.fftshift(np.abs(fft(recovered_freq_2))) / (wbf_samp_freq_2*lpf_cond_total_time_2)
+    recovered_signal_2 = ifft(recovered_freq_2)
+
     fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
     axes[0,0].plot(real_time_1, real_input_1)
     axes[0,0].set_title("Time (File)")
@@ -112,13 +135,13 @@ if __name__ == '__main__':
     axes[0,0].plot(real_time_1, wbf_signal_1)
     axes[0,0].set_title(f"Time (File)\nUsing filter mode {wbf_params_1['mode']}")
     axes[0,0].set_xlim(-0.0002, 0.0002)
-    axes[0,1].plot(real_freq_1, wbf_freq_1)
+    axes[0,1].plot(real_freq_1, wbf_sig_freq_1)
     axes[0,1].set_title("Frequency (File)")
     axes[0,1].set_xlim(-160000, 160000)
     axes[1,0].plot(real_time_2, wbf_signal_2)
     axes[1,0].set_title(f"Time (File)\nUsing filter mode {wbf_params_2['mode']}")
     axes[1,0].set_xlim(0, 0.04)
-    axes[1,1].plot(real_freq_2, wbf_freq_2)
+    axes[1,1].plot(real_freq_2, wbf_sig_freq_2)
     axes[1,1].set_title("Frequency (Default)")
     axes[1,1].set_xlim(-1600, 1600)
     fig.suptitle("NYFR Wide Band Filtered Signals ")
@@ -195,8 +218,8 @@ if __name__ == '__main__':
     axes[0,1].set_ylim(0, 1)
     axes[0,1].set_xlim(-10000, 10000)
     axes[1,0].plot(lpf_cond_time_2, lpf_cond_sig_2)
-    axes[1,0].set_title("Time (Default)")
-    axes[1,0].set_xlim(0, 0.04)
+    #axes[1,0].set_title("Time (Default)")
+    #axes[1,0].set_xlim(0, 0.04)
     axes[1,1].plot(lpf_cond_freq_2, lpf_cond_sig_freq_2)
     axes[1,1].set_title("Frequency (Default)")
     axes[1,1].set_xlim(-130, 130)
@@ -218,5 +241,25 @@ if __name__ == '__main__':
     axes[1,1].step(mid_times_nyfr_2, quantized_nyfr_2, color='green', where='mid')
     axes[1,1].set_title(f"{bits_nyfr_2}-bit quantizer (Default)")
     fig.suptitle("NYFR ADC Signals")
+    fig.tight_layout()
+    plt.show()
+
+    fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
+    axes[0,0].plot(real_freq_1, real_input_freq_1)
+    axes[0,0].set_title("Frequency (File)")
+    axes[0,1].set_ylim(0, 1)
+    axes[0,0].set_xlim(-50000, 50000)
+    #axes[0,0].set_xlim(-0.0002, 0.0002)
+    axes[0,1].plot(wbf_freq_1, recovered_sig_freq_1)
+    axes[0,1].set_title(f"Frequency (File)\nRecovery Method: {recovery_method_1}")
+    axes[0,1].set_ylim(0, 1)
+    axes[0,1].set_xlim(-50000, 50000)
+    axes[1,0].plot(wbf_time_2, recovered_signal_2)
+    axes[1,0].set_title(f"Time (Default)")
+    axes[1,0].set_xlim(0, 0.04)
+    axes[1,1].plot(wbf_freq_2, recovered_sig_freq_2)
+    axes[1,1].set_title(f"Frequency (Default)\nRecovery Method: {recovery_method_2}")
+    axes[1,1].set_xlim(-130, 130)
+    fig.suptitle("NYFR Recovered Signals")
     fig.tight_layout()
     plt.show()

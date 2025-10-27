@@ -1,7 +1,7 @@
 {
     "config_name": "Input_Config_1",
     "time_params": {
-        "time_range": [-0.002, 0.002],
+        "time_range": [-0.004, 0.004],
         "sim_freq": 10000000
     },
     "adc_params": {

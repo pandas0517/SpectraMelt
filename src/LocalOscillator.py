@@ -51,7 +51,7 @@ class LocalOscillator:
     # Setters
     # -------------------------------
        
-    def set_config_from_file(self, config_file_path=None):
+    def set_config_from_file(self, config_file_path):
         print("Loading Local Oscillator configuration from file: ", config_file_path)
         lo_config = load_settings(config_file_path)
         lo_params = lo_config.get('lo_params', None)
@@ -72,7 +72,7 @@ class LocalOscillator:
                 "amp": 1,
                 "freq": 100,
                 "phase": 0,
-                "mod_enabled": False,
+                "mod_enabled": True,
                 "phase_delta": 0.08,
                 "phase_freq": 0.1,
                 "phase_offset": 0.0,

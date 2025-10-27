@@ -91,7 +91,7 @@ class InputSignal:
     def set_wave_params(self, wave_params=None):
         if wave_params is None:
             wave_params = {
-                "num_waves": 0,
+                "num_waves": 1,
                 "freq_range": (100, 1000),
                 "amp_range": (0.1, 1.0),
                 "phase_random": True,
@@ -134,7 +134,7 @@ class InputSignal:
         analog['sim_freq'] = points_per_second
         analog['adj_spacing'] = 1 / points_per_second
         analog['total_time'] = abs(time_range[1] - time_range[0])
-        analog['num_points'] = int(analog['total_time'] * points_per_second)
+        analog['num_points'] = int(round(analog['total_time'] * points_per_second))
         analog['time'] = np.linspace(time_range[0],
                                   time_range[1],
                                   analog['num_points'],
@@ -151,6 +151,7 @@ class InputSignal:
         """
          
         # Override defaults with values inside wave_params if they exist
+        waves = self.wave_params.get('waves', [])
         num_waves = self.wave_params.get('num_waves', 1)
         freq_range = tuple(self.wave_params.get('freq_range', (100, 1000)))
         amp_range = tuple(self.wave_params.get('amp_range', (0.1, 1.0)))
@@ -159,7 +160,7 @@ class InputSignal:
         v_ref_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
 
         # === Wave parameter setup ===
-        if 'waves' not in self.wave_params or not self.wave_params['waves']:
+        if not waves:
             amps = self.rng.uniform(amp_range[0], amp_range[1], num_waves)
             freqs = self.rng.uniform(freq_range[0], freq_range[1], num_waves)
             if phase_random:
@@ -167,14 +168,15 @@ class InputSignal:
                 phases = 2 * np.pi * freqs * t_shift
             else:
                 phases = np.zeros(num_waves)
-            # Save generated wave dictionaries into wave_params
+            # Save generated wave dictionaries into waves
             self.wave_params['waves'] = [
                 {"amp": float(amps[i]), "freq": float(freqs[i]), "phase": float(phases[i])}
                 for i in range(num_waves)
             ]
-        waves = self.wave_params['waves']
+        else:
+            self.wave_params['num_waves'] = len(self.wave_params['waves'])
 
-        input_signal = self._generate_signal(waves)
+        input_signal = self._generate_signal(self.wave_params['waves'])
             # --- Adjust to midpoint ---
         midpoint = (v_ref_range[1] + v_ref_range[0]) / 2
         input_signal = input_signal + midpoint  # shift signal to midpoint

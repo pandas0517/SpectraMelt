@@ -1,0 +1,12 @@
+{
+    "config_name": "Recovery_Config_1",
+    "recovery_params": {
+        "method": "spgl1",
+        "threshold_frac": 0.05,
+        "auto_threshold": false,
+        "recovery_type": "complex",
+        "model_file_path": null,
+        "sigma": 0.001,
+        "dict_mag_adj": 1.0
+    }
+}

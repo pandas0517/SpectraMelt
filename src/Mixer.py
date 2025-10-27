@@ -40,7 +40,7 @@ class Mixer:
     # Setters
     # -------------------------------
        
-    def set_config_from_file(self, config_file_path=None):
+    def set_config_from_file(self, config_file_path):
         print("Loading Mixer configuration from file: ", config_file_path)
         mixer_config = load_settings(config_file_path)
         mixer_params = mixer_config.get('mixer_params', None)
