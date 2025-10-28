@@ -77,13 +77,13 @@ class NYFR:
     def set_nyfr_params(self, nyfr_params=None):
         if nyfr_params is None:
             nyfr_params = {}
+        store_internal_sigs = nyfr_params.get('store_internal_sigs', True)
         lo_params = nyfr_params.get('lo_params', None)
         adc_params = nyfr_params.get('adc_params', None)
         pulse_params = nyfr_params.get('pulse_params', None)
         lpf_params = nyfr_params.get('lpf_params', None)
         wbf_params = nyfr_params.get('wbf_params', None)
         mixer_params = nyfr_params.get('mixer_params', None)
-        store_internal_sigs = nyfr_params.get('store_internal_sigs', True)
         nyfr_config_name = nyfr_params.get('config_name', "Input_Config_1")
         dict_type = nyfr_params.get('dict_type', "real")
         create_dict = nyfr_params.get('create_dict', True)
@@ -95,10 +95,10 @@ class NYFR:
             wbf_params is None and
             mixer_params is None ):
             nyfr_config_name = "Default_Input_Config"
-                    
+            
+        self.set_store_internal_sigs(store_internal_sigs)
         self.set_lo_params(lo_params)
         self.set_pulse_params(pulse_params)
-        self.set_store_internal_sigs(store_internal_sigs)
         self.set_dict_type(dict_type)
         self.set_adc_params(adc_params)
         self.set_nyfr_config_name(nyfr_config_name)
@@ -106,7 +106,6 @@ class NYFR:
         self.set_wbf_params(wbf_params)
         self.set_mixer_params(mixer_params)
         self.set_create_dict(create_dict)
-
         
     def set_nyfr_config_name(self, nyfr_config_name):
         self.nyfr_config_name = nyfr_config_name
@@ -131,8 +130,9 @@ class NYFR:
         
     def set_adc_params(self, adc_params):
         if adc_params is not None:
+            adc_params['store_conditioned_sigs'] = True
             if self.store_internal_sigs:
-                adc_params['store_internal_sigs'] = True           
+                adc_params['store_sh_sigs'] = True           
         self.adc_params = adc_params
 
     def set_pulse_params(self, pulse_params):
@@ -295,21 +295,21 @@ class NYFR:
             self.adc_params = adc.get_adc_params()
             
         quantized_signals = adc.get_quantizer_signals()
-
+        self.conditioned_signals = adc.get_conditioned_signals()
+        
         # Find closest indices of ADC quantizer mid_times in real_time
         sampled_indicies = np.searchsorted(real_time, quantized_signals.get('mid_times'))
         
         if isinstance(lo_phase_mod, np.ndarray):
             # Extract the corresponding lo_phase_mod values
             self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
-          
+         
         if self.store_internal_sigs:
             self.wbf_signal = wbf_signal
             self.lo_signal = lo_signal
             self.pulse_signal = pulse_signal
             self.mixed_signal = mixed_signal
             self.lpf_signal = lpf_signal
-            self.conditioned_signals = adc.get_conditioned_signals()
             self.sh_signals = adc.get_sh_signals()
             
         return quantized_signals

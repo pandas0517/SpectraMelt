@@ -1,10 +1,7 @@
 import numpy as np
 import os
-from utility import load_settings
-from spgl1 import spgl1
-from IHT import CIHT
-from OMP import OMP
-from NYFR_ML_Models import model_prediction
+from importlib import import_module
+from utils import load_config_from_json
 
 class Recovery:
 
@@ -32,7 +29,7 @@ class Recovery:
 
     def set_config_from_file(self, config_file_path):
         print("Loading Recovery configuration from file: ", config_file_path)
-        recovery_config = load_settings(config_file_path)
+        recovery_config = load_config_from_json(config_file_path)
         recovery_params = recovery_config.get('recovery_params', None)
         recovery_config_name = recovery_config.get('config_name', "Recovery_Config_1")
         
@@ -151,19 +148,23 @@ class Recovery:
 
         match recovery_method:
             case 'iht':
-                recovered_coef = CIHT(dict_mag_adj * dictionary, sparse_signal, 2*num_waves, learning_rate=sigma)
+                IHT = import_module("IHT")
+                recovered_coef = IHT.CIHT(dict_mag_adj * dictionary, sparse_signal, 2*num_waves, learning_rate=sigma)
             case 'omp':
+                OMP = import_module("OMP")
                 signal_norm = np.linalg.norm(sparse_signal)
-                recovered_coef = OMP(dict_mag_adj * dictionary, sparse_signal/signal_norm)[0]
+                recovered_coef = OMP.OMP(dict_mag_adj * dictionary, sparse_signal/signal_norm)[0]
             case 'spgl1':
+                spgl1 = import_module("spgl1")
                 signal_norm = np.linalg.norm(sparse_signal)
-                recovered_coef,_,_,_ = spgl1(dict_mag_adj * dictionary, sparse_signal/signal_norm, sigma=sigma)
+                recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, sparse_signal/signal_norm, sigma=sigma)
             case 'mlp1':
+                NYFR_ML_Models = import_module("NYFR_ML_Models")
                 if not os.path.exists(model_file_path):
                     raise FileNotFoundError(f"File not found: {model_file_path}")
                 pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
                 init_guess = np.dot(pseudo,sparse_signal)
-                recovered_coef = model_prediction(init_guess, model_file_path)
+                recovered_coef = NYFR_ML_Models.model_prediction(init_guess, model_file_path)
 
         return recovered_coef
 

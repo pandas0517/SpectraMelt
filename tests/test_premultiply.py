@@ -10,7 +10,7 @@ if __name__ == '__main__':
     # Add the src directory to the system path
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
     from dotenv import load_dotenv
-    from NYFR_Test_Harness import NYFR_Test_Harness
+    from NYFR_Test_Harness_v2 import NYFR_Test_Harness
     
     load_dotenv()
 

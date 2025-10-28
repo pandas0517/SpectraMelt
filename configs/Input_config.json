@@ -4,6 +4,12 @@
         "time_range": [-0.004, 0.004],
         "sim_freq": 10000000
     },
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "DEBUG",
+        "console": true
+    },
     "adc_params": {
         "adc_samp_freq": 10000,
         "v_ref_range": [0, 5],

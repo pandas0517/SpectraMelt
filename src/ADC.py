@@ -47,7 +47,8 @@ class ADC:
     def set_adc_params(self, adc_params=None):
         if adc_params is None:
             adc_params = {
-                "store_internal_sigs": True,
+                "store_conditioned_sigs": True,
+                "store_sh_sigs": True,
                 "adc_samp_freq": 100,
                 "allow_clipping": True,
                 "v_ref_range": (0, 1),
@@ -383,11 +384,15 @@ class ADC:
         conditioned_signal = conditioned_signals.get('signal')
         conditioned_time = conditioned_signals.get('time')
         sh_signals = self._sample_and_hold(conditioned_signal, conditioned_time)
-        store_internal_sigs = self.adc_params.get('store_internal_sigs', True)
-        if store_internal_sigs:
+        
+        store_conditioned_sigs = self.adc_params.get('store_conditioned_sigs', True)
+        if store_conditioned_sigs:
             self.conditioned_signals = conditioned_signals
-            self.conditioned_time = conditioned_time
+            
+        store_sh_sigs = self.adc_params.get('store_sh_sigs', True)
+        if store_sh_sigs:
             self.sh_signals = sh_signals
+            
         return self._quantizer(sh_signals, conditioned_time) 
         
  

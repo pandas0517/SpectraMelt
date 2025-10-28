@@ -3,8 +3,15 @@
     "store_internal_sigs": true,
     "dict_type": "real",
     "create_dict": true,
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "DEBUG",
+        "console": true
+    },
     "adc_params": {
-        "store_internal_sigs": true,
+        "store_conditioned_sigs": true,
+        "store_sh_sigs": true,
         "adc_samp_freq": 10000,
         "allow_clipping": true,
         "v_ref_range": [0, 5],

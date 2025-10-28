@@ -1,5 +1,5 @@
 import numpy as np
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 
 class PulseGenerator:
     """
@@ -14,6 +14,7 @@ class PulseGenerator:
                  real_time=None,
                  pre_start_val=None,
                  pulse_params=None,
+                 log_params=None,
                  pulse_config_name=None,
                  config_file_path=None) -> None:
         """
@@ -45,7 +46,16 @@ class PulseGenerator:
             if pulse_params is None:
                 pulse_config_name = "Default_Pulse_Config"
             self.set_pulse_config_name(pulse_config_name)
-
+            self.set_log_params(log_params)
+        
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled')
+        if logging_enabled:
+            log_file = self.log_params.get('log_file')
+            level = self.log_params.get('level')
+            console = self.log_params.get('console')
+            self.logger = get_logger("PulseGenerator", log_file, level, console)
+        
         self.pulse_signal = None
         self.pre_start_val = pre_start_val
         if signal is not None and real_time is not None:
@@ -56,19 +66,31 @@ class PulseGenerator:
     # -------------------------------
 
     def set_config_from_file(self, config_file_path):
-        print("Loading Pulse Generator configuration from file: ", config_file_path)
-        pulse_config = load_settings(config_file_path)
+        print(f"Loading Pulse Generator configuration from file: {config_file_path}")
+        pulse_config = load_config_from_json(config_file_path)
+        log_params = pulse_config.get('log_params', None)
         pulse_params = pulse_config.get('pulse_params', None)
         pulse_config_name = pulse_config.get('config_name', "Pulse_Config_1")
         
         if pulse_params is None:
             pulse_config_name = "Default_Pulse_Config"
 
+        self.set_log_params(log_params)
         self.set_pulse_params(pulse_params)
         self.set_pulse_config_name(pulse_config_name)
 
     def set_pulse_config_name(self, pulse_config_name):
-        self.pulse_config_name = pulse_config_name  
+        self.pulse_config_name = pulse_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params
 
     def set_pulse_params(self, pulse_params=None):
         if pulse_params is None:

@@ -1,5 +1,11 @@
 {
     "config_name": "Recovery_Config_1",
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "DEBUG",
+        "console": true
+    },
     "recovery_params": {
         "method": "spgl1",
         "threshold_frac": 0.05,
