@@ -1,11 +1,12 @@
 import numpy as np
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 
 class ADC:
     def __init__(self,
                  input_signal=None,
                  real_time=None,
                  adc_params=None,
+                 log_params=None,
                  adc_config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
@@ -15,6 +16,18 @@ class ADC:
             if adc_params is None:
                 adc_config_name = "Default_ADC_Config"
             self.set_adc_config_name(adc_config_name)
+            
+            self.set_log_params(log_params)
+        
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
 
         self.conditioned_signals = None
         self.sh_signals = None
@@ -28,21 +41,30 @@ class ADC:
     # -------------------------------
     
     def set_config_from_file(self, config_file_path):
-        print("Loading adc configuration from file: ", config_file_path)
-        adc_config = load_settings(config_file_path)
+        adc_config = load_config_from_json(config_file_path)
         adc_params = adc_config.get('adc_params', None)
-        adc_config_name = adc_config.get('config_name', None)  
+        adc_config_name = adc_config.get('config_name', "ADC_Config_1")
+        log_params = adc_config.get('log_params', None) 
 
         if adc_params is None:
             adc_config_name = "Default_ADC_Config"
             
         self.set_adc_params(adc_params)
         self.set_adc_config_name(adc_config_name)
+        self.set_log_params(log_params)
         
-    def set_adc_config_name(self, adc_config_name=None):
-        if adc_config_name is None:
-            adc_config_name = "ADC_Config_1"
+    def set_adc_config_name(self, adc_config_name):
         self.adc_config_name = adc_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params 
 
     def set_adc_params(self, adc_params=None):
         if adc_params is None:
@@ -147,6 +169,7 @@ class ADC:
             skip_end = min(skip_end, n // 2)
 
         else:
+            self.logger.error("transient_mode must be 'auto', 'fixed', or 'none'")
             raise ValueError("transient_mode must be 'auto', 'fixed', or 'none'")
 
         # =================================================================
@@ -349,6 +372,7 @@ class ADC:
             elif non_linearity_mode == "hard_clip":
                 sampled_values = np.clip(sampled_values, v_min + threshold, v_max - threshold)
             else:
+                self.logger.error(f"Unknown non-linearity mode: {non_linearity_mode}")
                 raise ValueError(f"Unknown non-linearity mode: {non_linearity_mode}")
 
         # Initialize output
@@ -391,6 +415,7 @@ class ADC:
             
         store_sh_sigs = self.adc_params.get('store_sh_sigs', True)
         if store_sh_sigs:
+            self.logger.info("Storing Sample and Hold Signals")
             self.sh_signals = sh_signals
             
         return self._quantizer(sh_signals, conditioned_time) 
@@ -435,3 +460,6 @@ class ADC:
     
     def get_adc_config_name(self):
         return self.adc_config_name
+    
+    def get_log_params(self):
+        return self.log_params

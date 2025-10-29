@@ -2,12 +2,9 @@
 @author: pete
 '''
 if __name__ == '__main__':
-    import os
-    import sys
-    # Add the src directory to the system path
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+    from os import getenv
     from dotenv import load_dotenv
-    load_dotenv()
+    from util import get_logger
     from pathlib import Path
     from utility import load_settings
     from InputSignal import InputSignal
@@ -17,8 +14,12 @@ if __name__ == '__main__':
     from scipy.fftpack import fft, ifft
     import numpy as np
     import time
+    import atexit
 
-    input_conf_1 = load_settings(Path(os.getenv('INPUT_CONF')))
+    load_dotenv()
+    logger = get_logger(Path(__file__).stem)
+    
+    input_conf_1 = load_settings(Path(getenv('INPUT_CONF')))
     input_signal_1 = InputSignal(input_conf_1)
     real_time_1 = input_signal_1.get_analog_time()
     real_input_1 = input_signal_1.get_input_signal()
@@ -35,11 +36,11 @@ if __name__ == '__main__':
     sim_freq_2 = input_signal_2.get_analog_signals().get('sim_freq')
     real_input_freq_2 = np.fft.fftshift(np.abs(fft(real_input_2))) / (sim_freq_2*total_time_2)
     
-    nyfr_config_1 = load_settings(Path(os.getenv('NYFR_CONF')))
+    nyfr_config_1 = load_settings(Path(getenv('NYFR_CONF')))
     start = time.time()
     nyfr_1 = NYFR(real_input_1, real_time_1, nyfr_config_1)
     end = time.time()
-    print(f"NYFR Execution time with file config: {end - start:.6f} seconds")
+    logger.info(f"NYFR Execution time with file config: {end - start:.6f} seconds")
     
     wbf_signal_1 = nyfr_1.get_wbf_signal()
     wbf_params_1 = nyfr_1.get_wbf_params()
@@ -67,7 +68,7 @@ if __name__ == '__main__':
     dictionary_1 = nyfr_1.get_nyfr_dict()
     wbf_time_1 = nyfr_1.get_wbf_time()
     wbf_freq_1 = nyfr_1.get_wbf_freq()
-    recovery_config_path = Path(os.getenv('RECOVERY_CONF'))
+    recovery_config_path = Path(getenv('RECOVERY_CONF'))
     recovery_1 = Recovery(quantized_nyfr_1, dictionary_1, config_file_path=recovery_config_path)
     recovery_params_1 = recovery_1.get_recovery_params()
     recovery_method_1 = recovery_params_1.get('method')
@@ -78,7 +79,7 @@ if __name__ == '__main__':
     start = time.time()
     nyfr_2 = NYFR(real_input_2, real_time_2)
     end = time.time()
-    print(f"NYFR Execution time with default config: {end - start:.6f} seconds")
+    logger.info(f"NYFR Execution time with default config: {end - start:.6f} seconds")
     
     wbf_signal_2 = nyfr_2.get_wbf_signal()
     wbf_params_2 = nyfr_2.get_wbf_params()
@@ -263,3 +264,5 @@ if __name__ == '__main__':
     fig.suptitle("NYFR Recovered Signals")
     fig.tight_layout()
     plt.show()
+    
+    atexit.register(logger.info(""))

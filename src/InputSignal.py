@@ -1,4 +1,4 @@
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 import numpy as np
 
 class InputSignal:
@@ -8,11 +8,11 @@ class InputSignal:
                  adc_params=None,
                  env_params=None,
                  wave_params=None,
+                 log_params=None,
                  input_config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
-            print("Loading input configuration from file: ", config_file_path)
-            input_params = load_settings(config_file_path)
+            input_params = load_config_from_json(config_file_path)
         elif input_params is None:
             input_params = {}
             input_params['time_params'] = time_params
@@ -20,8 +20,13 @@ class InputSignal:
             input_params['env_params'] =env_params
             input_params['wave_params'] = wave_params
             input_params['config_name'] = input_config_name
+            input_params['log_params'] = log_params
         
         self.set_input_params(input_params)
+        
+        if config_file_path is not None and self.logger is not None:
+            self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
+                
         self.effects = None
         self.analog = self.create_analog()
         self.input_signal = self.create_input_signal()
@@ -37,6 +42,7 @@ class InputSignal:
         adc_params = input_params.get('adc_params', None)
         env_params = input_params.get('env_params', None)
         wave_params = input_params.get('wave_params', None)
+        log_params = input_params.get('log_params', None)
         input_config_name = input_params.get('config_name', None)
         if ( time_params is None and
                 adc_params is None and
@@ -45,15 +51,34 @@ class InputSignal:
             input_config_name = "Default_Input_Config"
         else:
             input_config_name = input_params.get('config_name', "NYFR_Config_1")
+            
+        self.logger = None
+        logging_enabled = log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = log_params.get('log_file', None)
+            level = log_params.get('level', "DEBUG")
+            console = log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
                 
         self.set_time_params(time_params)
         self.set_adc_params(adc_params)
         self.set_env_params(env_params)
         self.set_wave_params(wave_params)
+        self.set_log_params(log_params)
         self.set_input_config_name(input_config_name)
         
     def set_input_config_name(self, input_config_name):
         self.input_config_name = input_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params
 
     def set_time_params(self, time_params=None):
         if time_params is None:
@@ -266,6 +291,7 @@ class InputSignal:
                 effects['phase_inversion'].append(phase_inversion)
                 
         if store_internal_sigs:
+            self.logger.info("Storing Environmental Effects")
             self.effects = effects
             
         return signal
@@ -314,6 +340,9 @@ class InputSignal:
     
     def get_wave_params(self):
         return self.wave_params
+    
+    def get_log_params(self):
+        return self.log_params
     
     def get_effects(self):
         return self.effects

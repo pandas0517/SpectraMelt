@@ -1,7 +1,7 @@
 import numpy as np
 import os
 from importlib import import_module
-from utils import load_config_from_json
+from utils import load_config_from_json, get_logger
 
 class Recovery:
 
@@ -9,6 +9,7 @@ class Recovery:
                 signal=None,
                 dictionary=None,
                 recovery_params=None,
+                log_params=None,
                 recovery_config_name=None,
                 num_waves=1,
                 config_file_path=None) -> None:
@@ -19,7 +20,18 @@ class Recovery:
             if recovery_params is None:
                 recovery_config_name = "Default_Recovery_Config"
             self.set_recovery_config_name(recovery_config_name)
-
+            self.set_log_params(log_params)
+            
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
+                
         self.recovered_coefs = None
         if signal is not None and dictionary is not None:
             self.recovered_coefs = self.recover_signal(signal, dictionary, num_waves)
@@ -28,19 +40,30 @@ class Recovery:
     # -------------------------------
 
     def set_config_from_file(self, config_file_path):
-        print("Loading Recovery configuration from file: ", config_file_path)
         recovery_config = load_config_from_json(config_file_path)
         recovery_params = recovery_config.get('recovery_params', None)
+        log_params = recovery_config.get('log_params', None)
         recovery_config_name = recovery_config.get('config_name', "Recovery_Config_1")
         
         if recovery_params is None:
             recovery_config_name = "Default_Recovery_Config"
 
+        self.set_log_params(log_params)
         self.set_recovery_params(recovery_params)
         self.set_recovery_config_name(recovery_config_name)
 
     def set_recovery_config_name(self, recovery_config_name):
-        self.recovery_config_name = recovery_config_name  
+        self.recovery_config_name = recovery_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params 
 
     def set_recovery_params(self, recovery_params=None):
         if recovery_params is None:
@@ -130,6 +153,7 @@ class Recovery:
                         else:
                             sparse_signal = complex_sparse
                 else:
+                    self.logger.error("Dictionary is not complex")
                     raise ValueError("Dictionary is not complex")
             case 'real':
                 sparse_signal = complex_sparse.real
@@ -137,6 +161,7 @@ class Recovery:
                 if np.iscomplexobj(dictionary):
                         sparse_signal = complex_sparse.imag
                 else:
+                    self.logger.error("Dictionary is not complex")
                     raise ValueError("Dictionary is not complex")
             case 'mag':
                 sparse_signal = magnitude_sparse
@@ -144,6 +169,7 @@ class Recovery:
                 if np.iscomplexobj(dictionary):
                         sparse_signal = phase_sparse
                 else:
+                    self.logger.error("Dictionary is not complex")
                     raise ValueError("Dictionary is not complex")
 
         match recovery_method:
@@ -165,6 +191,8 @@ class Recovery:
                 pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
                 init_guess = np.dot(pseudo,sparse_signal)
                 recovered_coef = NYFR_ML_Models.model_prediction(init_guess, model_file_path)
+            case _:
+                self.logger.error(f"Recovery method {recovery_method} is not supported")
 
         return recovered_coef
 
@@ -180,3 +208,6 @@ class Recovery:
     
     def get_recovery_params(self):
         return self.recovery_params
+
+    def get_log_params(self):
+        return self.log_params

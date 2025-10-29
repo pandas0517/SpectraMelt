@@ -1,5 +1,5 @@
 import numpy as np
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 from scipy.linalg import dft
 from LowPassFilter import LowPassFilter
 from PulseGenerator import PulseGenerator
@@ -21,6 +21,7 @@ class NYFR:
                  wbf_params=None,
                  lpf_params=None,
                  adc_params=None,
+                 log_params=None,
                  dict_type="real",
                  nyfr_config_name="NYFR_Config_1",
                  store_internal_sigs=True,
@@ -32,8 +33,7 @@ class NYFR:
 
         """
         if config_file_path is not None:
-            print("Loading NYFR configuration from file: ", config_file_path)
-            nyfr_params = load_settings(config_file_path)
+            nyfr_params = load_config_from_json(config_file_path)
         elif nyfr_params is None:
             nyfr_params = {}
             nyfr_params['lo_params'] = lo_params
@@ -46,8 +46,12 @@ class NYFR:
             nyfr_params['store_internal_sigs'] = store_internal_sigs
             nyfr_params['dict_type'] = dict_type
             nyfr_params['create_dict'] = create_dict
+            nyfr_params['log_params'] = log_params
 
         self.set_nyfr_params(nyfr_params)
+        
+        if config_file_path is not None and self.logger is not None:
+            self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
         
         self.conditioned_signals = None
         self.wbf_signal = None
@@ -87,6 +91,7 @@ class NYFR:
         nyfr_config_name = nyfr_params.get('config_name', "Input_Config_1")
         dict_type = nyfr_params.get('dict_type', "real")
         create_dict = nyfr_params.get('create_dict', True)
+        log_params = nyfr_params.get('log_params', None)
         
         if ( lo_params is None and 
             adc_params is None and
@@ -96,7 +101,16 @@ class NYFR:
             mixer_params is None ):
             nyfr_config_name = "Default_Input_Config"
             
+        self.logger = None
+        logging_enabled = log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = log_params.get('log_file', None)
+            level = log_params.get('level', "DEBUG")
+            console = log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            
         self.set_store_internal_sigs(store_internal_sigs)
+        self.set_log_params(log_params)
         self.set_lo_params(lo_params)
         self.set_pulse_params(pulse_params)
         self.set_dict_type(dict_type)
@@ -110,12 +124,23 @@ class NYFR:
     def set_nyfr_config_name(self, nyfr_config_name):
         self.nyfr_config_name = nyfr_config_name
         
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params
+        
     def set_dict_type(self, dict_type):
         # Set Dictionary Type: Real or Complex
         dict_type = dict_type.lower()
 
         if dict_type not in ("real", "complex"):
-            raise ValueError(f"Invalid dict_type '{dict_type}'. Must be 'real' or 'complex'.")
+            self.logger.error(f"Invalid dict_type '{dict_type}'. Must be 'real' or 'complex'. Defaulting to 'real'")
+            dict_type = "real"
 
         self.dict_type = dict_type
         
@@ -305,6 +330,7 @@ class NYFR:
             self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
          
         if self.store_internal_sigs:
+            self.logger.info("Storing Internal Signals")
             self.wbf_signal = wbf_signal
             self.lo_signal = lo_signal
             self.pulse_signal = pulse_signal
@@ -398,3 +424,6 @@ class NYFR:
     
     def get_store_internal_sigs(self):
         return self.store_internal_sigs
+    
+    def get_log_params(self):
+        return self.log_params

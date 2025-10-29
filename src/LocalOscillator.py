@@ -1,5 +1,5 @@
 import numpy as np
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 
 class LocalOscillator:
     """
@@ -10,6 +10,7 @@ class LocalOscillator:
     def __init__(self,
                  real_time=None,
                  lo_params=None,
+                 log_params=None,
                  lo_config_name=None,
                  config_file_path=None) -> None:
         """
@@ -40,6 +41,18 @@ class LocalOscillator:
             if lo_params is None:
                 lo_config_name = "Default_LO_Config"
             self.set_lo_config_name(lo_config_name)
+            
+            self.set_log_params(log_params)
+        
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
 
         self.pre_start_lo = None
         self.phase_mod = None 
@@ -52,19 +65,30 @@ class LocalOscillator:
     # -------------------------------
        
     def set_config_from_file(self, config_file_path):
-        print("Loading Local Oscillator configuration from file: ", config_file_path)
-        lo_config = load_settings(config_file_path)
+        lo_config = load_config_from_json(config_file_path)
         lo_params = lo_config.get('lo_params', None)
         lo_config_name = lo_config.get('config_name', "LO_Config_1")
+        log_params = lo_config.get('log_params', None)
         
         if lo_params is None:
             lo_config_name = "Default_LO_Config"
         
         self.set_lo_params(lo_params)
         self.set_lo_config_name(lo_config_name)
+        self.set_log_params(log_params)
         
     def set_lo_config_name(self, lo_config_name):
-        self.lo_config_name = lo_config_name        
+        self.lo_config_name = lo_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params         
         
     def set_lo_params(self, lo_params=None):
         if lo_params is None:
@@ -178,3 +202,6 @@ class LocalOscillator:
     
     def get_pre_start_lo(self):
         return self.pre_start_lo
+    
+    def get_log_params(self):
+        return self.log_params

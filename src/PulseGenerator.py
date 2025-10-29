@@ -49,12 +49,14 @@ class PulseGenerator:
             self.set_log_params(log_params)
         
         self.logger = None
-        logging_enabled = self.log_params.get('enabled')
+        logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
-            log_file = self.log_params.get('log_file')
-            level = self.log_params.get('level')
-            console = self.log_params.get('console')
-            self.logger = get_logger("PulseGenerator", log_file, level, console)
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
         
         self.pulse_signal = None
         self.pre_start_val = pre_start_val
@@ -66,7 +68,6 @@ class PulseGenerator:
     # -------------------------------
 
     def set_config_from_file(self, config_file_path):
-        print(f"Loading Pulse Generator configuration from file: {config_file_path}")
         pulse_config = load_config_from_json(config_file_path)
         log_params = pulse_config.get('log_params', None)
         pulse_params = pulse_config.get('pulse_params', None)
@@ -227,6 +228,9 @@ class PulseGenerator:
 
     def get_pulse_params(self):
         return self.pulse_params
+    
+    def get_log_params(self):
+        return self.log_params
     
     def get_pre_start_val(self):
         return self.pre_start_val

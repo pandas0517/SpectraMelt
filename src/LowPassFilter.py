@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import signal
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 
 class LowPassFilter:
     """
@@ -14,6 +14,7 @@ class LowPassFilter:
                  signal_in=None,
                  real_time=None,
                  lpf_params=None,
+                 log_params=None,
                  lpf_config_name=None,
                  config_file_path=None) -> None:
         """
@@ -35,6 +36,18 @@ class LowPassFilter:
             if lpf_params is None:
                 lpf_config_name = "Default_LPF_Config"
             self.set_lpf_config_name(lpf_config_name)
+            
+            self.set_log_params(log_params)
+        
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
 
         self.signal_out = None
         if signal_in is not None and real_time is not None:
@@ -45,19 +58,30 @@ class LowPassFilter:
     # -------------------------------
 
     def set_config_from_file(self, config_file_path):
-        print("Loading LPF configuration from file:", config_file_path)
-        lpf_config = load_settings(config_file_path)
+        lpf_config = load_config_from_json(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)
         lpf_config_name = lpf_config.get('config_name', "LPF_Config_1")
+        log_params = lpf_config.get('log_params', None)
         
         if lpf_params is None:
             lpf_config_name = "Default_LPF_Config"
 
         self.set_lpf_params(lpf_params)
         self.set_lpf_config_name(lpf_config_name)
+        self.set_log_params(log_params)
 
     def set_lpf_config_name(self, lpf_config_name):
         self.lpf_config_name = lpf_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params 
 
     def set_lpf_params(self, lpf_params=None):
         if lpf_params is None:
@@ -111,6 +135,7 @@ class LowPassFilter:
         elif filter_type == "bessel":
             b, a = signal.bessel(order, wn, btype='low', norm='phase')
         else:
+            self.logger.error(f"Unsupported filter type: {filter_type}")
             raise ValueError(f"Unsupported filter type: {filter_type}")
 
         # --- Choose filtering method ---
@@ -125,6 +150,7 @@ class LowPassFilter:
             # Real world filtering
             filtered = signal.lfilter(b, a, signal_in)
         else:
+            self.logger.error("Filter mode must be either 'sos', 'filtfilt', or 'lfilter'")
             raise ValueError("Filter mode must be either 'sos', 'filtfilt', or 'lfilter'")
 
         # --- Optional noise injection ---
@@ -146,3 +172,6 @@ class LowPassFilter:
 
     def get_lpf_config_name(self):
         return self.lpf_config_name
+    
+    def get_log_params(self):
+        return self.log_params

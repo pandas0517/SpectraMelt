@@ -1,11 +1,12 @@
 import numpy as np
-from utility import load_settings
+from utils import load_config_from_json, get_logger
 
 class Mixer:
     def __init__(self,
                  rf_signal=None,
                  lo_signal=None,
                  mixer_params=None,
+                 log_params=None,
                  mixer_config_name=None,
                  config_file_path=None) -> None:
         """
@@ -31,6 +32,17 @@ class Mixer:
             if mixer_params is None:
                 mixer_config_name = "Default_Mixer_Config"
             self.set_mixer_config_name(mixer_config_name)
+            self.set_log_params(log_params)
+        
+        self.logger = None
+        logging_enabled = self.log_params.get('enabled', True)
+        if logging_enabled:
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "DEBUG")
+            console = self.log_params.get('console', True)
+            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
+            if config_file_path is not None:
+                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
         
         self.mixed_signal = None
         if rf_signal is not None and lo_signal is not None:
@@ -41,19 +53,30 @@ class Mixer:
     # -------------------------------
        
     def set_config_from_file(self, config_file_path):
-        print("Loading Mixer configuration from file: ", config_file_path)
-        mixer_config = load_settings(config_file_path)
+        mixer_config = load_config_from_json(config_file_path)
         mixer_params = mixer_config.get('mixer_params', None)
         mixer_config_name = mixer_config.get('config_name', "Mixer_Config_1")
+        log_params = mixer_config.get('log_params', None)
         
         if mixer_params is None:
             mixer_config_name = "Default_Mixer_Config"
 
+        self.set_log_params(log_params)
         self.set_mixer_params(mixer_params)
         self.set_mixer_config_name(mixer_config_name)
         
     def set_mixer_config_name(self, mixer_config_name):
-        self.mixer_config_name = mixer_config_name        
+        self.mixer_config_name = mixer_config_name
+        
+    def set_log_params(self, log_params=None):
+        if log_params is None:
+            log_params = {
+                "enabled": True,
+                "log_file": None,
+                "level": "DEBUG",
+                "console": True
+            }
+        self.log_params = log_params        
         
     def set_mixer_params(self, mixer_params=None):
         if mixer_params is None:
@@ -107,3 +130,6 @@ class Mixer:
     
     def get_mixer_params(self):
         return self.mixer_params
+    
+    def get_log_params(self):
+        return self.log_params
