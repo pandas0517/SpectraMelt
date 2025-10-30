@@ -10,5 +10,8 @@ setup(
         "scipy",
         "spgl1"
     ],
+    extras_require={
+        "ml": ["tensorflow", "keras"]  # only needed for ML features
+    },
     python_requires=">=3.8",
 )
