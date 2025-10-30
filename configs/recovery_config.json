@@ -3,7 +3,7 @@
     "log_params": {
         "enabled": true,
         "log_file": null,
-        "level": "DEBUG",
+        "level": "INFO",
         "console": true
     },
     "recovery_params": {

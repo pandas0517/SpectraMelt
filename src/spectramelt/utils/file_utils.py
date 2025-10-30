@@ -1,8 +1,8 @@
 from pathlib import Path
-from logging_utils import get_logger
+from .logging_utils import get_logger
 
 
-def replace_file(old_filepath, new_filepath, log_file=None, level="DEBUG", console=True):
+def replace_file(old_filepath, new_filepath, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     old_path = Path(old_filepath)
@@ -20,7 +20,7 @@ def replace_file(old_filepath, new_filepath, log_file=None, level="DEBUG", conso
         logger.exception(f"An error occurred while replacing file: {e}")
 
 
-def replace_extension(file_path, new_extension, log_file=None, level="DEBUG", console=True):
+def replace_extension(file_path, new_extension, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     new_path = Path(file_path).with_suffix(f".{new_extension}")
@@ -28,7 +28,7 @@ def replace_extension(file_path, new_extension, log_file=None, level="DEBUG", co
     return str(new_path)
 
 
-def get_all_file_names(directory, log_file=None, level="DEBUG", console=True):
+def get_all_file_names(directory, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     directory = Path(directory)
@@ -37,7 +37,7 @@ def get_all_file_names(directory, log_file=None, level="DEBUG", console=True):
     return files
 
 
-def get_all_file_paths(directory, log_file=None, level="DEBUG", console=True):
+def get_all_file_paths(directory, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     directory = Path(directory)
@@ -46,7 +46,7 @@ def get_all_file_paths(directory, log_file=None, level="DEBUG", console=True):
     return files
 
 
-def get_all_sub_dirs(directory, log_file=None, level="DEBUG", console=True):
+def get_all_sub_dirs(directory, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     directory = Path(directory)
@@ -55,7 +55,7 @@ def get_all_sub_dirs(directory, log_file=None, level="DEBUG", console=True):
     return sub_dirs
 
 
-def get_file_sub_dirs(input_file_path, log_file=None, level="DEBUG", console=True):
+def get_file_sub_dirs(input_file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     path = Path(input_file_path)
@@ -68,7 +68,7 @@ def get_file_sub_dirs(input_file_path, log_file=None, level="DEBUG", console=Tru
     return result
 
 
-def delete_lines_with_string(file_path, target_string, log_file=None, level="DEBUG", console=True):
+def delete_lines_with_string(file_path, target_string, log_file=None, level="INFO", console=True):
     logger = get_logger("file_utils", log_file, level, console)
 
     file_path = Path(file_path)

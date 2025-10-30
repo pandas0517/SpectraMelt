@@ -1,11 +1,11 @@
 import numpy as np
-from utils import load_config_from_json, get_logger
+from .utils import load_config_from_json, get_logger
 from scipy.linalg import dft
-from LowPassFilter import LowPassFilter
-from PulseGenerator import PulseGenerator
-from LocalOscillator import LocalOscillator
-from ADC import ADC
-from Mixer import Mixer
+from .LowPassFilter import LowPassFilter
+from .PulseGenerator import PulseGenerator
+from .LocalOscillator import LocalOscillator
+from .ADC import ADC
+from .Mixer import Mixer
 
 class NYFR:
     """
@@ -100,17 +100,17 @@ class NYFR:
             wbf_params is None and
             mixer_params is None ):
             nyfr_config_name = "Default_Input_Config"
-            
+        
+        self.set_log_params(log_params)    
         self.logger = None
-        logging_enabled = log_params.get('enabled', True)
+        logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
-            log_file = log_params.get('log_file', None)
-            level = log_params.get('level', "DEBUG")
-            console = log_params.get('console', True)
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "INFO")
+            console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
             
         self.set_store_internal_sigs(store_internal_sigs)
-        self.set_log_params(log_params)
         self.set_lo_params(lo_params)
         self.set_pulse_params(pulse_params)
         self.set_dict_type(dict_type)
@@ -129,7 +129,7 @@ class NYFR:
             log_params = {
                 "enabled": True,
                 "log_file": None,
-                "level": "DEBUG",
+                "level": "INFO",
                 "console": True
             }
         self.log_params = log_params

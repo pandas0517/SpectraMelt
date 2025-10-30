@@ -22,14 +22,14 @@ class ColorFormatter(logging.Formatter):
         return f"{log_color}{message}{RESET_COLOR}"
 
 # Base directory and default log file
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_LOG_FILE = BASE_DIR / "app.log"
 
 
 def get_logger(
     name: str = "file_utils",
     log_file: Optional[Path | str] = None,
-    level: str = "DEBUG",
+    level: str = "INFO",
     console: bool = True
 ) -> logging.Logger:
     """Returns a logger object. If log_file is None, uses the default log path.

@@ -1,5 +1,5 @@
 import numpy as np
-from utils import load_config_from_json, get_logger
+from .utils import load_config_from_json, get_logger
 
 class ADC:
     def __init__(self,

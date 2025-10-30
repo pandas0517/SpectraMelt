@@ -4,12 +4,11 @@
 if __name__ == '__main__':
     from os import getenv
     from dotenv import load_dotenv
-    from util import get_logger
+    from spectramelt.utils import get_logger, load_config_from_json
     from pathlib import Path
-    from utility import load_settings
-    from InputSignal import InputSignal
-    from NYFR import NYFR
-    from Recovery import Recovery
+    from spectramelt.InputSignal import InputSignal
+    from spectramelt.NYFR import NYFR
+    from spectramelt.Recovery import Recovery
     import matplotlib.pyplot as plt
     from scipy.fftpack import fft, ifft
     import numpy as np
@@ -19,7 +18,7 @@ if __name__ == '__main__':
     load_dotenv()
     logger = get_logger(Path(__file__).stem)
     
-    input_conf_1 = load_settings(Path(getenv('INPUT_CONF')))
+    input_conf_1 = load_config_from_json(Path(getenv('INPUT_CONF')))
     input_signal_1 = InputSignal(input_conf_1)
     real_time_1 = input_signal_1.get_analog_time()
     real_input_1 = input_signal_1.get_input_signal()
@@ -36,7 +35,7 @@ if __name__ == '__main__':
     sim_freq_2 = input_signal_2.get_analog_signals().get('sim_freq')
     real_input_freq_2 = np.fft.fftshift(np.abs(fft(real_input_2))) / (sim_freq_2*total_time_2)
     
-    nyfr_config_1 = load_settings(Path(getenv('NYFR_CONF')))
+    nyfr_config_1 = load_config_from_json(Path(getenv('NYFR_CONF')))
     start = time.time()
     nyfr_1 = NYFR(real_input_1, real_time_1, nyfr_config_1)
     end = time.time()
@@ -255,7 +254,7 @@ if __name__ == '__main__':
     axes[0,1].set_title(f"Frequency (File)\nRecovery Method: {recovery_method_1}")
     axes[0,1].set_ylim(0, 1)
     axes[0,1].set_xlim(-50000, 50000)
-    axes[1,0].plot(wbf_time_2, recovered_signal_2)
+    axes[1,0].plot(real_freq_2, real_input_freq_2)
     axes[1,0].set_title(f"Time (Default)")
     axes[1,0].set_xlim(0, 0.04)
     axes[1,1].plot(wbf_freq_2, recovered_sig_freq_2)
@@ -265,4 +264,4 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.show()
     
-    atexit.register(logger.info(""))
+    atexit.register(logger.info, "Completed Test\n")

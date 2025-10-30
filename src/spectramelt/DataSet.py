@@ -1,4 +1,4 @@
-from utility import load_settings
+from .utils import load_config_from_json
 import warnings
 
 class DataSet:
@@ -17,7 +17,7 @@ class DataSet:
         """
         if config_file_path is not None:
             print("Loading NYFR configuration from file: ", config_file_path)
-            dataset_params = load_settings(config_file_path)
+            dataset_params = load_config_from_json(config_file_path)
         elif dataset_params is None:
             dataset_params = {}
             dataset_params['filenames'] = filenames

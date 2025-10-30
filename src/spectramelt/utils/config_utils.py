@@ -1,12 +1,10 @@
 import json
 from pathlib import Path
-from logging_utils import get_logger
+from .logging_utils import get_logger
 
 
-def load_config_from_json(file_path, log_file=None, level="DEBUG", console=True):
-    logger = None
-    if log_file is not None:
-        logger = get_logger("config_utils", log_file, level, console)
+def load_config_from_json(file_path, log_file=None, level="INFO", console=True):
+    logger = get_logger("config_utils", log_file, level, console)
         
     file_path = Path(file_path)
     try:
@@ -31,7 +29,7 @@ def load_config_from_json(file_path, log_file=None, level="DEBUG", console=True)
             logger.error(f"Expected a file but found a directory: {file_path}")
 
 
-def create_input_set_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_input_set_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     file_path = Path(file_path)
     input_set = {}
@@ -72,7 +70,7 @@ def create_input_set_json(file_path, log_file=None, level="DEBUG", console=True)
         logger.exception(f"Failed to save input set JSON to {file_path}: {e}")
 
 
-def create_filename_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_filename_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     file_path = Path(file_path)
     filenames = {}
@@ -156,7 +154,7 @@ def create_filename_json(file_path, log_file=None, level="DEBUG", console=True):
     except Exception as e:
         logger.exception(f"Failed to create filename JSON at {file_path}: {e}")
 
-def create_directories_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_directories_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     directories = {}
 
@@ -222,7 +220,7 @@ def create_directories_json(file_path, log_file=None, level="DEBUG", console=Tru
         logger.exception(f"Failed to save directory JSON to {file_path}: {e}")
 
 
-def create_system_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_system_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     system_config = {
         "system_params": {},
@@ -288,7 +286,7 @@ def create_system_json(file_path, log_file=None, level="DEBUG", console=True):
         logger.exception(f"Failed to save system JSON to {file_path}: {e}")
 
 
-def create_training_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_training_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     training_config = {}
     training_config["processing_system"] = input("Enter processing system: ")
@@ -330,7 +328,7 @@ def create_training_json(file_path, log_file=None, level="DEBUG", console=True):
         logger.exception(f"Failed to save training JSON to {file_path}: {e}")
 
 
-def create_wave_json(file_path, log_file=None, level="DEBUG", console=True):
+def create_wave_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
     wave_config = {}
     wave_params = []

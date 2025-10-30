@@ -1,5 +1,5 @@
 import numpy as np
-from utils import load_config_from_json, get_logger
+from .utils import load_config_from_json, get_logger
 
 class LocalOscillator:
     """
@@ -41,14 +41,13 @@ class LocalOscillator:
             if lo_params is None:
                 lo_config_name = "Default_LO_Config"
             self.set_lo_config_name(lo_config_name)
-            
             self.set_log_params(log_params)
         
         self.logger = None
         logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
             log_file = self.log_params.get('log_file', None)
-            level = self.log_params.get('level', "DEBUG")
+            level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
             if config_file_path is not None:
@@ -85,7 +84,7 @@ class LocalOscillator:
             log_params = {
                 "enabled": True,
                 "log_file": None,
-                "level": "DEBUG",
+                "level": "INFO",
                 "console": True
             }
         self.log_params = log_params         

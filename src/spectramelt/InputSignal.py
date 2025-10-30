@@ -1,4 +1,4 @@
-from utils import load_config_from_json, get_logger
+from .utils import load_config_from_json, get_logger
 import numpy as np
 
 class InputSignal:
@@ -51,20 +51,20 @@ class InputSignal:
             input_config_name = "Default_Input_Config"
         else:
             input_config_name = input_params.get('config_name', "NYFR_Config_1")
-            
+        
+        self.set_log_params(log_params)    
         self.logger = None
-        logging_enabled = log_params.get('enabled', True)
+        logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
-            log_file = log_params.get('log_file', None)
-            level = log_params.get('level', "DEBUG")
-            console = log_params.get('console', True)
+            log_file = self.log_params.get('log_file', None)
+            level = self.log_params.get('level', "INFO")
+            console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
                 
         self.set_time_params(time_params)
         self.set_adc_params(adc_params)
         self.set_env_params(env_params)
         self.set_wave_params(wave_params)
-        self.set_log_params(log_params)
         self.set_input_config_name(input_config_name)
         
     def set_input_config_name(self, input_config_name):
@@ -75,7 +75,7 @@ class InputSignal:
             log_params = {
                 "enabled": True,
                 "log_file": None,
-                "level": "DEBUG",
+                "level": "INFO",
                 "console": True
             }
         self.log_params = log_params
