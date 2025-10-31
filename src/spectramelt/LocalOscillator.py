@@ -11,7 +11,7 @@ class LocalOscillator:
                  real_time=None,
                  lo_params=None,
                  log_params=None,
-                 lo_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -39,8 +39,8 @@ class LocalOscillator:
         else:
             self.set_lo_params(lo_params)
             if lo_params is None:
-                lo_config_name = "Default_LO_Config"
-            self.set_lo_config_name(lo_config_name)
+                config_name = "Default_LO_Config"
+            self.set_config_name(config_name)
             self.set_log_params(log_params)
         
         self.logger = None
@@ -66,18 +66,18 @@ class LocalOscillator:
     def set_config_from_file(self, config_file_path):
         lo_config = load_config_from_json(config_file_path)
         lo_params = lo_config.get('lo_params', None)
-        lo_config_name = lo_config.get('config_name', "LO_Config_1")
+        config_name = lo_config.get('config_name', "LO_Config_1")
         log_params = lo_config.get('log_params', None)
         
         if lo_params is None:
-            lo_config_name = "Default_LO_Config"
+            config_name = "Default_LO_Config"
         
         self.set_lo_params(lo_params)
-        self.set_lo_config_name(lo_config_name)
+        self.set_config_name(config_name)
         self.set_log_params(log_params)
         
-    def set_lo_config_name(self, lo_config_name):
-        self.lo_config_name = lo_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -187,8 +187,8 @@ class LocalOscillator:
     # Getters
     # -------------------------------
     
-    def get_lo_config_name(self):
-        return self.lo_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_lo_signal(self):
         return self.signal

@@ -21,8 +21,16 @@ class ColorFormatter(logging.Formatter):
         message = super().format(record)
         return f"{log_color}{message}{RESET_COLOR}"
 
+def find_project_root(marker_files=("pyproject.toml", "setup.py", ".git")):
+    path = Path(__file__).resolve()
+    for parent in path.parents:
+        if any((parent / marker).exists() for marker in marker_files):
+            return parent
+    return Path.cwd()  # fallback
+
 # Base directory and default log file
-BASE_DIR = Path(__file__).resolve().parents[3]
+# BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = find_project_root()
 DEFAULT_LOG_FILE = BASE_DIR / "app.log"
 
 

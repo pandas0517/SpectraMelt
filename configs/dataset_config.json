@@ -1,0 +1,56 @@
+{
+    "config_name": "Dataset_Config_1",
+    "inputset_params": {
+        "num_sigs": 5000,
+        "tones_per_sig": [
+            1, 2, 3, 4, 5,
+            6, 7, 8, 9, 10
+        ],
+        "freq_range": [1, 1000],
+        "amp_range": [0.1, 1.0],
+        "phase_random": true
+    },
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "INFO",
+        "console": true
+    },
+    "directories": {
+        "dataset_dir": "Data_Set",
+        "paths": [
+            "inputs",
+            "outputs",
+            "recovery",
+            "ml_models"
+        ],
+        "base": {
+            "inputs": null,
+            "outputs": null,
+            "recovery": null,
+            "ml_models": null
+        },
+        "tail": {
+            "inputs": "Inputs",
+            "outputs": "Outputs",
+            "recovery": "Recovery",
+            "ml_models": "ML_Models"            
+        }
+    },
+    "filenames": {
+        "real_time": "real_time.npy",
+        "real_freq": "real_freq.npy",
+        "wbf_time": "wbf_time.npy",
+        "wbf_freq": "wbf_freq.npy",
+        "samp_time": "sampled_time.npy",
+        "samp_freq": "sampled_freq.npy",
+        "input_signal": "signal.npy",
+        "input_config": "input_config.json",
+        "output_signal": "signal.npy",
+        "DUT_config": "DUT_config.json",
+        "dictionary": "dictionary.npy",
+        "recovered": "recovered.npy",
+        "recovery_config": "recovery_config.json",
+        "ml_model": "ml_model.keras"
+    }
+}

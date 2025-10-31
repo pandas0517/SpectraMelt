@@ -15,7 +15,7 @@ class LowPassFilter:
                  real_time=None,
                  lpf_params=None,
                  log_params=None,
-                 lpf_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -24,7 +24,7 @@ class LowPassFilter:
             Input signal to be filtered.
         lpf_params : dict, optional
             Dictionary of filter parameters.
-        lpf_config_name : str, optional
+        config_name : str, optional
             Name of the filter configuration.
         config_file_path : Path or str, optional
             Path to configuration file containing filter settings.
@@ -34,8 +34,8 @@ class LowPassFilter:
         else:
             self.set_lpf_params(lpf_params)
             if lpf_params is None:
-                lpf_config_name = "Default_LPF_Config"
-            self.set_lpf_config_name(lpf_config_name)
+                config_name = "Default_LPF_Config"
+            self.set_config_name(config_name)
             self.set_log_params(log_params)
         
         self.logger = None
@@ -59,18 +59,18 @@ class LowPassFilter:
     def set_config_from_file(self, config_file_path):
         lpf_config = load_config_from_json(config_file_path)
         lpf_params = lpf_config.get('lpf_params', None)
-        lpf_config_name = lpf_config.get('config_name', "LPF_Config_1")
+        config_name = lpf_config.get('config_name', "LPF_Config_1")
         log_params = lpf_config.get('log_params', None)
         
         if lpf_params is None:
-            lpf_config_name = "Default_LPF_Config"
+            config_name = "Default_LPF_Config"
 
         self.set_lpf_params(lpf_params)
-        self.set_lpf_config_name(lpf_config_name)
+        self.set_config_name(config_name)
         self.set_log_params(log_params)
 
-    def set_lpf_config_name(self, lpf_config_name):
-        self.lpf_config_name = lpf_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -169,8 +169,8 @@ class LowPassFilter:
     def get_signal_out(self):
         return self.signal_out
 
-    def get_lpf_config_name(self):
-        return self.lpf_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_log_params(self):
         return self.log_params

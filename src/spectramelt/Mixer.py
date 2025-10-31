@@ -7,7 +7,7 @@ class Mixer:
                  lo_signal=None,
                  mixer_params=None,
                  log_params=None,
-                 mixer_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         """
         Simulates a realistic RF/baseband mixer.
@@ -30,8 +30,8 @@ class Mixer:
         else:
             self.set_mixer_params(mixer_params)
             if mixer_params is None:
-                mixer_config_name = "Default_Mixer_Config"
-            self.set_mixer_config_name(mixer_config_name)
+                config_name = "Default_Mixer_Config"
+            self.set_config_name(config_name)
             self.set_log_params(log_params)
         
         self.logger = None
@@ -55,18 +55,18 @@ class Mixer:
     def set_config_from_file(self, config_file_path):
         mixer_config = load_config_from_json(config_file_path)
         mixer_params = mixer_config.get('mixer_params', None)
-        mixer_config_name = mixer_config.get('config_name', "Mixer_Config_1")
+        config_name = mixer_config.get('config_name', "Mixer_Config_1")
         log_params = mixer_config.get('log_params', None)
         
         if mixer_params is None:
-            mixer_config_name = "Default_Mixer_Config"
+            config_name = "Default_Mixer_Config"
 
         self.set_log_params(log_params)
         self.set_mixer_params(mixer_params)
-        self.set_mixer_config_name(mixer_config_name)
+        self.set_config_name(config_name)
         
-    def set_mixer_config_name(self, mixer_config_name):
-        self.mixer_config_name = mixer_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -122,8 +122,8 @@ class Mixer:
     # Getters
     # -------------------------------
     
-    def get_mixer_config_name(self):
-        return self.mixer_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_mixed_signal(self):
         return self.mixed_signal

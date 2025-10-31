@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from .logging_utils import get_logger
-
+from typing import Any, Dict, Union
 
 def load_config_from_json(file_path, log_file=None, level="INFO", console=True):
     logger = get_logger("config_utils", log_file, level, console)
@@ -27,6 +27,25 @@ def load_config_from_json(file_path, log_file=None, level="INFO", console=True):
             raise IsADirectoryError(f"Expected a file but found a directory: {file_path}")
         else:
             logger.error(f"Expected a file but found a directory: {file_path}")
+            
+
+def save_to_json(data: Dict[str, Any], filename: Union[str, Path], indent: int = 4):
+    """
+    Save a dictionary to a JSON file.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary to save.
+    filename : str or Path
+        Path to the output JSON file.
+    indent : int
+        Number of spaces for JSON indentation (default=4).
+    """
+    file_path = Path(filename)
+    file_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure parent directories exist
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=indent)
 
 
 def create_input_set_json(file_path, log_file=None, level="INFO", console=True):

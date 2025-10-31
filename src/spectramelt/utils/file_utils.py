@@ -79,3 +79,34 @@ def delete_lines_with_string(file_path, target_string, log_file=None, level="INF
         logger.info(f"Lines containing '{target_string}' have been deleted in {file_path}")
     except Exception as e:
         logger.exception(f"An error occurred while deleting lines in {file_path}: {e}")
+        
+
+def build_flat_paths(directories):
+    """
+    Build full paths from nested 'base' and 'tail' dicts and return
+    a flat dictionary where keys are dot-separated path strings and
+    values are Path objects.
+    """
+    dataset_dir = directories["dataset_dir"]
+
+    flat_paths = {}
+
+    def recursive_build(keys, base_dict, tail_dict, parent_key=""):
+        for k in base_dict:
+            new_parent_key = f"{parent_key}.{k}" if parent_key else k
+            base_value = base_dict[k]
+            tail_value = (
+                Path(*tail_dict[k]) if isinstance(tail_dict.get(k), list)
+                else Path(tail_dict[k]) if isinstance(tail_dict.get(k), str)
+                else None
+            ) if tail_dict else None
+
+            if isinstance(base_value, dict):
+                recursive_build(keys + [k], base_value, tail_value, new_parent_key)
+            else:
+                # Build full path
+                full_path = Path(base_value) / dataset_dir / (tail_value if tail_value else "")
+                flat_paths[new_parent_key] = full_path
+
+    recursive_build([], directories["base"], directories["tail"])
+    return flat_paths

@@ -7,15 +7,15 @@ class ADC:
                  real_time=None,
                  adc_params=None,
                  log_params=None,
-                 adc_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
             self.set_config_from_file(config_file_path)
         else:
             self.set_adc_params(adc_params)
             if adc_params is None:
-                adc_config_name = "Default_ADC_Config"
-            self.set_adc_config_name(adc_config_name)
+                config_name = "Default_ADC_Config"
+            self.set_config_name(config_name)
             
             self.set_log_params(log_params)
         
@@ -43,18 +43,18 @@ class ADC:
     def set_config_from_file(self, config_file_path):
         adc_config = load_config_from_json(config_file_path)
         adc_params = adc_config.get('adc_params', None)
-        adc_config_name = adc_config.get('config_name', "ADC_Config_1")
+        config_name = adc_config.get('config_name', "ADC_Config_1")
         log_params = adc_config.get('log_params', None) 
 
         if adc_params is None:
-            adc_config_name = "Default_ADC_Config"
+            config_name = "Default_ADC_Config"
             
         self.set_adc_params(adc_params)
-        self.set_adc_config_name(adc_config_name)
+        self.set_config_name(config_name)
         self.set_log_params(log_params)
         
-    def set_adc_config_name(self, adc_config_name):
-        self.adc_config_name = adc_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -458,8 +458,8 @@ class ADC:
     def get_adc_indices(self):
         return self.quantizer_signals.get('adc_indices') if self.quantizer_signals else None
     
-    def get_adc_config_name(self):
-        return self.adc_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_log_params(self):
         return self.log_params

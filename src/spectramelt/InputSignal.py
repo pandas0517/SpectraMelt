@@ -9,7 +9,7 @@ class InputSignal:
                  env_params=None,
                  wave_params=None,
                  log_params=None,
-                 input_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
             input_params = load_config_from_json(config_file_path)
@@ -19,7 +19,7 @@ class InputSignal:
             input_params['adc_params'] = adc_params
             input_params['env_params'] =env_params
             input_params['wave_params'] = wave_params
-            input_params['config_name'] = input_config_name
+            input_params['config_name'] = config_name
             input_params['log_params'] = log_params
         
         self.set_input_params(input_params)
@@ -43,14 +43,14 @@ class InputSignal:
         env_params = input_params.get('env_params', None)
         wave_params = input_params.get('wave_params', None)
         log_params = input_params.get('log_params', None)
-        input_config_name = input_params.get('config_name', None)
+        config_name = input_params.get('config_name', None)
         if ( time_params is None and
                 adc_params is None and
                 env_params is None and
                 wave_params is None ):
-            input_config_name = "Default_Input_Config"
+            config_name = "Default_Input_Config"
         else:
-            input_config_name = input_params.get('config_name', "NYFR_Config_1")
+            config_name = input_params.get('config_name', "Input_Config_1")
         
         self.set_log_params(log_params)    
         self.logger = None
@@ -65,10 +65,10 @@ class InputSignal:
         self.set_adc_params(adc_params)
         self.set_env_params(env_params)
         self.set_wave_params(wave_params)
-        self.set_input_config_name(input_config_name)
+        self.set_config_name(config_name)
         
-    def set_input_config_name(self, input_config_name):
-        self.input_config_name = input_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -303,8 +303,8 @@ class InputSignal:
     def get_input_signal(self):
         return self.input_signal
     
-    def get_input_config_name(self):
-        return self.input_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_analog_signals(self):
         return self.analog

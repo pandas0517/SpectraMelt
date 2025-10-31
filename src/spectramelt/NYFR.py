@@ -23,7 +23,7 @@ class NYFR:
                  adc_params=None,
                  log_params=None,
                  dict_type="real",
-                 nyfr_config_name="NYFR_Config_1",
+                 config_name="NYFR_Config_1",
                  store_internal_sigs=True,
                  create_dict=True,
                  config_file_path=None) -> None:
@@ -42,7 +42,7 @@ class NYFR:
             nyfr_params['lpf_params'] = lpf_params
             nyfr_params['wbf_params'] = wbf_params
             nyfr_params['mixer_params'] = mixer_params
-            nyfr_params['config_name'] = nyfr_config_name
+            nyfr_params['config_name'] = config_name
             nyfr_params['store_internal_sigs'] = store_internal_sigs
             nyfr_params['dict_type'] = dict_type
             nyfr_params['create_dict'] = create_dict
@@ -88,7 +88,7 @@ class NYFR:
         lpf_params = nyfr_params.get('lpf_params', None)
         wbf_params = nyfr_params.get('wbf_params', None)
         mixer_params = nyfr_params.get('mixer_params', None)
-        nyfr_config_name = nyfr_params.get('config_name', "Input_Config_1")
+        config_name = nyfr_params.get('config_name', "Input_Config_1")
         dict_type = nyfr_params.get('dict_type', "real")
         create_dict = nyfr_params.get('create_dict', True)
         log_params = nyfr_params.get('log_params', None)
@@ -99,7 +99,7 @@ class NYFR:
             lpf_params is None and
             wbf_params is None and
             mixer_params is None ):
-            nyfr_config_name = "Default_Input_Config"
+            config_name = "Default_Input_Config"
         
         self.set_log_params(log_params)    
         self.logger = None
@@ -115,14 +115,14 @@ class NYFR:
         self.set_pulse_params(pulse_params)
         self.set_dict_type(dict_type)
         self.set_adc_params(adc_params)
-        self.set_nyfr_config_name(nyfr_config_name)
+        self.set_config_name(config_name)
         self.set_lpf_params(lpf_params)
         self.set_wbf_params(wbf_params)
         self.set_mixer_params(mixer_params)
         self.set_create_dict(create_dict)
         
-    def set_nyfr_config_name(self, nyfr_config_name):
-        self.nyfr_config_name = nyfr_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -419,8 +419,8 @@ class NYFR:
     def get_dict_type(self):
         return self.dict_type
     
-    def get_nyfr_config_name(self):
-        return self.nyfr_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_store_internal_sigs(self):
         return self.store_internal_sigs

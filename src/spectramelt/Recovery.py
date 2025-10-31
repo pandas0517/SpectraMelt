@@ -10,7 +10,7 @@ class Recovery:
                 dictionary=None,
                 recovery_params=None,
                 log_params=None,
-                recovery_config_name=None,
+                config_name=None,
                 num_waves=1,
                 config_file_path=None) -> None:
         if config_file_path is not None:
@@ -18,8 +18,8 @@ class Recovery:
         else:
             self.set_recovery_params(recovery_params)
             if recovery_params is None:
-                recovery_config_name = "Default_Recovery_Config"
-            self.set_recovery_config_name(recovery_config_name)
+                config_name = "Default_Recovery_Config"
+            self.set_config_name(config_name)
             self.set_log_params(log_params)
             
         self.logger = None
@@ -43,17 +43,17 @@ class Recovery:
         recovery_config = load_config_from_json(config_file_path)
         recovery_params = recovery_config.get('recovery_params', None)
         log_params = recovery_config.get('log_params', None)
-        recovery_config_name = recovery_config.get('config_name', "Recovery_Config_1")
+        config_name = recovery_config.get('config_name', "Recovery_Config_1")
         
         if recovery_params is None:
-            recovery_config_name = "Default_Recovery_Config"
+            config_name = "Default_Recovery_Config"
 
         self.set_log_params(log_params)
         self.set_recovery_params(recovery_params)
-        self.set_recovery_config_name(recovery_config_name)
+        self.set_config_name(config_name)
 
-    def set_recovery_config_name(self, recovery_config_name):
-        self.recovery_config_name = recovery_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -200,8 +200,8 @@ class Recovery:
     # Getters
     # -------------------------------
 
-    def get_recovery_config_name(self):
-        return self.recovery_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_recovered_coefs(self):
         return self.recovered_coefs

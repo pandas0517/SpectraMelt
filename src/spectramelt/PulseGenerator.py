@@ -15,7 +15,7 @@ class PulseGenerator:
                  pre_start_val=None,
                  pulse_params=None,
                  log_params=None,
-                 pulse_config_name=None,
+                 config_name=None,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -44,8 +44,8 @@ class PulseGenerator:
         else:
             self.set_pulse_params(pulse_params)
             if pulse_params is None:
-                pulse_config_name = "Default_Pulse_Config"
-            self.set_pulse_config_name(pulse_config_name)
+                config_name = "Default_Pulse_Config"
+            self.set_config_name(config_name)
             self.set_log_params(log_params)
         
         self.logger = None
@@ -71,17 +71,17 @@ class PulseGenerator:
         pulse_config = load_config_from_json(config_file_path)
         log_params = pulse_config.get('log_params', None)
         pulse_params = pulse_config.get('pulse_params', None)
-        pulse_config_name = pulse_config.get('config_name', "Pulse_Config_1")
+        config_name = pulse_config.get('config_name', "Pulse_Config_1")
         
         if pulse_params is None:
-            pulse_config_name = "Default_Pulse_Config"
+            config_name = "Default_Pulse_Config"
 
         self.set_log_params(log_params)
         self.set_pulse_params(pulse_params)
-        self.set_pulse_config_name(pulse_config_name)
+        self.set_config_name(config_name)
 
-    def set_pulse_config_name(self, pulse_config_name):
-        self.pulse_config_name = pulse_config_name
+    def set_config_name(self, config_name):
+        self.config_name = config_name
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -220,8 +220,8 @@ class PulseGenerator:
     # Getters
     # -------------------------------
     
-    def get_pulse_config_name(self):
-        return self.pulse_config_name
+    def get_config_name(self):
+        return self.config_name
     
     def get_pulse_signal(self):
         return self.pulse_signal
