@@ -76,6 +76,11 @@ if __name__ == '__main__':
     recovered_signal_1 = ifft(recovered_freq_1)
 
     start = time.time()
+    premultiply_signal_1 = np.dot(np.linalg.pinv(dictionary_1), quantized_nyfr_1)
+    end = time.time()
+    logger.info(f"Premultiplication Time: {end - start:.6f} seconds")
+
+    start = time.time()
     nyfr_2 = NYFR(real_input_2, real_time_2)
     end = time.time()
     logger.info(f"NYFR Execution time with default config: {end - start:.6f} seconds")

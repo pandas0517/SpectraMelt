@@ -14,7 +14,7 @@
         "level": "INFO",
         "console": true
     },
-    "directories": {
+    "directory_params": {
         "dataset_dir": "Data_Set",
         "paths": [
             "inputs",

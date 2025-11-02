@@ -11,15 +11,15 @@ import time
 
 class DataSet:
     def __init__(self,
-                 DUT=None,
                  input_sig=None,
+                 DUT=None,
                  recovery=None,
                  dataset_config_name="DataSet_Config_1",
                  dataset_params=None,
                  inputset_params=None,
                  log_params=None,
                  filenames=None,
-                 directories=None,
+                 directory_params=None,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -32,7 +32,7 @@ class DataSet:
             dataset_params = {}
             dataset_params['inputset_params'] = inputset_params
             dataset_params['filenames'] = filenames
-            dataset_params['directories'] = directories
+            dataset_params['directory_params'] = directory_params
             dataset_params['config_name'] = dataset_config_name
             dataset_params['log_params'] = log_params
 
@@ -67,24 +67,14 @@ class DataSet:
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
             
-        DUT_config_name = "DUT_Config_1"
-        input_config_name = "Input_Config_1"
-        recovery_config_name = "Recovery_Config_1"
-        
-        if DUT is not None:
-            DUT_config_name = DUT.get_config_name()
-        if input_sig is not None:
-            input_config_name = input_sig.get_config_name()
-        if recovery is not None:
-            recovery_config_name = recovery.get_config_name()
-            
         self.set_config_name(config_name)
-        self.set_DUT_config_name(DUT_config_name)
-        self.set_input_config_name(input_config_name)
-        self.set_recovery_config_name(recovery_config_name)
         self.set_inputset_params(inputset_params)
         self.set_filenames(filenames)
-        self.set_directories(directories)
+        self.set_directory_params(directories)
+        self.set_input_sig(input_sig)
+        self.set_DUT(DUT)
+        self.set_recovery(recovery)
+        self.set_ML_models_dir()
 
         
     def set_log_params(self, log_params=None):
@@ -113,61 +103,85 @@ class DataSet:
         self.input_rng = np.random.default_rng(inputset_params.get('seed', None))
         self.inputset_params = inputset_params
         
+
+    def set_DUT(self, DUT):
+        DUT_config_name = "DUT_Config_1"
+        if DUT is not None:
+            DUT_config_name = DUT.get_config_name()
+
+        self.directory_params['tail']['outputs'] = [self.input_config_name,
+                                        self.DUT_config_name,
+                                        self.directory_params['tail']['outputs']]
+        self.directories = build_flat_paths(self.directory_params)
         
-    def set_DUT_config_name(self, config_name):
-        self.DUT_config_name = config_name
+        self.DUT_config_name = DUT_config_name
+        self.DUT = DUT
+        
+
+    def set_input_sig(self, input_sig):
+        input_config_name = "Input_Config_1"
+        if input_sig is not None:
+            input_config_name = input_sig.get_config_name()
+
+        self.directory_params['tail']['inputs'] = [self.input_config_name,
+                                self.directory_params['tail']['inputs']]
+        self.directories = build_flat_paths(self.directory_params)
+
+        self.input_config_name = input_config_name
+        self.input_sig = input_sig  
         
         
-    def set_input_config_name(self, config_name):
-        self.input_config_name = config_name
+    def set_recovery(self, recovery):
+        recovery_config_name = "Recovery_Config_1"
+        if recovery is not None:
+            recovery_config_name = recovery.get_config_name()
+
+        self.directory_params['tail']['recovery'] = [self.input_config_name,
+                                    self.DUT_config_name,
+                                    self.recovery_config_name,
+                                    self.directory_params['tail']['recovery']]
+        self.directories = build_flat_paths(self.directory_params)
+
+        self.recovery_config_name = recovery_config_name
+        self.recovery = recovery  
         
-        
-    def set_recovery_config_name(self, config_name):
-        self.recovery_config_name = config_name
-        
-            
-    def set_directories(self, directories=None):
-        if directories is None:
-            directories = {}
-            directories['dataset_dir'] = "Data_Set"
-            directories['paths'] = [
+
+    def set_ML_models_dir(self):
+        self.directory_params['tail']['ml_models'] = [self.input_config_name,
+                                    self.DUT_config_name,
+                                    self.recovery_config_name,
+                                    self.directory_params['tail']['ml_models']]
+        self.directories = build_flat_paths(self.directory_params)
+
+
+    def set_directory_params(self, directory_params=None):
+        if directory_params is None:
+            directory_params = {}
+            directory_params['dataset_dir'] = "Data_Set"
+            directory_params['paths'] = [
                 "inputs",
                 "outputs",
                 "recovery",
                 "ml_models"
             ]
-            directories['base'] = {
+            directory_params['base'] = {
                 "inputs": None,
                 "outputs": None,
                 "recovery": None,
                 "ml_models": None
             }
-            directories['tail'] = {
+            directory_params['tail'] = {
                 "inputs": "Inputs",
                 "outputs": "Outputs",
                 "recovery": "Recovery",
                 "ml_models": "ML_Models"
             }
 
-        for base_dir in directories['base']:
-            if directories['base'][base_dir] is None:
-                directories['base'][base_dir] = find_project_root()
-            
-        directories['tail']['inputs'] = [self.input_config_name,
-                                        directories['tail']['inputs']]
-        directories['tail']['outputs'] = [self.input_config_name,
-                                        self.DUT_config_name,
-                                        directories['tail']['outputs']]
-        directories['tail']['recovery'] = [self.input_config_name,
-                                            self.DUT_config_name,
-                                            self.recovery_config_name,
-                                            directories['tail']['recovery']]
-        directories['tail']['ml_models'] = [self.input_config_name,
-                                    self.DUT_config_name,
-                                    self.recovery_config_name,
-                                    directories['tail']['ml_models']]
-        
-        self.directories = build_flat_paths(directories)
+        for base_dir in directory_params['base']:
+            if directory_params['base'][base_dir] is None:
+                directory_params['base'][base_dir] = find_project_root()
+
+        self.directory_params = directory_params            
         
 
     def set_filenames(self, filenames=None):
@@ -196,7 +210,7 @@ class DataSet:
     # Core functional methods
     # -------------------------------
         
-    def create_input_set(self, input_signal):
+    def create_input_set(self):
         """
         Generate and save multiple randomized input signals.
 
@@ -205,6 +219,11 @@ class DataSet:
                        10 → 0.1 Hz steps
                        100 → 0.01 Hz steps
         """
+        self.logger.info("Starting Input Set Creation...") 
+        input_signal = self.input_sig
+        if input_signal is None:
+            self.logger.error("Input Signal Object not set")
+            raise ValueError("Input Signal Object Not Set")
         # --- Setup and pre-saves ---
         real_time_file = self.directories['inputs'] / self.filenames['real_time']
         real_freq_file = self.directories['inputs'] / self.filenames['real_freq']
@@ -285,7 +304,8 @@ class DataSet:
 
             inputset_path = self.directories['inputs'] / f"{tones}_tone_" + self.filenames['input_signal']
             np.save(inputset_path, input_signals)
-                        
+
+        self.logger.info("Input Set Creation Complete")                    
 
     def create_output_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
         self.__set_init(nyfr, filenames, directories, input_set_params)
@@ -519,4 +539,3 @@ class DataSet:
             "directories": self.directories,
             "filenames": self.filenames
         }
-        return dataset_params

@@ -1,8 +1,8 @@
 {
     "config_name": "Input_Config_1",
     "time_params": {
-        "time_range": [-0.004, 0.004],
-        "sim_freq": 10000000
+        "time_range": [-0.003, 0.003],
+        "sim_freq": 100000000
     },
     "log_params": {
         "enabled": true,
@@ -11,7 +11,7 @@
         "console": true
     },
     "adc_params": {
-        "adc_samp_freq": 10000,
+        "adc_samp_freq": 100000,
         "v_ref_range": [0, 5],
         "allow_clipping": true
     },
@@ -29,9 +29,9 @@
     },
     "wave_params":{
         "num_waves": 5,
-        "freq_range": [100, 1000],
-        "amp_range": [0.1, 1.0],
-        "phase_range": [0, 1],
+        "freq_range": [10000, 200000],
+        "amp_range": [0.5, 1],
+        "phase_range": [0.25,0.75],
         "waves": [
             {"amp": 0.25,
             "freq": 5000,

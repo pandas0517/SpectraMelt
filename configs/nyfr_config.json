@@ -12,7 +12,7 @@
     "adc_params": {
         "store_conditioned_sigs": true,
         "store_sh_sigs": true,
-        "adc_samp_freq": 10000,
+        "adc_samp_freq": 100000,
         "allow_clipping": true,
         "v_ref_range": [0, 5],
         "num_bits": 8,
@@ -40,11 +40,11 @@
     },
     "lo_params": {
         "amp": 1,
-        "freq": 10000,
+        "freq": 100000,
         "phase": 0,
         "mod_enabled": true,
-        "phase_delta": 400,
-        "phase_freq": 500,
+        "phase_delta": 2000,
+        "phase_freq": 2500,
         "phase_offset": 0,
         "phase_noise_std": 0.0,
         "amp_noise_std": 0.0,
@@ -55,7 +55,7 @@
     "lpf_params": {
         "filter_type": "butter",
         "order": 6,
-        "cutoff_freq": 10000,
+        "cutoff_freq": 50000,
         "mode": "lfilter",
         "ripple_db": 1.0,
         "atten_db": 40.0,
@@ -65,7 +65,7 @@
     "wbf_params": {
         "filter_type": "butter",
         "order": 6,
-        "cutoff_freq": 100000,
+        "cutoff_freq": 200000,
         "mode": "lfilter",
         "ripple_db": 1.0,
         "atten_db": 40.0,

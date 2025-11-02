@@ -10,7 +10,6 @@ def load_config_from_json(file_path, log_file=None, level="INFO", console=True):
     try:
         with file_path.open('r', encoding='utf-8') as file:
             system_config = json.load(file)
-            logger.info(f"Loaded configuration from {file_path}")
             return system_config
     except FileNotFoundError:
         if logger is None:
