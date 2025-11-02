@@ -31,7 +31,7 @@
         "num_waves": 5,
         "freq_range": [100, 1000],
         "amp_range": [0.1, 1.0],
-        "phase_random": true,
+        "phase_range": [0, 1],
         "waves": [
             {"amp": 0.25,
             "freq": 5000,

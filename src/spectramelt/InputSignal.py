@@ -117,9 +117,9 @@ class InputSignal:
         if wave_params is None:
             wave_params = {
                 "num_waves": 1,
-                "freq_range": (100, 1000),
-                "amp_range": (0.1, 1.0),
-                "phase_random": True,
+                "freq_range": [100, 1000],
+                "amp_range": [0.1, 1.0],
+                "phase_range": [0, 1],
                 "waves": [
                     {"amp": 1,
                     "freq": 50,
@@ -132,6 +132,9 @@ class InputSignal:
                     "phase": 0}                    
                 ]
             }
+        wave_params['phase_range'] = tuple(wave_params['phase_range'])
+        wave_params["freq_range"] = tuple(wave_params["freq_range"])
+        wave_params["amp_range"] = tuple(wave_params["amp_range"])
         self.wave_params = wave_params
         
     # -------------------------------
@@ -178,9 +181,9 @@ class InputSignal:
         # Override defaults with values inside wave_params if they exist
         waves = self.wave_params.get('waves', [])
         num_waves = self.wave_params.get('num_waves', 1)
-        freq_range = tuple(self.wave_params.get('freq_range', (100, 1000)))
-        amp_range = tuple(self.wave_params.get('amp_range', (0.1, 1.0)))
-        phase_random = self.wave_params.get('phase_random', True)
+        freq_range = self.wave_params.get('freq_range', (100, 1000))
+        amp_range = self.wave_params.get('amp_range', (0.1, 1.0))
+        phase_range = self.wave_params.get('phase_range', (0, 1))
         allow_clipping = self.adc_params.get('allow_clipping', False)
         v_ref_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
 
@@ -188,8 +191,8 @@ class InputSignal:
         if not waves:
             amps = self.rng.uniform(amp_range[0], amp_range[1], num_waves)
             freqs = self.rng.uniform(freq_range[0], freq_range[1], num_waves)
-            if phase_random:
-                t_shift = self.rng.uniform(0, 1/freqs)  # seconds
+            if phase_range:
+                t_shift = self.rng.uniform(phase_range[0]/freqs, phase_range[1]/freqs)  # seconds
                 phases = 2 * np.pi * freqs * t_shift
             else:
                 phases = np.zeros(num_waves)

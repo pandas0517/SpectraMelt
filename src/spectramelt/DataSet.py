@@ -6,6 +6,8 @@ from .utils import (
     save_to_json
 )
 import numpy as np
+import pickle
+import time
 
 class DataSet:
     def __init__(self,
@@ -14,8 +16,7 @@ class DataSet:
                  recovery=None,
                  dataset_config_name="DataSet_Config_1",
                  dataset_params=None,
-                 num_input_sigs=5000,
-                 tones_per_sig=[1],
+                 inputset_params=None,
                  log_params=None,
                  filenames=None,
                  directories=None,
@@ -29,8 +30,7 @@ class DataSet:
             dataset_params = load_config_from_json(config_file_path)
         elif dataset_params is None:
             dataset_params = {}
-            dataset_params['num_input_sigs'] = num_input_sigs
-            dataset_params['tones_per_sig'] = tones_per_sig
+            dataset_params['inputset_params'] = inputset_params
             dataset_params['filenames'] = filenames
             dataset_params['directories'] = directories
             dataset_params['config_name'] = dataset_config_name
@@ -105,13 +105,12 @@ class DataSet:
     def set_inputset_params(self, inputset_params):
         if inputset_params is None:
             inputset_params = {
-                "input_freq_range": [1, 1000],
-                "num_input_sigs": 5000,
+                "num_sigs": 5000,
                 "tones_per_sig": [1],
-                "amp_range": [0.1, 1.0],
-                "phase_random": True
+                "scale_freq": 1,
+                "seed": None
             }
-        inputset_params["input_freq_range"] = tuple(inputset_params["input_freq_range"])
+        self.input_rng = np.random.default_rng(inputset_params.get('seed', None))
         self.inputset_params = inputset_params
         
         
@@ -180,8 +179,9 @@ class DataSet:
                 "wbf_freq": "wbf_freq.npy",
                 "samp_time": "sampled_time.npy",
                 "samp_freq": "sampled_freq.npy",
-                "input_signal": "signal.npy",
-                "input_config": "input_config.json",
+                "input_signal": "signals.npy",
+                "input_wave_params": "wave_params.pkl",
+                "inputset_config": "inputset_config.json",
                 "output_signal": "signal.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
@@ -197,68 +197,94 @@ class DataSet:
     # -------------------------------
         
     def create_input_set(self, input_signal):
+        """
+        Generate and save multiple randomized input signals.
+
+        scale (float): resolution multiplier, e.g.
+                       1 → 1 Hz steps
+                       10 → 0.1 Hz steps
+                       100 → 0.01 Hz steps
+        """
+        # --- Setup and pre-saves ---
         real_time_file = self.directories['inputs'] / self.filenames['real_time']
         real_freq_file = self.directories['inputs'] / self.filenames['real_freq']
+
         real_time = input_signal.get_analog_time()
-        if not (real_time_file).is_file():
+        if not real_time_file.exists():
             np.save(real_time_file, real_time)
-        if not (real_freq_file).is_file():
+        if not real_freq_file.exists():
             np.save(real_freq_file, input_signal.get_analog_frequency())
-            
-        input_config_file = self.directories['inputs'] / self.filenames['input_config']
-        input_sig_params = input_signal.get_input_params()
-        if not (input_config_file).is_file():
-            save_to_json(input_sig_params, input_config_file)
-            
-        num_input_sigs = self.num_input_sigs   
-        input_signals = np.zeros((num_input_sigs, real_time.size))
-        tones_per_sig = self.tones_per_sig
         
-        for tones in tones_per_sig: 
-            for sig_num in range(num_input_sigs):
-             
-        wbf_cut_freq = system_params['wbf_cut_freq']
-        for noise_level, _ in self.input_set_params["noise_levels"]:
-            for phase_shift, _ in self.input_set_params["phase_shifts"]:
-                for input_tones, _ in self.input_set_params["input_tones"]:
-                    input_file_path = os.path.join(self.input_dir,
-                                                   noise_level,
-                                                   phase_shift,
-                                                   self.input_tones[input_tones]['sigs']) # e.g. 1_2_tone_sigs.npy
-                    input_list_path = os.path.join(self.input_dir,
-                                                   noise_level,
-                                                   phase_shift,
-                                                   self.input_tones[input_tones]['list'])
-                    input_list = []
-                    wave_param_list = []
+        # --- Config file ---
+        inputset_config_file = self.directories['inputs'] / self.filenames['inputset_config']
+        input_signal_params = input_signal.get_input_params()
 
-                    input_list_exists = os.path.isfile(input_list_path)
-                    if input_list_exists:
-                        with open(input_list_path, 'rb') as file:
-                            input_freq_tot_list = pickle.load(file)
-                    else:
-                        input_freq_tot_list = self.__get_frequency_list(input_tones, wbf_cut_freq)
+        if not inputset_config_file.exists():
+            inputset_config = {
+                "config_name": self.config_name,
+                "inputset": self.inputset_params,
+                "input": input_signal_params
+            }
+            save_to_json(inputset_config, inputset_config_file)
 
-                    for input_freqs in input_freq_tot_list:
-                        if input_list_exists:
-                            wave_params = input_freqs[0]
-                            noise = input_freqs[1]
-                        else:
-                            wave_params, noise = self.__update_wave_system(input_freqs,phase_shift,noise_level)
-                            wave_param_list.append((wave_params, noise))
-                        system_params['system_noise_level'] = noise
-                        self.nyfr.set_system_params(system_params=system_params)
-                        analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
-                        if ( not os.path.isfile(input_file_path) ):
-                            input_list.append(self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate()))
-                    if wave_param_list:
-                        # Save the wave parameters if they were generated
-                        with open(input_list_path, 'wb') as file:
-                            pickle.dump(wave_param_list, file)
-                    if input_list:
-                        # Save the input set if it was generated
-                        input_set = np.array(input_list)
-                        np.save(input_file_path, input_set)
+        # Build discrete frequency grid with scaling
+        scale_freq = self.inputset_params.get('scale_freq', 1)
+        freq_range = input_signal_params.get('freq_range', (100, 1000))
+        freq_start = int(freq_range[0] * scale_freq)
+        freq_stop  = int(freq_range[1] * scale_freq) + 1
+        freq_bins = np.arange(freq_start, freq_stop)
+
+        amp_range = input_signal_params.get('amp_range', (0.1, 1.0))
+        phase_range = input_signal_params.get('phase_range', True)
+
+        num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)   
+        tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
+        input_signals = np.zeros((num_input_sigs, real_time.size))
+
+        # --- Generate all tone sets ---
+        for tones in tones_per_sig:
+            wave_param_list = [] # reset for this tone set
+            start = time.time()
+            for input_sig in range(num_input_sigs):
+                amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
+
+                # Randomly choose unique bins, then scale back to Hz
+                chosen = self.input_rng.choice(freq_bins, size=tones, replace=False)
+                freqs = chosen / scale_freq
+                # Remove chosen bins from freq_bins (in place)
+                freq_bins = freq_bins[~np.isin(freq_bins, chosen)]
+                if tones * input_sig > len(freq_bins):
+                    self.logger.error("Ran out of unique frequency bins for input signals")
+                    raise ValueError("Ran out of unique frequency bins for input signals")
+
+                if phase_range:
+                    t_shift = self.input_rng.uniform(phase_range[0], phase_range[1], tones) / freqs  # seconds
+                    phases = 2 * np.pi * freqs * t_shift
+                else:
+                    phases = np.zeros(tones)
+                # Save generated wave dictionaries into waves
+                wave = [
+                    {"amp": float(amps[i]), "freq": float(freqs[i]), "phase": float(phases[i])}
+                    for i in range(tones)
+                ]
+                wave_param_list.append(wave)
+
+                params = input_signal_params['waves']
+                params['waves'] = wave
+                input_signal.set_wave_params(params)
+                input_signal.create_input_signal()
+                input_signals[input_sig] = input_signal.get_input_signal()
+
+            stop = time.time()
+            self.logger.info(f"{num_input_sigs} Signal Input Set Creation Time: {stop - start:.6f} seconds")
+
+            # --- Save outputs ---
+            inputset_wave_params_path = self.directories['inputs'] / f"{tones}_tone_" + self.filenames['input_wave_params']
+            with open(inputset_wave_params_path, 'wb') as file:
+                pickle.dump(wave_param_list, file)
+
+            inputset_path = self.directories['inputs'] / f"{tones}_tone_" + self.filenames['input_signal']
+            np.save(inputset_path, input_signals)
                         
 
     def create_output_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
