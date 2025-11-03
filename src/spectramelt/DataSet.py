@@ -51,11 +51,11 @@ class DataSet:
         config_name = dataset_params.get('config_name', "Dataset_Config_1")
         inputset_params = dataset_params.get('inputset_params', None)
         filenames = dataset_params.get('filenames', None)
-        directories = dataset_params.get('directories', None)
+        directory_params = dataset_params.get('directory_params', None)
         log_params = dataset_params.get('log_params', None)
         
         if (filenames is None and
-            directories is None ):
+            directory_params is None ):
             config_name = "Default_Dataset_Config"
             
         self.set_log_params(log_params)    
@@ -70,7 +70,7 @@ class DataSet:
         self.set_config_name(config_name)
         self.set_inputset_params(inputset_params)
         self.set_filenames(filenames)
-        self.set_directory_params(directories)
+        self.set_directory_params(directory_params)
         self.set_input_sig(input_sig)
         self.set_DUT(DUT)
         self.set_recovery(recovery)
@@ -97,7 +97,7 @@ class DataSet:
             inputset_params = {
                 "num_sigs": 5000,
                 "tones_per_sig": [1],
-                "scale_freq": 1,
+                "wave_precision": None,
                 "seed": None
             }
         self.input_rng = np.random.default_rng(inputset_params.get('seed', None))
@@ -110,7 +110,7 @@ class DataSet:
             DUT_config_name = DUT.get_config_name()
 
         self.directory_params['tail']['outputs'] = [self.input_config_name,
-                                        self.DUT_config_name,
+                                        DUT_config_name,
                                         self.directory_params['tail']['outputs']]
         self.directories = build_flat_paths(self.directory_params)
         
@@ -123,7 +123,7 @@ class DataSet:
         if input_sig is not None:
             input_config_name = input_sig.get_config_name()
 
-        self.directory_params['tail']['inputs'] = [self.input_config_name,
+        self.directory_params['tail']['inputs'] = [input_config_name,
                                 self.directory_params['tail']['inputs']]
         self.directories = build_flat_paths(self.directory_params)
 
@@ -138,7 +138,7 @@ class DataSet:
 
         self.directory_params['tail']['recovery'] = [self.input_config_name,
                                     self.DUT_config_name,
-                                    self.recovery_config_name,
+                                    recovery_config_name,
                                     self.directory_params['tail']['recovery']]
         self.directories = build_flat_paths(self.directory_params)
 
@@ -219,25 +219,38 @@ class DataSet:
                        10 → 0.1 Hz steps
                        100 → 0.01 Hz steps
         """
-        self.logger.info("Starting Input Set Creation...") 
+        self.logger.info("Starting Input Set Creation...")
+        # --- Setup and pre-saves ---
         input_signal = self.input_sig
         if input_signal is None:
             self.logger.error("Input Signal Object not set")
             raise ValueError("Input Signal Object Not Set")
-        # --- Setup and pre-saves ---
-        real_time_file = self.directories['inputs'] / self.filenames['real_time']
-        real_freq_file = self.directories['inputs'] / self.filenames['real_freq']
+        input_dirs = self.directories.get('inputs', "Inputs")
+        real_time_filename = self.filenames.get('real_time', "real_time.npy")
+        real_freq_filename = self.filenames.get('real_freq', "real_freq.npy")
+        inputset_config_filename = self.filenames.get('inputset_config', "inputset_config.json")
+        input_wave_params_filename = self.filenames.get('input_wave_params', "wave_params.pkl")
+        input_signal_filename = self.filenames.get('input_signal', "signals.npy")
 
+        input_dirs.mkdir(parents=True, exist_ok=True)
+        real_time_file = input_dirs / real_time_filename
+        real_freq_file = input_dirs / real_freq_filename
+        
         real_time = input_signal.get_analog_time()
+        real_freq = input_signal.get_analog_frequency()
         if not real_time_file.exists():
             np.save(real_time_file, real_time)
         if not real_freq_file.exists():
-            np.save(real_freq_file, input_signal.get_analog_frequency())
+            np.save(real_freq_file, real_freq)
         
         # --- Config file ---
-        inputset_config_file = self.directories['inputs'] / self.filenames['inputset_config']
+        inputset_config_file = input_dirs.parent / inputset_config_filename
         input_signal_params = input_signal.get_input_params()
-
+        input_signal_wave_params = input_signal_params.get('wave_params', None)
+        if input_signal_wave_params is None:
+            self.logger.error("Input Signal Wave Parameters not set")
+            raise ValueError("Input Signal Wave Parameters Not Set")
+        
         if not inputset_config_file.exists():
             inputset_config = {
                 "config_name": self.config_name,
@@ -246,39 +259,42 @@ class DataSet:
             }
             save_to_json(inputset_config, inputset_config_file)
 
-        # Build discrete frequency grid with scaling
-        scale_freq = self.inputset_params.get('scale_freq', 1)
-        freq_range = input_signal_params.get('freq_range', (100, 1000))
-        freq_start = int(freq_range[0] * scale_freq)
-        freq_stop  = int(freq_range[1] * scale_freq) + 1
-        freq_bins = np.arange(freq_start, freq_stop)
+        # Build discrete frequency grid
+        freq_range = input_signal_wave_params.get('freq_range', (100, 1000))
+        freq_subset = real_freq[(real_freq >= freq_range[0]) & (real_freq <= freq_range[1])]
+        freq_bins = np.copy(freq_subset)
 
-        amp_range = input_signal_params.get('amp_range', (0.1, 1.0))
-        phase_range = input_signal_params.get('phase_range', True)
+        amp_range = input_signal_wave_params.get('amp_range', (0.1, 1.0))
+        phase_range = input_signal_wave_params.get('phase_range', (0, 1))
 
         num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)   
         tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
-        input_signals = np.zeros((num_input_sigs, real_time.size))
+        wave_precision = self.inputset_params.get('wave_precision', None)
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
+            input_signals = np.zeros((num_input_sigs, real_time.size))
             wave_param_list = [] # reset for this tone set
             start = time.time()
             for input_sig in range(num_input_sigs):
                 amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
+                if wave_precision is not None:
+                    amps = np.round(amps, wave_precision)
 
                 # Randomly choose unique bins, then scale back to Hz
-                chosen = self.input_rng.choice(freq_bins, size=tones, replace=False)
-                freqs = chosen / scale_freq
+                freqs = self.input_rng.choice(freq_bins, size=tones, replace=False)
+
                 # Remove chosen bins from freq_bins (in place)
-                freq_bins = freq_bins[~np.isin(freq_bins, chosen)]
-                if tones * input_sig > len(freq_bins):
-                    self.logger.error("Ran out of unique frequency bins for input signals")
-                    raise ValueError("Ran out of unique frequency bins for input signals")
+                freq_bins = freq_bins[~np.isin(freq_bins, freqs)]
+                if tones > len(freq_bins):
+                    # self.logger.info("Ran out of unique frequency bins for input signals. Resetting...")
+                    freq_bins = np.copy(freq_subset)
 
                 if phase_range:
                     t_shift = self.input_rng.uniform(phase_range[0], phase_range[1], tones) / freqs  # seconds
                     phases = 2 * np.pi * freqs * t_shift
+                    if wave_precision is not None:
+                        phases = np.round(phases, wave_precision)
                 else:
                     phases = np.zeros(tones)
                 # Save generated wave dictionaries into waves
@@ -288,21 +304,21 @@ class DataSet:
                 ]
                 wave_param_list.append(wave)
 
-                params = input_signal_params['waves']
-                params['waves'] = wave
+                params = input_signal_wave_params
+                params["waves"] = wave
                 input_signal.set_wave_params(params)
                 input_signal.create_input_signal()
                 input_signals[input_sig] = input_signal.get_input_signal()
 
             stop = time.time()
-            self.logger.info(f"{num_input_sigs} Signal Input Set Creation Time: {stop - start:.6f} seconds")
+            self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
 
             # --- Save outputs ---
-            inputset_wave_params_path = self.directories['inputs'] / f"{tones}_tone_" + self.filenames['input_wave_params']
+            inputset_wave_params_path = input_dirs / f"{tones}_tone_{input_wave_params_filename}" 
             with open(inputset_wave_params_path, 'wb') as file:
                 pickle.dump(wave_param_list, file)
 
-            inputset_path = self.directories['inputs'] / f"{tones}_tone_" + self.filenames['input_signal']
+            inputset_path = input_dirs / f"{tones}_tone_{input_signal_filename}"
             np.save(inputset_path, input_signals)
 
         self.logger.info("Input Set Creation Complete")                    
@@ -527,6 +543,10 @@ class DataSet:
     def get_log_params(self):
         return self.log_params
     
+
+    def get_directory_params(self):
+        return self.directory_params
+    
     
     def get_dataset_params(self):
         dataset_params = {
@@ -534,7 +554,8 @@ class DataSet:
             "DUT_config_name": self.DUT_config_name,
             "input_config_name": self.input_config_name,
             "reconvery_config_name": self.recovery_config_name,
-            "inputset_params": self.inputset_params, 
+            "inputset_params": self.inputset_params,
+            "directory_params": self.directory_params,
             "log_params": self.log_params,
             "directories": self.directories,
             "filenames": self.filenames

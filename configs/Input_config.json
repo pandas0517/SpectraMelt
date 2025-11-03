@@ -1,7 +1,7 @@
 {
-    "config_name": "Input_Config_1",
+    "config_name": "Input_Config_Ideal_1",
     "time_params": {
-        "time_range": [-0.003, 0.003],
+        "time_range": [-0.002, 0.002],
         "sim_freq": 100000000
     },
     "log_params": {
@@ -16,7 +16,7 @@
         "allow_clipping": true
     },
     "env_params": {
-        "store_internal_sigs": true,
+        "store_internal_sigs": false,
         "noise_level": 0.0,
         "attenuation": 1.0,
         "doppler": 0.0,
@@ -30,7 +30,7 @@
     "wave_params":{
         "num_waves": 5,
         "freq_range": [10000, 200000],
-        "amp_range": [0.5, 1],
+        "amp_range": [0.1, 0.25],
         "phase_range": [0.25,0.75],
         "waves": [
             {"amp": 0.25,

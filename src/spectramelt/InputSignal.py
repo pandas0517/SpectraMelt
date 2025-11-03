@@ -28,8 +28,8 @@ class InputSignal:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
                 
         self.effects = None
-        self.analog = self.create_analog()
-        self.input_signal = self.create_input_signal()
+        self.create_analog()
+        self.create_input_signal()
 
     # -------------------------------
     # Setters
@@ -171,7 +171,7 @@ class InputSignal:
                                    points_per_second / 2,
                                    int(analog['time'].size),
                                    endpoint=False)
-        return analog
+        self.analog = analog
 
     def create_input_signal(self):
         """
@@ -218,7 +218,7 @@ class InputSignal:
                 scale = max_allowed_amp / max_abs_val
                 input_signal = (input_signal - midpoint) * scale + midpoint
                 
-        return input_signal
+        self.input_signal = input_signal
 
     def _generate_signal(self, waves):
         store_internal_sigs = self.env_params.get('store_internal_sigs', True)
