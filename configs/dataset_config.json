@@ -9,6 +9,14 @@
         ],
         "seed": null
     },
+    "outputset_params": {
+        "valid_types": [
+            "NYFR"
+        ],
+        "DUT_type": "NYFR",
+        "premultiply": false,
+        "scale_dict": 1.0
+    },
     "log_params": {
         "enabled": true,
         "log_file": null,
@@ -20,18 +28,21 @@
         "paths": [
             "inputs",
             "outputs",
+            "premultiply",
             "recovery",
             "ml_models"
         ],
         "base": {
             "inputs": "F:\\",
             "outputs": "F:\\",
+            "premultiply": "F:\\",
             "recovery": "F:\\",
             "ml_models": "F:\\"
         },
         "tail": {
             "inputs": "Inputs",
             "outputs": "Outputs",
+            "premultiply": "Premultiply",
             "recovery": "Recovery",
             "ml_models": "ML_Models"            
         }
@@ -46,7 +57,7 @@
         "input_signal": "signals.npy",
         "input_wave_params": "wave_params.pkl",
         "inputset_config": "inputset_config.json",
-        "output_signal": "signal.npy",
+        "output_signal": "signals.npy",
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
         "recovered": "recovered.npy",

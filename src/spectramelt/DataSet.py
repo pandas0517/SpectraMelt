@@ -17,6 +17,7 @@ class DataSet:
                  dataset_config_name="DataSet_Config_1",
                  dataset_params=None,
                  inputset_params=None,
+                 outputset_params=None,
                  log_params=None,
                  filenames=None,
                  directory_params=None,
@@ -31,6 +32,7 @@ class DataSet:
         elif dataset_params is None:
             dataset_params = {}
             dataset_params['inputset_params'] = inputset_params
+            dataset_params['outputset_params'] = outputset_params
             dataset_params['filenames'] = filenames
             dataset_params['directory_params'] = directory_params
             dataset_params['config_name'] = dataset_config_name
@@ -50,6 +52,7 @@ class DataSet:
             dataset_params = {}
         config_name = dataset_params.get('config_name', "Dataset_Config_1")
         inputset_params = dataset_params.get('inputset_params', None)
+        outputset_params = dataset_params.get('outputset_params', None)
         filenames = dataset_params.get('filenames', None)
         directory_params = dataset_params.get('directory_params', None)
         log_params = dataset_params.get('log_params', None)
@@ -69,6 +72,7 @@ class DataSet:
             
         self.set_config_name(config_name)
         self.set_inputset_params(inputset_params)
+        self.set_outputset_params(outputset_params)
         self.set_filenames(filenames)
         self.set_directory_params(directory_params)
         self.set_input_sig(input_sig)
@@ -104,14 +108,43 @@ class DataSet:
         self.inputset_params = inputset_params
         
 
-    def set_DUT(self, DUT):
-        DUT_config_name = "DUT_Config_1"
-        if DUT is not None:
-            DUT_config_name = DUT.get_config_name()
+    def set_outputset_params(self, outputset_params):
+        if outputset_params is None:
+            outputset_params = {
+                "DUT_type": "NYFR",
+                "valid_types": [
+                    "NYFR"
+                ],
+                "premultiply": False,
+                "scale_dict": 1.0
+            }
+        
+        valid_types = outputset_params.get('valid_types', ["nyfr"])
+        outputset_params['valid_types'] = [w.lower() for w in valid_types]
+                    
+        self.outputset_params = outputset_params
 
+
+    def set_DUT(self, DUT):
+        if DUT is None:
+            DUT_config_name = "DUT_Config_1"
+        else: 
+            DUT_config_name = DUT.get_config_name()
+            DUT_type = type(DUT).__name__.lower()
+            if DUT_type in self.outputset_params['valid_types']:
+                self.outputset_params['DUT_type'] = DUT_type
+            else:
+                self.logger.error("DUT not a valid type")
+                raise ValueError("DUT not a valid type")
+            
+        self.directory_params['tail']['premultiply'] = [self.input_config_name,
+                                DUT_config_name,
+                                self.directory_params['tail']['outputs'],
+                                self.directory_params['tail']['premultiply']]
         self.directory_params['tail']['outputs'] = [self.input_config_name,
                                         DUT_config_name,
                                         self.directory_params['tail']['outputs']]
+
         self.directories = build_flat_paths(self.directory_params)
         
         self.DUT_config_name = DUT_config_name
@@ -119,14 +152,14 @@ class DataSet:
         
 
     def set_input_sig(self, input_sig):
-        input_config_name = "Input_Config_1"
-        if input_sig is not None:
-            input_config_name = input_sig.get_config_name()
-
+        if input_sig is None:
+            input_config_name = "Input_Config_1"
+        
+        input_config_name = input_sig.get_config_name()
         self.directory_params['tail']['inputs'] = [input_config_name,
                                 self.directory_params['tail']['inputs']]
         self.directories = build_flat_paths(self.directory_params)
-
+        
         self.input_config_name = input_config_name
         self.input_sig = input_sig  
         
@@ -161,18 +194,21 @@ class DataSet:
             directory_params['paths'] = [
                 "inputs",
                 "outputs",
+                "premultiply",
                 "recovery",
                 "ml_models"
             ]
             directory_params['base'] = {
                 "inputs": None,
                 "outputs": None,
+                "premultiply": None,
                 "recovery": None,
                 "ml_models": None
             }
             directory_params['tail'] = {
                 "inputs": "Inputs",
                 "outputs": "Outputs",
+                "premultiply": "Premultiply",
                 "recovery": "Recovery",
                 "ml_models": "ML_Models"
             }
@@ -196,7 +232,7 @@ class DataSet:
                 "input_signal": "signals.npy",
                 "input_wave_params": "wave_params.pkl",
                 "inputset_config": "inputset_config.json",
-                "output_signal": "signal.npy",
+                "output_signal": "signals.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
@@ -323,56 +359,130 @@ class DataSet:
 
         self.logger.info("Input Set Creation Complete")                    
 
-    def create_output_sets(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
-        self.__set_init(nyfr, filenames, directories, input_set_params)
-        if self.__needs_init(include_set_params=True):
-            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
-            return
-        system_params = self.nyfr.get_system_params()
-        LO_params = self.nyfr.get_LO_params()
-        for noise_level, _ in self.input_set_params["noise_levels"]:
-            for phase_shift, _ in self.input_set_params["phase_shifts"]:
-                for input_tones, _ in self.input_set_params["input_tones"]:
-                    input_list_path = os.path.join(self.input_dir,
-                                                   noise_level,
-                                                   phase_shift,
-                                                   self.input_tones[input_tones]['list'])
-                    for f_mod, f_mod_value in self.input_set_params["f_mods"]:
-                        LO_params['phase_freq'] = f_mod_value
-                        for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
-                            LO_params['phase_delta'] = round(f_delta_value * f_mod_value, 2)
-                            self.nyfr.set_LO_params(LO_params=LO_params)
-                            output_file_path = os.path.join(self.output_dir,
-                                                           noise_level,
-                                                           phase_shift,
-                                                           f_mod,
-                                                           f_delta,
-                                                           self.input_tones[input_tones]['sigs'])
-                            output_list = []
-                            output_file_exists = os.path.isfile(output_file_path)
-                            input_list_exists = os.path.isfile(input_list_path)
-                            if not output_file_exists and input_list_exists:
-                                with open(input_list_path, 'rb') as file:
-                                    input_freq_tot_list = pickle.load(file)
-
-                                for input_freqs in input_freq_tot_list:
-                                    wave_params = input_freqs[0]
-                                    noise = input_freqs[1]
-
-                                    system_params['system_noise_level'] = noise
-                                    self.nyfr.set_system_params(system_params=system_params)
-                                    analog_input, _ = self.nyfr.create_input_signal(wave_params=wave_params)
-                                    output_list.append( self.nyfr.simulate_system(input_signal=analog_input) )
-
-                                output_set = np.array(output_list)
-                                np.save(output_file_path, output_set)
-                            else:
-                                if output_file_exists:
-                                    print("Output file already exists: ", output_file_path)
-                                if not input_list_exists:
-                                    print("Input list file does not exist: ", input_list_path)
-                                    
-
+    def create_output_set(self, inputset_path):
+        if not inputset_path.exists():
+            self.logger.error("Input Set File Does Not Exist")
+            raise ValueError("Input Set File Does Not Exist")           
+        input_signals = np.load(inputset_path)
+        
+        input_signal_filename = self.filenames.get('input_signal', "signals.npy")
+        # Extract identifying portion (for example, everything up to "signals.npy")
+        stem = inputset_path.name
+        key_part = stem.split(input_signal_filename)[0]
+        
+        self.logger.info("Starting Output Set Creation...")
+        # --- Setup and pre-saves ---
+        DUT = self.DUT
+        if DUT is None:
+            self.logger.error("DUT Object not set")
+            raise ValueError("DUT Object Not Set")
+        DUT_type = self.outputset_params.get('DUT_type', "nyfr")
+        
+        input_dirs = self.directories.get('inputs', "Inputs")
+        real_time_filename = self.filenames.get('real_time', "real_time.npy")
+        real_time_file = input_dirs / real_time_filename
+        if real_time_file.exists():
+            real_time = np.load(real_time_file)
+        elif self.input_sig is not None:
+            real_time = self.input_sig.get_analog_time()
+        else:
+            self.logger.error("No time file found and Input Signal Object not set")
+            raise ValueError("No time file found and Input Signal Object Not Set")
+        
+        output_dirs = self.directories.get('outputs', "Outputs")
+        premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
+        output_signal_filename = self.filenames.get("output_signal", "signals.npy")
+        dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+        samp_time_filename = self.filenames.get('samp_time', "sampled_time.npy")
+        samp_freq_filename = self.filenames.get('samp_freq', "sampled_freq.npy")
+        
+        output_dirs.mkdir(parents=True, exist_ok=True)
+        output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
+        premultiply_file = premultiply_dir / f"{key_part}{output_signal_filename}"
+        dictionary_file = output_dirs / dictionary_filename
+        samp_time_file = output_dirs / samp_time_filename
+        samp_freq_file = output_dirs / samp_freq_filename                             
+        
+        # --- Config file ---
+        DUT_config_file = output_dirs.parent / DUT_config_filename
+        DUT_params = DUT.get_DUT_params()
+        if not DUT_config_file.exists():
+            DUT_config = {
+                "config_name": self.config_name,
+                "output": DUT_params
+            }
+            save_to_json(DUT_config, DUT_config_file)
+        
+        # Premultiply signals used for ML sets
+        premultiply = self.outputset_params.get('premultiply', False)
+        scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        premultiply_signals = np.zeros_like(input_signals)
+        
+        dictionary = None
+        output_signal_list = []
+        
+        for idx, signal in enumerate(input_signals):
+            quantized_signals = DUT.create_output_signal(signal, real_time)
+            output_signal = quantized_signals.get('quantized_values')
+            output_signal_list.append(output_signal)
+            
+            if idx == 0 and not dictionary_file.exists():
+                match DUT_type:
+                    case "nyfr":               
+                        conditioned_signals = DUT.get_conditioned_signals()
+                        conditioned_time = conditioned_signals.get('time', None)
+                        lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
+                        dictionary = self.create_dictionary(conditioned_time, lo_phase_mod_mid)
+                np.save(dictionary_file, dictionary)
+                self.logger.info(f"Dictionary Creation Complete for DUT {DUT_type}")
+            
+            if idx == 0 and not samp_time_file.exists():
+                np.save(samp_time_file, quantized_signals.get('mid_times'))
+                
+            if idx == 0 and not samp_freq_file.exists():
+                np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
+                
+            if premultiply:
+                premultiply_signals[idx] = np.dot(np.linalg.pinv(scale_dict * dictionary), output_signal)
+        
+        if premultiply:
+            np.save(premultiply_file, premultiply_signals)
+            self.logger.info(f"Premultiply Set Creation Complete for Input Set {inputset_path}")
+            
+        np.save(output_signal_file, np.array(output_signal_list))
+        
+        self.logger.info(f"Output Set Creation Complete for Input Set {inputset_path}")
+        
+    
+    def create_premultiply_set(self, outputset_path, dictionary_path=None):
+        if not outputset_path.exists():
+            self.logger.error("Output Set File Does Not Exist")
+            raise ValueError("Output Set File Does Not Exist")
+        output_signals = np.load(outputset_path)
+        
+        self.logger.info(f"Starting Premultiply Set Creation...")
+        
+        if dictionary_path is None:
+            output_dirs = self.directories.get('outputs', "Outputs")
+            dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+            dictionary_path = output_dirs / dictionary_filename
+        if not dictionary_path.exists():
+            self.logger.error("Dictionary File Does Not Exist")
+            raise ValueError("Dictionary File Does Not Exist")
+        dictionary = np.load(dictionary_path)
+            
+        premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        premultiply_file = premultiply_dir / outputset_path.name
+        scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        
+        premultiply_signal_list = []
+        for signal in output_signals:
+            premultiply_signal_list.append(np.dot(np.linalg.pinv(scale_dict * dictionary), signal))
+        np.save(premultiply_file, np.array(premultiply_signal_list))
+        
+        self.logger.info(f"Premultiply Set Creation Complete for Output Set {outputset_path}")   
+            
     def batch_recover(self, nyfr=None, filenames=None, directories=None, get_recovery_time=False):
         self.__set_init(nyfr=nyfr, filenames=filenames, directories=directories)
         if self.__needs_init():
@@ -548,6 +658,14 @@ class DataSet:
         return self.directory_params
     
     
+    def get_inputset_params(self):
+        return self.inputset_params
+    
+    
+    def get_outputset_params(self):
+        return self.outputset_params
+    
+    
     def get_dataset_params(self):
         dataset_params = {
             "config_name": self.config_name,
@@ -555,8 +673,10 @@ class DataSet:
             "input_config_name": self.input_config_name,
             "reconvery_config_name": self.recovery_config_name,
             "inputset_params": self.inputset_params,
+            "outputset_params": self.outputset_params,
             "directory_params": self.directory_params,
             "log_params": self.log_params,
             "directories": self.directories,
             "filenames": self.filenames
         }
+        return dataset_params

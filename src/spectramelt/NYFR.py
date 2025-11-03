@@ -344,7 +344,7 @@ class NYFR:
     # Getters
     # -------------------------------
     
-    def get_nyfr_params(self):
+    def get_DUT_params(self):
         nyfr_params = {
             "lo_params": self.lo_params,
             "mixer_params": self.mixer_params,
