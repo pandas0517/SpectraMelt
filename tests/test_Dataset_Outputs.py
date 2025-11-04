@@ -33,7 +33,6 @@ if __name__ == '__main__':
     filenames = dataset.get_filenames()
     input_signal_filename = filenames.get('input_signal', "signals.npy")
     
-    
     if create_set:
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_signal_filename):
