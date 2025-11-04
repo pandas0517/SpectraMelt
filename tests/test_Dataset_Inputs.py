@@ -15,22 +15,35 @@ if __name__ == '__main__':
     from scipy.fft import fft, fftshift
 
     load_dotenv()
+    
+    create_set = True
+    test_max_min = True
+    display_signals = True
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
     dataset = DataSet(input_signal, config_file_path=Path(getenv('DATASET_CONF')))
-    
-    create_set = True
-    display_signals = True
 
     if create_set:
         dataset.create_input_set()
+        
+    directories = dataset.get_directories()
+    input_dir = directories.get('inputs', "Inputs")
+    filenames = dataset.get_filenames()
+    input_signal_filename = filenames.get('input_signal', "signals.npy")
+    
+    if test_max_min:
+        input_signal_params = input_signal.get_adc_params()
+        v_ref_range = tuple(input_signal_params.get('v_ref_range', (0, 5)))
+        for file_path in input_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_signal_filename):
+                signals = np.load(file_path)
+                for signal in enumerate(signals):
+                    if (signal > v_ref_range[1]).any() or (signal < v_ref_range[0]).any():
+                        logger.info(f"Value found out of range {v_ref_range[0]} - {v_ref_range[1]} for input set {file_path.stem}")
+                        break
 
     if display_signals:
-        directories = dataset.get_directories()
-        input_dir = directories.get('inputs', "Inputs")
-        filenames = dataset.get_filenames()
-        input_signal_filename = filenames.get('input_signal', "signals.npy")
         input_wave_params_filename = filenames.get('input_wave_params', "wave_params.pkl")
         real_time_filename = filenames.get('real_time', "real_time.npy")
         real_freq_filename = filenames.get('real_freq', "real_freq.npy")
