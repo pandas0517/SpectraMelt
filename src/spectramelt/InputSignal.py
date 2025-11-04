@@ -323,12 +323,14 @@ class InputSignal:
     def get_analog_frequency(self):
         return self.analog['frequency']
     
-    def get_input_params(self):
+    def get_all_params(self):
         input_params = {
+            "config_name": self.config_name,
             "time_params": self.time_params,
             "adc_params": self.adc_params,
             "env_params": self.env_params,
-            "wave_params": self.wave_params
+            "wave_params": self.wave_params,
+            "log_params": self.log_params
         }
         return input_params       
     

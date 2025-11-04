@@ -6,7 +6,7 @@ import tensorflow as tf
 from numpy import sin, cos
 import numpy as np
 from utility import load_settings, replace_extension
-from scipy.fftpack import fft
+from scipy.fft import fft
 import os
 
 def root_mean_squared_error(y_true, y_pred):

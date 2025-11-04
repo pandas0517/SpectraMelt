@@ -344,14 +344,16 @@ class NYFR:
     # Getters
     # -------------------------------
     
-    def get_DUT_params(self):
+    def get_all_params(self):
         nyfr_params = {
+            "config_name": self.config_name,
             "lo_params": self.lo_params,
             "mixer_params": self.mixer_params,
             "wbf_params": self.wbf_params,
             "lpf_params": self.lpf_params,
             "pulse_params": self.pulse_params,
             "adc_params": self.adc_params,
+            "log_params": self.log_params,
             "store_interal_sigs": self.store_internal_sigs
         }
         return nyfr_params

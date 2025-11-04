@@ -203,12 +203,24 @@ class Recovery:
 
     def get_config_name(self):
         return self.config_name
+
     
     def get_recovered_coefs(self):
         return self.recovered_coefs
+
     
     def get_recovery_params(self):
         return self.recovery_params
 
+
     def get_log_params(self):
         return self.log_params
+    
+    
+    def get_all_params(self):
+        recovery_params ={
+            "config_name": self.config_name,
+            "recovery_params": self.recovery_params,
+            "log_params": self.log_params
+        }
+        return recovery_params

@@ -4,7 +4,7 @@
 if __name__ == '__main__':
     from os import getenv
     from dotenv import load_dotenv
-    from spectramelt.utils import get_logger
+    from spectramelt.utils import load_config_from_json, get_logger
     from pathlib import Path
     from spectramelt.Recovery import Recovery
     from spectramelt.DataSet import DataSet
@@ -17,10 +17,16 @@ if __name__ == '__main__':
     
     create_set = True
     display_recovered_signals = True
+    DUT_type = "NYFR"
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
+    input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
+    nyfr_config = load_config_from_json(Path(getenv('NYFR_CONF')))
     recovery = Recovery(config_file_path=Path(getenv('RECOVERY_CONF')))
-    dataset = DataSet(recovery=recovery, config_file_path=Path(getenv('DATASET_CONF')))
+    dataset = DataSet(input_config_name=input_config.get('config_name'),
+                      DUT_config_name=nyfr_config.get('config_name'),
+                      recovery_config_name=recovery.get_config_name(),
+                      config_file_path=Path(getenv('DATASET_CONF')))
     
     directories = dataset.get_directories()
     filenames = dataset.get_filenames()
@@ -31,10 +37,9 @@ if __name__ == '__main__':
     if create_set:
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
-                dataset.create_recovery_set(file_path)
+                dataset.create_recovery_set(recovery, file_path)
                         
     if display_recovered_signals:
-        DUT_type = type(nyfr).__name__
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")
         

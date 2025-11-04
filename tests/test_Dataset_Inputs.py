@@ -22,10 +22,10 @@ if __name__ == '__main__':
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
-    dataset = DataSet(input_signal, config_file_path=Path(getenv('DATASET_CONF')))
+    dataset = DataSet(input_config_name=input_signal.get_config_name(), config_file_path=Path(getenv('DATASET_CONF')))
 
     if create_set:
-        dataset.create_input_set()
+        dataset.create_input_set(input_signal)
         
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")

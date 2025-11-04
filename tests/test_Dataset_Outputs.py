@@ -4,7 +4,7 @@
 if __name__ == '__main__':
     from os import getenv
     from dotenv import load_dotenv
-    from spectramelt.utils import get_logger
+    from spectramelt.utils import load_config_from_json, get_logger
     from pathlib import Path
     from spectramelt.NYFR import NYFR
     from spectramelt.DataSet import DataSet
@@ -21,8 +21,11 @@ if __name__ == '__main__':
     display_premultiply_signals = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
+    input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
     nyfr = NYFR(config_file_path=Path(getenv('NYFR_CONF')))
-    dataset = DataSet(DUT=nyfr, config_file_path=Path(getenv('DATASET_CONF')))
+    dataset = DataSet(input_config_name=input_config.get('config_name'),
+                      DUT_config_name=nyfr.get_config_name(),
+                      config_file_path=Path(getenv('DATASET_CONF')))
 
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
@@ -35,7 +38,7 @@ if __name__ == '__main__':
     if create_output_set:
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_signal_filename):
-                dataset.create_output_set(file_path)
+                dataset.create_output_set(nyfr, file_path)
                 
     if create_premultiply_set:
         for file_path in output_dir.iterdir():
