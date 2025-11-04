@@ -6,8 +6,6 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from spectramelt.utils import get_logger
     from pathlib import Path
-    from spectramelt.InputSignal import InputSignal
-    from spectramelt.NYFR import NYFR
     from spectramelt.Recovery import Recovery
     from spectramelt.DataSet import DataSet
     import atexit
@@ -21,10 +19,8 @@ if __name__ == '__main__':
     display_recovered_signals = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
-    input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
-    nyfr = NYFR(config_file_path=Path(getenv('NYFR_CONF')))
     recovery = Recovery(config_file_path=Path(getenv('RECOVERY_CONF')))
-    dataset = DataSet(input_signal, nyfr, recovery, config_file_path=Path(getenv('DATASET_CONF')))
+    dataset = DataSet(recovery=recovery, config_file_path=Path(getenv('DATASET_CONF')))
     
     directories = dataset.get_directories()
     filenames = dataset.get_filenames()
@@ -81,15 +77,22 @@ if __name__ == '__main__':
                     recovered_freq = recovery_signals[idx] / len(wbf_freq)
                     recovered_time = ifft(ifftshift(recovered_freq))
                     
-                    fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
-                    axes[0].plot(real_time, signal)
-                    axes[0].set_title("Time (File)")
-                    axes[0].set_xlim(-0.0002, 0.0002)
-                    axes[1].plot(real_freq, signal_freq)
-                    axes[1].set_title("Frequency (File)")
-                    axes[1].set_ylim(0, 0.25)
+                    fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
+                    axes[0,0].plot(real_time, signal)
+                    axes[0,0].set_title("Time (File)")
+                    axes[0,0].set_xlim(-0.0002, 0.0002)
+                    axes[0,1].plot(real_freq, signal_freq)
+                    axes[0,1].set_title("Frequency (File)")
+                    axes[0,1].set_ylim(0, 0.25)
                     # axes[1].set_xlim(-400000, 400000)
-                    fig.suptitle(f"Initial Recovery Guess Using Dictionary")
+                    axes[1,0].plot(wbf_time, recovered_time)
+                    axes[1,0].set_title("Time (File)")
+                    axes[1,0].set_xlim(-0.0002, 0.0002)
+                    axes[1,1].plot(wbf_freq, recovered_freq)
+                    axes[1,1].set_title("Frequency (File)")
+                    axes[1,1].set_ylim(0, 0.25)
+                    # axes[1].set_xlim(-400000, 400000)
+                    fig.suptitle(f"Actual vs Recovered Signals")
                     fig.tight_layout()
                     plt.show()
             

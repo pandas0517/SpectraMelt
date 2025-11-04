@@ -6,7 +6,6 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from spectramelt.utils import get_logger
     from pathlib import Path
-    from spectramelt.InputSignal import InputSignal
     from spectramelt.NYFR import NYFR
     from spectramelt.DataSet import DataSet
     import atexit
@@ -16,15 +15,14 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_set = True
+    create_output_set = True
+    create_premultiply_set = True
     display_output_signals = True
     display_premultiply_signals = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
-    input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
     nyfr = NYFR(config_file_path=Path(getenv('NYFR_CONF')))
-    DUT_type = type(nyfr).__name__
-    dataset = DataSet(input_signal, nyfr, config_file_path=Path(getenv('DATASET_CONF')))
+    dataset = DataSet(DUT=nyfr, config_file_path=Path(getenv('DATASET_CONF')))
 
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
@@ -32,14 +30,20 @@ if __name__ == '__main__':
     
     filenames = dataset.get_filenames()
     input_signal_filename = filenames.get('input_signal', "signals.npy")
+    output_signal_filename = filenames.get('output_signal', "signals.npy")
     
-    if create_set:
+    if create_output_set:
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_signal_filename):
                 dataset.create_output_set(file_path)
+                
+    if create_premultiply_set:
+        for file_path in output_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+                dataset.create_premultiply_set(file_path)
         
     if display_output_signals:
-        output_signal_filename = filenames.get('output_signal', "signals.npy")
+        DUT_type = type(nyfr).__name__
         samp_time_filename = filenames.get('samp_time', "sampled_time.npy")
         samp_freq_filename = filenames.get('samp_freq', "sampled_freq.npy")
         samp_time = np.load(output_dir / samp_time_filename)
