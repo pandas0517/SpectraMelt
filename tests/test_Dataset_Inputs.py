@@ -12,7 +12,7 @@ if __name__ == '__main__':
     import numpy as np
     import pickle
     import matplotlib.pyplot as plt
-    from scipy.fftpack import fft
+    from scipy.fft import fft, fftshift
 
     load_dotenv()
 
@@ -58,7 +58,8 @@ if __name__ == '__main__':
                     amps = [w["amp"] / 2 for w in wave_param]
                     freqs = [w["freq"] for w in wave_param]
                     neg_freqs = [-f for f in freqs]
-                    signal_freq = np.fft.fftshift(np.abs(fft(signal))) / len(real_freq)
+                    signal_freq = fftshift(np.abs(fft(signal))) / len(real_freq)
+                    
                     fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
                     axes[0].plot(real_time, signal)
                     axes[0].set_title("Time (File)")

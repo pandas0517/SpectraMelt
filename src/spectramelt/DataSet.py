@@ -356,8 +356,8 @@ class DataSet:
 
             inputset_path = input_dirs / f"{tones}_tone_{input_signal_filename}"
             np.save(inputset_path, input_signals)
+            self.logger.info("{tones}-Tone Input Set Creation Complete")                    
 
-        self.logger.info("Input Set Creation Complete")                    
 
     def create_output_set(self, inputset_path):
         if not inputset_path.exists():
@@ -369,14 +369,12 @@ class DataSet:
         # Extract identifying portion (for example, everything up to "signals.npy")
         stem = inputset_path.name
         key_part = stem.split(input_signal_filename)[0]
-        
-        self.logger.info("Starting Output Set Creation...")
+
         # --- Setup and pre-saves ---
         DUT = self.DUT
         if DUT is None:
             self.logger.error("DUT Object not set")
             raise ValueError("DUT Object Not Set")
-        DUT_type = self.outputset_params.get('DUT_type', "nyfr")
         
         input_dirs = self.directories.get('inputs', "Inputs")
         real_time_filename = self.filenames.get('real_time', "real_time.npy")
@@ -391,60 +389,87 @@ class DataSet:
         
         output_dirs = self.directories.get('outputs', "Outputs")
         premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
         output_signal_filename = self.filenames.get("output_signal", "signals.npy")
         dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+        
         samp_time_filename = self.filenames.get('samp_time', "sampled_time.npy")
         samp_freq_filename = self.filenames.get('samp_freq', "sampled_freq.npy")
         
+        wbf_time_filename = self.filenames.get('wbf_time', "wbf_time.npy")
+        wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
+        
         output_dirs.mkdir(parents=True, exist_ok=True)
         output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
+        
+        premultiply_dir.mkdir(parents=True, exist_ok=True)
         premultiply_file = premultiply_dir / f"{key_part}{output_signal_filename}"
+        
         dictionary_file = output_dirs / dictionary_filename
+        
         samp_time_file = output_dirs / samp_time_filename
-        samp_freq_file = output_dirs / samp_freq_filename                             
+        samp_freq_file = output_dirs / samp_freq_filename 
+        
+        wbf_time_file = output_dirs / wbf_time_filename
+        wbf_freq_file = output_dirs / wbf_freq_filename
         
         # --- Config file ---
         DUT_config_file = output_dirs.parent / DUT_config_filename
         DUT_params = DUT.get_DUT_params()
+        outputset_params = self.outputset_params
         if not DUT_config_file.exists():
             DUT_config = {
                 "config_name": self.config_name,
-                "output": DUT_params
+                "output": DUT_params,
+                "outputset": outputset_params
             }
             save_to_json(DUT_config, DUT_config_file)
-        
+            
+        DUT_type = outputset_params.get('DUT_type', "nyfr")        
         # Premultiply signals used for ML sets
-        premultiply = self.outputset_params.get('premultiply', False)
-        scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        premultiply = outputset_params.get('premultiply', False)
+        scale_dict = outputset_params.get('scale_dict', 1.0)
         premultiply_signals = np.zeros_like(input_signals)
         
         dictionary = None
         output_signal_list = []
         
+        self.logger.info("Starting Output Set Creation...")
+        start = time.time()
         for idx, signal in enumerate(input_signals):
             quantized_signals = DUT.create_output_signal(signal, real_time)
             output_signal = quantized_signals.get('quantized_values')
             output_signal_list.append(output_signal)
             
-            if idx == 0 and not dictionary_file.exists():
-                match DUT_type:
-                    case "nyfr":               
-                        conditioned_signals = DUT.get_conditioned_signals()
-                        conditioned_time = conditioned_signals.get('time', None)
-                        lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
-                        dictionary = self.create_dictionary(conditioned_time, lo_phase_mod_mid)
-                np.save(dictionary_file, dictionary)
-                self.logger.info(f"Dictionary Creation Complete for DUT {DUT_type}")
-            
-            if idx == 0 and not samp_time_file.exists():
-                np.save(samp_time_file, quantized_signals.get('mid_times'))
+            if idx == 0:
+                if not dictionary_file.exists():
+                    match DUT_type:
+                        case "nyfr":               
+                            conditioned_signals = DUT.get_conditioned_signals()
+                            conditioned_time = conditioned_signals.get('time', None)
+                            lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
+                            dictionary = self.create_dictionary(conditioned_time, lo_phase_mod_mid)
+                    np.save(dictionary_file, dictionary)
+                    self.logger.info(f"Dictionary Creation Complete for DUT {DUT_type}")
+                    
+                if not samp_time_file.exists():
+                    np.save(samp_time_file, quantized_signals.get('mid_times'))
                 
-            if idx == 0 and not samp_freq_file.exists():
-                np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
+                if not samp_freq_file.exists():
+                    np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
+                    
+                if not wbf_time_file.exists():
+                    np.save(wbf_time_file, DUT.get_wbf_time())
+                
+                if not wbf_freq_file.exists():
+                    np.save(wbf_freq_file, DUT.get_wbf_freq())
                 
             if premultiply:
                 premultiply_signals[idx] = np.dot(np.linalg.pinv(scale_dict * dictionary), output_signal)
+                
+        stop = time.time()
+        self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
         
         if premultiply:
             np.save(premultiply_file, premultiply_signals)
@@ -460,9 +485,7 @@ class DataSet:
             self.logger.error("Output Set File Does Not Exist")
             raise ValueError("Output Set File Does Not Exist")
         output_signals = np.load(outputset_path)
-        
-        self.logger.info(f"Starting Premultiply Set Creation...")
-        
+
         if dictionary_path is None:
             output_dirs = self.directories.get('outputs', "Outputs")
             dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
@@ -473,154 +496,82 @@ class DataSet:
         dictionary = np.load(dictionary_path)
             
         premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        premultiply_dir.mkdir(parents=True, exist_ok=True)
         premultiply_file = premultiply_dir / outputset_path.name
-        scale_dict = self.outputset_params.get('scale_dict', 1.0)
         
+        scale_dict = self.outputset_params.get('scale_dict', 1.0)
         premultiply_signal_list = []
+        
+        self.logger.info(f"Starting Premultiply Set Creation...")
+        start = time.time()
+        
         for signal in output_signals:
             premultiply_signal_list.append(np.dot(np.linalg.pinv(scale_dict * dictionary), signal))
-        np.save(premultiply_file, np.array(premultiply_signal_list))
         
+        stop = time.time()
+        self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
+        
+        np.save(premultiply_file, np.array(premultiply_signal_list))
         self.logger.info(f"Premultiply Set Creation Complete for Output Set {outputset_path}")   
-            
-    def batch_recover(self, nyfr=None, filenames=None, directories=None, get_recovery_time=False):
-        self.__set_init(nyfr=nyfr, filenames=filenames, directories=directories)
-        if self.__needs_init():
-            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
-            return
-        system_params = self.nyfr.get_system_params()
-        dictionary_params = self.nyfr.get_dictionary_params()
-        recovery_params = self.nyfr.get_recovery_params()
 
-        # mlp_inv_mod = 4 / self.nyfr.get_adc_clock_freq()
-        mlp_inv_mod = 1
-        recovery_list = []
-        for mode in recovery_params['modes']:
-            recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
-            if ( recovery_params['type'] == 'MLP1' ):
-                recovery_base_path = os.path.join(recovery_base_path,
-                                                  mode)
-            if ( mode == 'real_imag' ):
-                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['real']
-                mlp_models_base_path_aux = self.mlp_models_dir[dictionary_params['version']]['imag']
-            elif ( mode == 'mag_ang' ):
-                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['mag']
-                mlp_models_base_path_aux = self.mlp_models_dir[dictionary_params['version']]['ang']
-            elif ( mode == 'complex' ):
-                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['complex']
-                mlp_models_base_path_aux = None
-            elif ( mode == 'active_zones' ):
-                mlp_models_base_path = self.mlp_models_dir[dictionary_params['version']]['active_zones']
-                mlp_models_base_path_aux = None
-            for processing_system in system_params['processing_systems']:
-                for noise_level, _ in self.input_set_params["noise_levels"]:
-                    for phase_shift, _ in self.input_set_params["phase_shifts"]:
-                        for input_tones, num_tones in self.input_set_params["input_tones"]:
-                            if ( mode == 'real_imag' ):
-                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode]['real'][processing_system])
-                                recovery_log_file_path_aux = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode]['imag'][processing_system])
-                            elif ( mode == 'mag_ang' ):
-                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode]['mag'][processing_system])
-                                recovery_log_file_path_aux = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode]['ang'][processing_system])
-                            elif ( mode == 'complex' ):
-                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode][processing_system])
-                                recovery_log_file_path_aux = None
-                            elif ( mode == 'active_zones' ):
-                                recovery_log_file_path = os.path.join(self.recovery_dir[dictionary_params['version']][recovery_params['type']],
-                                                                    mode,
-                                                                    self.recovery_file[mode][processing_system])
-                                recovery_log_file_path_aux = None
-                            for f_mod, _ in self.input_set_params["f_mods"]:
-                                for f_delta, _ in self.input_set_params["f_deltas"]:
-                                    output_file_path = os.path.join(self.output_dir,
-                                                                    noise_level,
-                                                                    phase_shift,
-                                                                    f_mod,
-                                                                    f_delta,
-                                                                    self.input_tones[input_tones]['sigs'])
-                                    mlp_model_file_path = os.path.join(mlp_models_base_path,
-                                                                       noise_level,
-                                                                       phase_shift,
-                                                                       f_mod,
-                                                                       f_delta,
-                                                                       self.mlp_models_file['name'])
-                                    if self.input_set_params["use_per_signal_model"]:
-                                        mlp_model_per_set_file_path = os.path.join(mlp_models_base_path,
-                                                                        noise_level,
-                                                                        phase_shift,
-                                                                        f_mod,
-                                                                        f_delta,
-                                                                        self.input_tones[input_tones]['sigs'])
-                                        mlp_model_per_set_file_path = replace_extension(mlp_model_per_set_file_path, "keras")
-                                        replace_file(mlp_model_file_path, mlp_model_per_set_file_path)
-                                    mlp_model_aux_file_path = None
-                                    if mlp_models_base_path_aux is not None:
-                                        mlp_model_aux_file_path = os.path.join(mlp_models_base_path_aux,
-                                                                               noise_level,
-                                                                               phase_shift,
-                                                                               f_mod,
-                                                                               f_delta,
-                                                                               self.mlp_models_file['name'])
-                                    dictionary_file_path = os.path.join(self.dictionary_dir[dictionary_params['version']],
-                                                                        f_mod,
-                                                                        f_delta,
-                                                                        self.dictionary_file['name'])
-                                    recovery_file_path = os.path.join(recovery_base_path,
-                                                                      noise_level,
-                                                                      phase_shift,
-                                                                      f_mod,
-                                                                      f_delta,
-                                                                      self.input_tones[input_tones]['sigs'])
-                                    # disabling checking log for processed files flag for now
-                                    # found_string_in_file = False
-                                    found_string_in_file = True
-                                    found_string_in_file_aux = False
-                                    if os.path.isfile(recovery_log_file_path):
-                                        with open(recovery_log_file_path, "r") as recovery_log:
-                                            for line in recovery_log:
-                                                if output_file_path in line:
-                                                    found_string_in_file = True
-                                                    break
-                                    if recovery_log_file_path_aux is not None and os.path.isfile(recovery_log_file_path_aux):
-                                        with open(recovery_log_file_path_aux, "r") as recovery_log:
-                                            for line in recovery_log:
-                                                if output_file_path in line:
-                                                    found_string_in_file_aux = True
-                                                    break                    
-                                    if ( found_string_in_file ):
-                                        output_set = np.load(output_file_path)
-                                        dictionary = np.load(dictionary_file_path)
-                                        if ( not os.path.isfile(recovery_file_path )):
-                                            if get_recovery_time:
-                                                ave_recovery_time = 0
-                                                start_time = time.perf_counter()
-                                            for idx in range(recovery_params['set_size']):
-                                                pass
-                                                recovered_signal = self.nyfr.recover_signal(dictionary,
-                                                                                            output_set[idx],
-                                                                                            file_path=mlp_model_file_path,
-                                                                                            aux_file_path=mlp_model_aux_file_path,
-                                                                                            mlp_inv_mod=mlp_inv_mod,
-                                                                                            mode=mode,
-                                                                                            num_tones=num_tones[-1])
-                                                recovery_list.append(recovered_signal)
-                                            if get_recovery_time:
-                                                end_time = time.perf_counter()
-                                                ave_recovery_time = ( end_time - start_time ) / recovery_params['set_size']
-                                            recovery_set = np.array(recovery_list)
-                                            np.save(recovery_file_path, recovery_set)
-                                            recovery_list = []
-                                        delete_lines_with_string(recovery_log_file_path, output_file_path)
+
+    def create_recovery_set(self, outputset_path, dictionary_path=None):
+        if not outputset_path.exists():
+            self.logger.error("Output Set File Does Not Exist")
+            raise ValueError("Output Set File Does Not Exist")
+        output_signals = np.load(outputset_path)
+        
+        output_signal_filename = self.filenames.get('output_signal', "signals.npy")
+        # Extract identifying portion (for example, everything up to "signals.npy")
+        stem = outputset_path.name
+        key_part = stem.split(output_signal_filename)[0]
+          
+        if dictionary_path is None:
+            output_dirs = self.directories.get('outputs', "Outputs")
+            dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+            dictionary_path = output_dirs / dictionary_filename
+        if not dictionary_path.exists():
+            self.logger.error("Dictionary File Does Not Exist")
+            raise ValueError("Dictionary File Does Not Exist")
+        dictionary = np.load(dictionary_path)
+
+        # --- Setup and pre-saves ---
+        recovery = self.recovery
+        if recovery is None:
+            self.logger.error("Recovery Object not set")
+            raise ValueError("Recovery Object Not Set")
+      
+        recovery_dirs = self.directories.get('recovery', "Recovery")
+        recovery_dirs.mkdir(parents=True, exist_ok=True)
+        recovered_signal_filename = self.filenames.get("recovered", "recovered.npy")
+        recovery_file = recovery_dirs / f"{key_part}{recovered_signal_filename}"
+        
+        # --- Config file ---     
+        recovery_config_filename = self.filenames.get('recovery_config', "recovery_config.json")
+        recovery_config_file = recovery_dirs.parent / recovery_config_filename           
+        recovery_params = recovery.get_recovery_params()
+        if not recovery_config_file.exists():
+            recovery_config = {
+                "config_name": self.config_name,
+                "recovery": recovery_params
+            }
+            save_to_json(recovery_config, recovery_config_file)
+            
+        recovery_method = recovery_params.get('method')
+        recovered_sig_list = []
+
+        self.logger.info(f"Starting Recovery Set Creation...")
+        start = time.time() 
+         
+        for signal in output_signals:
+            recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
+            
+        stop = time.time()
+        self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                  
+        np.save(recovery_file, np.array(recovered_sig_list))
+        self.logger.info(f"Recovery Set Creation Complete for Output Set {outputset_path} using Recovery Method {recovery_method}")
+        
         
     # -------------------------------
     # Getters

@@ -2,6 +2,7 @@ import numpy as np
 import os
 from importlib import import_module
 from .utils import load_config_from_json, get_logger
+from scipy.fft import fft
 
 class Recovery:
 
@@ -109,7 +110,7 @@ class Recovery:
         threshold_frac = self.recovery_params.get('threshold_frac', 0.05)
         auto_threshold = self.recovery_params.get('auto_threshold', False)
 
-        fft_vals = np.fft.fft(signal)
+        fft_vals = fft(signal)
 
         # Magnitude + Phase
         magnitude = np.abs(fft_vals)
