@@ -8,6 +8,7 @@ from .utils import (
 import numpy as np
 import pickle
 import time
+import copy
 
 class DataSet:
     def __init__(self,
@@ -57,10 +58,10 @@ class DataSet:
         if dataset_params is None:
             dataset_params = {}
         config_name = dataset_params.get('config_name', "Dataset_Config_1")
-        input_config_name = dataset_params.get('input_config_name', "Input_Config_1")
-        DUT_config_name = dataset_params.get('DUT_config_name', "DUT_Config_1")
-        recovery_config_name = dataset_params.get('recovery_config_name', "Recovery_Config_1")
-        ML_config_name = dataset_params.get('ML_config_name', "ML_Config_1")
+        input_config_name = dataset_params.get('input_config_name', None)
+        DUT_config_name = dataset_params.get('DUT_config_name', None)
+        recovery_config_name = dataset_params.get('recovery_config_name', None)
+        ML_config_name = dataset_params.get('ML_config_name', None)
         inputset_params = dataset_params.get('inputset_params', None)
         outputset_params = dataset_params.get('outputset_params', None)
         filenames = dataset_params.get('filenames', None)
@@ -88,7 +89,7 @@ class DataSet:
         self.set_input_config_name(input_config_name)
         self.set_DUT_config_name(DUT_config_name)
         self.set_recovery_config_name(recovery_config_name)
-        self.set_ML_models_dir()
+        self.set_ML_config_name(ML_config_name)
 
         
     def set_log_params(self, log_params=None):
@@ -136,46 +137,58 @@ class DataSet:
 
 
     def set_input_config_name(self, input_config_name):
-        self.directory_params['tail']['inputs'] = [input_config_name,
+        if input_config_name is None:
+            input_config_name = "Input_Config_1"
+
+        self.internal_directory_params['tail']['inputs'] = [input_config_name,
                                 self.directory_params['tail']['inputs']]
-        self.directories = build_flat_paths(self.directory_params)
+        
+        self.directories = build_flat_paths(self.internal_directory_params)
         
         self.input_config_name = input_config_name
         
 
     def set_DUT_config_name(self, DUT_config_name):
-        self.directory_params['tail']['ml_models'] = [self.input_config_name,
-                                        DUT_config_name,
-                                        self.directory_params['tail']['ml_models']]
-        self.directory_params['tail']['premultiply'] = [self.input_config_name,
-                                DUT_config_name,
-                                self.directory_params['tail']['outputs'],
-                                self.directory_params['tail']['premultiply']]
-        self.directory_params['tail']['outputs'] = [self.input_config_name,
-                                        DUT_config_name,
-                                        self.directory_params['tail']['outputs']]
+        if DUT_config_name is None:
+            DUT_config_name = "DUT_Config_1"
 
-        self.directories = build_flat_paths(self.directory_params)
+        self.internal_directory_params['tail']['premultiply'] = [self.input_config_name,
+                                    DUT_config_name,
+                                    self.directory_params['tail']['outputs'],
+                                    self.directory_params['tail']['premultiply']]
+        self.internal_directory_params['tail']['outputs'] = [self.input_config_name,
+                                    DUT_config_name,
+                                    self.directory_params['tail']['outputs']]
+
+        self.directories = build_flat_paths(self.internal_directory_params)
         
         self.DUT_config_name = DUT_config_name
      
 
     def set_recovery_config_name(self, recovery_config_name):
-        self.directory_params['tail']['recovery'] = [self.input_config_name,
+        if recovery_config_name is None:
+            recovery_config_name = "Recovery_Config_1"
+
+        self.internal_directory_params['tail']['recovery'] = [self.input_config_name,
                                     self.DUT_config_name,
                                     recovery_config_name,
                                     self.directory_params['tail']['recovery']]
-        self.directories = build_flat_paths(self.directory_params)
+        
+        self.directories = build_flat_paths(self.internal_directory_params)
 
         self.recovery_config_name = recovery_config_name 
         
 
     def set_ML_config_name(self, ML_config_name):
-        self.directory_params['tail']['ml_models'] = [self.input_config_name,
+        if ML_config_name is None:
+            ML_config_name = "ML_Config_1"
+
+        self.internal_directory_params['tail']['ml_models'] = [self.input_config_name,
                                     self.DUT_config_name,
                                     ML_config_name,
                                     self.directory_params['tail']['ml_models']]
-        self.directories = build_flat_paths(self.directory_params)
+        
+        self.directories = build_flat_paths(self.internal_directory_params)
         
         self.ML_config_name = ML_config_name
 
@@ -210,6 +223,7 @@ class DataSet:
             if directory_params['base'][base_dir] is None:
                 directory_params['base'][base_dir] = find_project_root()
 
+        self.internal_directory_params = copy.deepcopy(directory_params)
         self.directory_params = directory_params            
         
 
@@ -448,27 +462,32 @@ class DataSet:
             output_signal_list.append(output_signal)
             
             if idx == 0:
+                self.logger.info(f"Time, Frequency, and Dictionary array creation for DUT {DUT_type}")
                 if not dictionary_file.exists():
                     match DUT_type:
                         case "nyfr":               
                             conditioned_signals = DUT.get_conditioned_signals()
                             conditioned_time = conditioned_signals.get('time', None)
                             lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
-                            dictionary = self.create_dictionary(conditioned_time, lo_phase_mod_mid)
+                            dictionary = DUT.create_dictionary(conditioned_time, lo_phase_mod_mid)
                     np.save(dictionary_file, dictionary)
-                    self.logger.info(f"Dictionary Creation Complete for DUT {DUT_type}")
+                    self.logger.info(f"Dictionary saved to file {dictionary_file}")
                     
                 if not samp_time_file.exists():
                     np.save(samp_time_file, quantized_signals.get('mid_times'))
+                    self.logger.info(f"Sample time array saved to file {samp_time_file}")
                 
                 if not samp_freq_file.exists():
                     np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
+                    self.logger.info(f"Sample frequency array saved to file {samp_freq_file}")
                     
                 if not wbf_time_file.exists():
                     np.save(wbf_time_file, DUT.get_wbf_time())
+                    self.logger.info(f"Wideband Filter time array saved to file {wbf_time_file}")
                 
                 if not wbf_freq_file.exists():
                     np.save(wbf_freq_file, DUT.get_wbf_freq())
+                    self.logger.info(f"Wideband Filter frequency array saved to file {wbf_freq_file}")
                 
             if premultiply:
                 premultiply_signals[idx] = np.dot(np.linalg.pinv(scale_dict * dictionary), output_signal)

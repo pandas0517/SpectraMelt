@@ -15,10 +15,10 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = True
-    create_premultiply_set = True
+    create_output_set = False
+    create_premultiply_set = False
     display_output_signals = True
-    display_premultiply_signals = True
+    display_premultiply_signals = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))

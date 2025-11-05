@@ -19,13 +19,13 @@ if __name__ == '__main__':
     logger = get_logger(Path(__file__).stem)
     
     display_analog_signals = True
-    display_wbf_signals = True
-    display_LO_signals = True
-    display_mixed_signals = True
-    display_lpf_signals = True
+    display_wbf_signals = False
+    display_LO_signals = False
+    display_mixed_signals = False
+    display_lpf_signals = False
     display_conditioned_signals = True
     display_ADC_signals = True
-    display_recovered_signals = True
+    display_recovered_signals = False
     
     input_conf_1 = load_config_from_json(Path(getenv('INPUT_CONF')))
     input_signal_1 = InputSignal(input_conf_1)

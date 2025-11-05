@@ -1,8 +1,8 @@
 {
     "config_name": "Input_Config_Ideal_1",
     "time_params": {
-        "time_range": [-0.002, 0.002],
-        "sim_freq": 100000000
+        "time_range": [-0.006, 0.006],
+        "sim_freq": 10000000
     },
     "log_params": {
         "enabled": true,
