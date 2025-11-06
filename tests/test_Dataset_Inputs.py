@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_set = True
+    create_set = False
     test_max_min = True
     display_signals = True
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_signal_filename):
                 signals = np.load(file_path)
-                for signal in enumerate(signals):
+                for signal in signals:
                     if (signal > v_ref_range[1]).any() or (signal < v_ref_range[0]).any():
                         logger.info(f"Value found out of range {v_ref_range[0]} - {v_ref_range[1]} for input set {file_path.stem}")
                         break
