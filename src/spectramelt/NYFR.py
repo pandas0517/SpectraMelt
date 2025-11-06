@@ -71,8 +71,7 @@ class NYFR:
         if input_signal is not None and real_time is not None:
             self.output_signals = self.create_output_signal(input_signal, real_time)
             if self.create_dict:
-                conditioned_time = self.conditioned_signals.get('time', None)
-                self.nyfr_dict = self.create_dictionary(conditioned_time, self.lo_phase_mod_mid)
+                self.nyfr_dict = self.create_dictionary(self.lo_phase_mod_mid)
  
     # -------------------------------
     # Setters
@@ -176,32 +175,16 @@ class NYFR:
     # Core functional methods
     # -------------------------------
     
-    def create_dictionary(self, real_time, lo_phase_mod_mid):
+    def create_dictionary(self, lo_phase_mod_mid):
         """Create a real or complex dictionary matrix efficiently."""
 
-        wbf_cutoff_freq = self.wbf_params.get('cutoff_freq')
-        total_time = abs(real_time[-1] - real_time[0])
-        points_per_second = round(wbf_cutoff_freq)
-        num_time_points = int(round(total_time * points_per_second))        
-
-        self.wbf_time = np.linspace(
-            real_time[0],
-            real_time[-1],
-            num_time_points,
-            endpoint=False
-        )
-
-        self.wbf_freq = np.linspace(
-            -points_per_second / 2,
-            points_per_second / 2,
-            num_time_points,
-            endpoint=False
-        )
-
+        num_time_points = len(self.wbf_time)
+        time_step = self.wbf_time[1] - self.wbf_time[0]
+        
         adc_clock_freq = self.adc_params.get('adc_samp_freq', 100)
 
         # Core band and zone parameters
-        self.K_band = round((num_time_points * adc_clock_freq) / points_per_second)
+        self.K_band = round(num_time_points * adc_clock_freq * time_step)
         self.Zones = int(num_time_points / self.K_band)
 
         R_init = np.eye(self.K_band, dtype=complex)
@@ -321,6 +304,28 @@ class NYFR:
             
         quantized_signals = adc.get_quantizer_signals()
         self.conditioned_signals = adc.get_conditioned_signals()
+        conditioned_time = self.conditioned_signals.get('time', None)
+        
+        wbf_cutoff_freq = self.wbf_params.get('cutoff_freq')
+        total_time = abs(conditioned_time[-1] - conditioned_time[0])
+        
+        # Multiply by 2 to account for Nyquist rate
+        points_per_second = round(wbf_cutoff_freq * 2)
+        num_time_points = int(round(total_time * points_per_second))        
+
+        self.wbf_time = np.linspace(
+            conditioned_time[0],
+            conditioned_time[-1],
+            num_time_points,
+            endpoint=False
+        )
+
+        self.wbf_freq = np.linspace(
+            -points_per_second / 2,
+            points_per_second / 2,
+            num_time_points,
+            endpoint=False
+        )
         
         # Find closest indices of ADC quantizer mid_times in real_time
         sampled_indicies = np.searchsorted(real_time, quantized_signals.get('mid_times'))

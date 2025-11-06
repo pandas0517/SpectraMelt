@@ -202,10 +202,11 @@ class ADC:
             
         # --- Compute corresponding frequency axis (for FFT-based analysis) ---
         num_samples = len(corresponding_time)
+        time_step = corresponding_time[1] - corresponding_time[0]
         total_time = corresponding_time[-1] - corresponding_time[0]
         corresponding_freq = np.linspace(
-            -0.5 * num_samples / total_time,
-            0.5 * num_samples / total_time,
+            -0.5 / time_step,
+            0.5 / time_step,
             num_samples,
             endpoint=False
         )
@@ -296,12 +297,10 @@ class ADC:
 
         # --- Compute sampled frequency axis (for FFT-based analysis) ---
         num_samples = len(mid_times)
-        total_time = mid_times[-1] - mid_times[0]
-        if total_time <= 0:
-            total_time = 1.0 / sim_freq  # fallback if single sample
+        time_step = mid_times[1] - mid_times[0]
         sampled_freq = np.linspace(
-            -0.5 * num_samples / total_time,
-             0.5 * num_samples / total_time,
+            -0.5 / time_step,
+             0.5 / time_step,
              num_samples,
              endpoint=False
         )
