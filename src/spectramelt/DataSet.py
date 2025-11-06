@@ -462,30 +462,29 @@ class DataSet:
             output_signal_list.append(output_signal)
             
             if idx == 0:
-                self.logger.info(f"Time, Frequency, and Dictionary array creation for DUT {DUT_type}")
                 if not dictionary_file.exists():
                     match DUT_type:
                         case "nyfr":               
                             lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
                             dictionary = DUT.create_dictionary(lo_phase_mod_mid)
                     np.save(dictionary_file, dictionary)
-                    self.logger.info(f"Dictionary saved to file {dictionary_file}")
+                    self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
                     
                 if not samp_time_file.exists():
                     np.save(samp_time_file, quantized_signals.get('mid_times'))
-                    self.logger.info(f"Sample time array saved to file {samp_time_file}")
+                    self.logger.info(f"DUT {DUT_type} Sample time array saved to file {samp_time_file}")
                 
                 if not samp_freq_file.exists():
                     np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
-                    self.logger.info(f"Sample frequency array saved to file {samp_freq_file}")
+                    self.logger.info(f"DUT {DUT_type} Sample frequency array saved to file {samp_freq_file}")
                     
                 if not wbf_time_file.exists():
                     np.save(wbf_time_file, DUT.get_wbf_time())
-                    self.logger.info(f"Wideband Filter time array saved to file {wbf_time_file}")
+                    self.logger.info(f"DUT {DUT_type} Wideband Filter time array saved to file {wbf_time_file}")
                 
                 if not wbf_freq_file.exists():
                     np.save(wbf_freq_file, DUT.get_wbf_freq())
-                    self.logger.info(f"Wideband Filter frequency array saved to file {wbf_freq_file}")
+                    self.logger.info(f"DUT {DUT_type} Wideband Filter frequency array saved to file {wbf_freq_file}")
                 
             if premultiply:
                 premultiply_signals[idx] = np.dot(np.linalg.pinv(scale_dict * dictionary), output_signal)
