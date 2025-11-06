@@ -335,7 +335,7 @@ class NYFR:
             self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
          
         if self.store_internal_sigs:
-            self.logger.info("Storing Internal Signals")
+            # self.logger.info("Storing Internal Signals")
             self.wbf_signal = wbf_signal
             self.lo_signal = lo_signal
             self.pulse_signal = pulse_signal

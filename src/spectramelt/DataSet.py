@@ -466,10 +466,8 @@ class DataSet:
                 if not dictionary_file.exists():
                     match DUT_type:
                         case "nyfr":               
-                            conditioned_signals = DUT.get_conditioned_signals()
-                            conditioned_time = conditioned_signals.get('time', None)
                             lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
-                            dictionary = DUT.create_dictionary(conditioned_time, lo_phase_mod_mid)
+                            dictionary = DUT.create_dictionary(lo_phase_mod_mid)
                     np.save(dictionary_file, dictionary)
                     self.logger.info(f"Dictionary saved to file {dictionary_file}")
                     

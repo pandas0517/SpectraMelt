@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = False
+    create_output_set = True
     create_premultiply_set = False
     display_output_signals = True
     display_premultiply_signals = False
