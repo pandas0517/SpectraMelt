@@ -365,7 +365,9 @@ class DataSet:
 
             inputset_path = input_dirs / f"{tones}_tone_{input_signal_filename}"
             np.save(inputset_path, input_signals)
-            self.logger.info("{tones}-Tone Input Set Creation Complete")                    
+            self.logger.info(f"{tones}-Tone Input Set saved to file {inputset_path}")
+
+        self.logger.info("All Input Sets Created and Saved")
 
 
     def create_output_set(self, DUT, inputset_path, input_signal=None):
@@ -454,7 +456,7 @@ class DataSet:
         dictionary = None
         output_signal_list = []
         
-        self.logger.info("Starting Output Set Creation...")
+        self.logger.info(f"Starting Output Set Creation for {inputset_path}")
         start = time.time()
         for idx, signal in enumerate(input_signals):
             quantized_signals = DUT.create_output_signal(signal, real_time)
@@ -532,7 +534,7 @@ class DataSet:
         scale_dict = self.outputset_params.get('scale_dict', 1.0)
         premultiply_signal_list = []
         
-        self.logger.info(f"Starting Premultiply Set Creation...")
+        self.logger.info(f"Starting Premultiply Set Creation for {outputset_path}")
         start = time.time()
         
         for signal in output_signals:
@@ -601,7 +603,7 @@ class DataSet:
         recovery_method = recovery_params.get('method')
         recovered_sig_list = []
 
-        self.logger.info(f"Starting Recovery Set Creation...")
+        self.logger.info(f"Starting Recovery Set Creation for {outputset_path}")
         start = time.time() 
          
         for signal in output_signals:

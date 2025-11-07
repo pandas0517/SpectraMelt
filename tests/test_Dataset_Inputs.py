@@ -13,10 +13,11 @@ if __name__ == '__main__':
     import pickle
     import matplotlib.pyplot as plt
     from scipy.fft import fft, fftshift
+    import logging
 
     load_dotenv()
     
-    create_set = False
+    create_set = True
     test_max_min = True
     display_signals = True
 
@@ -44,6 +45,7 @@ if __name__ == '__main__':
                         break
 
     if display_signals:
+        logging.getLogger('matplotlib').setLevel(logging.INFO)
         input_wave_params_filename = filenames.get('input_wave_params', "wave_params.pkl")
         real_time_filename = filenames.get('real_time', "real_time.npy")
         real_freq_filename = filenames.get('real_freq', "real_freq.npy")

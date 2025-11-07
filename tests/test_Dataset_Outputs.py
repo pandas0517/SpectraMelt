@@ -12,6 +12,7 @@ if __name__ == '__main__':
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy.fft import fft, ifft, fftshift, ifftshift
+    import logging
 
     load_dotenv()
     
@@ -34,16 +35,21 @@ if __name__ == '__main__':
     filenames = dataset.get_filenames()
     input_signal_filename = filenames.get('input_signal', "signals.npy")
     output_signal_filename = filenames.get('output_signal', "signals.npy")
-    
+    logging.getLogger('matplotlib').setLevel(logging.INFO)
+
     if create_output_set:
+        logger.info(f"Starting Output Set Creation...")
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_signal_filename):
                 dataset.create_output_set(nyfr, file_path)
+        logger.info(f"Output Set Creation Complete")
                 
     if create_premultiply_set:
+        logger.info(f"Starting Premultiply Set Creation...")
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
                 dataset.create_premultiply_set(file_path)
+        logger.info(f"Premultiply Set Creation Complete")
         
     if display_output_signals:
         DUT_type = type(nyfr).__name__

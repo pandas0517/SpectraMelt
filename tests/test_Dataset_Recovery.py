@@ -12,6 +12,7 @@ if __name__ == '__main__':
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy.fft import fft, ifft, fftshift, ifftshift
+    import logging
 
     load_dotenv()
     
@@ -35,11 +36,14 @@ if __name__ == '__main__':
     output_signal_filename = filenames.get('output_signal', "signals.npy")
     
     if create_set:
+        logger.info(f"Starting Recovery Set Creation...")
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
                 dataset.create_recovery_set(recovery, file_path)
+        logger.info(f"Recovery Set Creation Complete")
                         
     if display_recovered_signals:
+        logging.getLogger('matplotlib').setLevel(logging.INFO)
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")
         
