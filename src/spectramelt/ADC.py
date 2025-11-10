@@ -414,11 +414,10 @@ class ADC:
             
         store_sh_sigs = self.adc_params.get('store_sh_sigs', True)
         if store_sh_sigs:
-            # self.logger.info("Storing Sample and Hold Signals")
+            self.logger.debug("Storing Sample and Hold Signals")
             self.sh_signals = sh_signals
             
-        return self._quantizer(sh_signals, conditioned_time) 
-        
+        return self._quantizer(sh_signals, conditioned_time)   
  
     # -------------------------------
     # Getters

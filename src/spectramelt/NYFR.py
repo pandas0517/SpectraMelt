@@ -10,7 +10,6 @@ from .Mixer import Mixer
 class NYFR:
     """
     """
-
     def __init__(self,
                  input_signal=None,
                  real_time=None,
@@ -23,7 +22,7 @@ class NYFR:
                  adc_params=None,
                  log_params=None,
                  dict_type="real",
-                 config_name="NYFR_Config_1",
+                 config_name=None,
                  store_internal_sigs=True,
                  create_dict=True,
                  config_file_path=None) -> None:
@@ -87,7 +86,7 @@ class NYFR:
         lpf_params = nyfr_params.get('lpf_params', None)
         wbf_params = nyfr_params.get('wbf_params', None)
         mixer_params = nyfr_params.get('mixer_params', None)
-        config_name = nyfr_params.get('config_name', "Input_Config_1")
+        config_name = nyfr_params.get('config_name', None)
         dict_type = nyfr_params.get('dict_type', "real")
         create_dict = nyfr_params.get('create_dict', True)
         log_params = nyfr_params.get('log_params', None)
@@ -121,6 +120,8 @@ class NYFR:
         self.set_create_dict(create_dict)
         
     def set_config_name(self, config_name):
+        if config_name is None:
+            config_name = "NYFR_Config_1"
         self.config_name = config_name
         
     def set_log_params(self, log_params=None):
@@ -335,7 +336,7 @@ class NYFR:
             self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
          
         if self.store_internal_sigs:
-            # self.logger.info("Storing Internal Signals")
+            self.logger.debug("Storing Internal Signals")
             self.wbf_signal = wbf_signal
             self.lo_signal = lo_signal
             self.pulse_signal = pulse_signal
