@@ -242,6 +242,7 @@ class DataSet:
                 "input_wave_params": "wave_params.pkl",
                 "inputset_config": "inputset_config.json",
                 "output_signal": "time_signals.npy",
+                "premultiply": "premult_signals.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
@@ -600,7 +601,7 @@ class DataSet:
             
         premultiply_dir = self.directories.get('premultiply', "Premultiply")
         premultiply_dir.mkdir(parents=True, exist_ok=True)
-        premultiply_file = premultiply_dir / file_path.name
+        premultiply_filename = self.filenames.get('premultiply', "premult_signals.npy")
         
         scale_dict = self.outputset_params.get('scale_dict', 1.0)
         scaled_dictionary = scale_dict * dictionary
@@ -612,7 +613,9 @@ class DataSet:
         
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
-
+                stem = file_path.name
+                key_part = stem.split(output_signal_filename)[0]
+                premultiply_file = premultiply_dir / f"{key_part}{premultiply_filename}"
                 output_signals = np.load(file_path)
 
                 self.logger.info(f"Starting Premultiply Set Creation for {file_path}")

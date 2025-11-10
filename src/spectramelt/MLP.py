@@ -10,7 +10,6 @@ from keras import (
     optimizers,
 )
 import tensorflow as tf
-import h5py
 from sklearn.model_selection import train_test_split
 
 class MLP:
@@ -290,7 +289,7 @@ class MLP:
             shuffle:          shuffle entire combined dataset
             random_state:     RNG seed or instance
         """
-
+        import h5py
         # --- Determine chunk shape if sample signal is given ---
         # HDF5 chunking works best when a chunk contains a small batch of whole signals.
         # A reasonable default is (batch_of_128, signal_length...)
@@ -373,8 +372,7 @@ class MLP:
             h5_output_path: str,
             test_fraction: float = 0.1,
             batch_size: int = 32,
-            epochs: int = 50,
-            random_state=None
+            epochs: int = 50
     ):
         """
         Train the existing Keras model on the prepared HDF5 datasets.

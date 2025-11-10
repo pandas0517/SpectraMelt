@@ -58,6 +58,7 @@
         "input_wave_params": "wave_params.pkl",
         "inputset_config": "inputset_config.json",
         "output_signal": "time_signals.npy",
+        "premultiply": "premult_signals.npy",
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
         "recovered": "recovered.npy",

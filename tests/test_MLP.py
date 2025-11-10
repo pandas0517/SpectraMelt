@@ -6,7 +6,7 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from spectramelt.utils import load_config_from_json, get_logger
     from pathlib import Path
-    from spectramelt.NYFR import NYFR
+    from spectramelt.MLP import MLP
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
@@ -29,11 +29,43 @@ if __name__ == '__main__':
     dataset = DataSet(input_config_name=input_config.get('config_name'),
                       DUT_config_name=nyfr_config.get('config_name'),
                       config_file_path=Path(getenv('DATASET_CONF')))
-
+    mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
+    
     directories = dataset.get_directories()
-    input_dir = directories.get('inputs', "Inputs")
+    premultiply_dir = directories.get('premultiply', "Premultiply")
+    ml_models_dir = directories.get('ml_models', "ML_Models")
     output_dir = directories.get('outputs', "Outputs")    
     
     filenames = dataset.get_filenames()
-    input_freq_signal_filename = filenames.get('input_freq_signal', "freq_signals.npy")
+    premultiply_filename = filenames.get('premultiply', "premult_signals.npy")
+    premultiply_file = premultiply_dir / premultiply_filename
+    premultiply_h5_file = Path(premultiply_file).with_suffix(".h5")
+    ml_model_filename = filenames.get('ml_model', "ml_model.keras")
     output_signal_filename = filenames.get('output_signal', "time_signals.npy")
+    output_file = output_dir / output_signal_filename
+    output_h5_file = Path(output_file).with_suffix(".h5")
+        
+    premultiply_test_signal = None
+    premultiply_file_list = []
+    get_test_signal = True
+    for file_path in premultiply_dir.iterdir():
+        if file_path.is_file() and file_path.name.endswith(premultiply_filename):
+            if get_test_signal:
+                premultiply_signals = np.load(file_path)
+                premultiply_test_signal = premultiply_signals[0]
+                get_test_signal = False
+            premultiply_file_list.append(file_path)
+            
+    output_test_signal = None
+    output_file_list = []
+    get_test_signal = True
+    for file_path in output_dir.iterdir():
+        if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+            if get_test_signal:
+                output_signals = np.load(file_path)
+                output_test_signal = output_signals[0]
+                get_test_signal = False
+            output_file_list.append(file_path)
+    
+    
+    atexit.register(logger.info, "Completed Test\n")
