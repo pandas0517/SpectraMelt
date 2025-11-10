@@ -10,7 +10,7 @@ import pickle
 import time
 import copy
 from importlib import import_module
-from scipy.fft import fft
+from scipy.fft import fft, fftshift
 
 class DataSet:
     def __init__(self,
@@ -238,10 +238,11 @@ class DataSet:
                 "wbf_freq": "wbf_freq.npy",
                 "samp_time": "sampled_time.npy",
                 "samp_freq": "sampled_freq.npy",
-                "input_signal": "signals.npy",
+                "input_time_signal": "time_signals.npy",
+                "input_freq_signal": "freq_signals.npy",
                 "input_wave_params": "wave_params.pkl",
                 "inputset_config": "inputset_config.json",
-                "output_signal": "signals.npy",
+                "output_signal": "time_signals.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
@@ -277,7 +278,8 @@ class DataSet:
         real_freq_filename = self.filenames.get('real_freq', "real_freq.npy")
         inputset_config_filename = self.filenames.get('inputset_config', "inputset_config.json")
         input_wave_params_filename = self.filenames.get('input_wave_params', "wave_params.pkl")
-        input_signal_filename = self.filenames.get('input_signal', "signals.npy")
+        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
+        input_freq_signal_filename = self.filenames.get('input_freq_signal', "freq_signals.npy")
 
         input_dirs.mkdir(parents=True, exist_ok=True)
         real_time_file = input_dirs / real_time_filename
@@ -369,8 +371,8 @@ class DataSet:
             with open(inputset_wave_params_path, 'wb') as file:
                 pickle.dump(wave_param_list, file)
                 
-            inputset_time_path = input_dirs / f"{tones}_tone_time_{input_signal_filename}"
-            inputset_freq_path = input_dirs / f"{tones}_tone_freq_{input_signal_filename}"
+            inputset_time_path = input_dirs / f"{tones}_tone_{input_time_signal_filename}"
+            inputset_freq_path = input_dirs / f"{tones}_tone_{input_freq_signal_filename}"
             
             np.save(inputset_time_path, input_signals_time)
             self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
@@ -387,10 +389,10 @@ class DataSet:
             raise ValueError("Input Set File Does Not Exist")           
         input_signals = np.load(inputset_path)
         
-        input_signal_filename = self.filenames.get('input_signal', "signals.npy")
+        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
         # Extract identifying portion (for example, everything up to "signals.npy")
         stem = inputset_path.name
-        key_part = stem.split(input_signal_filename)[0]
+        key_part = stem.split(input_time_signal_filename)[0]
 
         # --- Setup and pre-saves ---
         if input_signal is not None:
@@ -512,6 +514,78 @@ class DataSet:
         np.save(output_signal_file, np.array(output_signal_list))
         
         self.logger.info(f"Output Set Creation Complete for Input Set {inputset_path}")
+
+
+    def create_nyfr_wave_params(self, nyfr):
+        self.logger.info(f"Starting NYFR folded wave parameter Creation...")
+        DUT_type = self.outputset_params.get('DUT_type', None).lower()
+        DUT_config_name = self.DUT_config_name
+        class_name = nyfr.__class__.__name__.lower()
+        config_name = nyfr.get_config_name()
+        if class_name != "nyfr":
+            self.logger.error(f"{class_name} is not a NYFR object")
+            raise ValueError(f"{class_name} is not a NYFR object")
+        elif DUT_type != "nyfr":
+            self.logger.error(f"Output set parameter {DUT_type} not NYFR")
+            raise ValueError(f"Output set parameter {DUT_type} not NYFR")
+        elif DUT_config_name != config_name:
+            self.logger.error(f"DUT config name {DUT_config_name} does not match NYFR config name {config_name}")
+            raise ValueError(f"DUT config name {DUT_config_name} does not match NYFR config name {config_name}")            
+        
+        LO_params = nyfr.get_lo_params()
+        LO_freq = LO_params.get('freq')
+        input_dir = self.directories.get('inputs', "Inputs")
+        input_signal_wave_params = self.filenames.get('input_wave_params', "wave_params.pkl")
+        output_dir = self.directories.get('outputs', "Outputs")
+        output_signal_filename = self.filenames.get('output_signal', "signals.npy")
+        samp_freq_filename = self.filenames.get('samp_freq', "sampled_freq.npy")
+        samp_freq = np.load(output_dir / samp_freq_filename)
+        for file_path in input_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_signal_wave_params):
+                stem = file_path.name
+                key_part = stem.split(input_signal_wave_params)[0]
+                output_signal_file = output_dir / f"{key_part}{output_signal_filename}"
+                nyfr_wave_file = output_dir / f"{key_part}{input_signal_wave_params}"
+                
+                if output_signal_file.exists():
+                    with open(file_path, "rb") as f:
+                        input_wave_params = pickle.load(f)
+                    
+                    nyfr_signals = np.load(output_signal_file)
+                    nyfr_centered_signals = np.zeros_like(nyfr_signals)
+                    nyfr_wave_params = []
+                    
+                    for idx, nyfr_signal in enumerate(nyfr_signals):
+                        nyfr_centered_signal = nyfr_signal - np.mean(nyfr_signal)
+                        nyfr_centered_signals[idx] = nyfr_centered_signal
+                        nyfr_signal_amp = fftshift(np.abs(fft(nyfr_centered_signal))) / len(samp_freq)
+                        nyfr_signal_phase = fftshift(np.angle(fft(nyfr_centered_signal)))
+                        input_wave_param = input_wave_params[idx]
+                        nyfr_waves = []
+                        
+                        for input_wave in input_wave_param:
+                            nyfr_wave = input_wave
+                            input_freq = input_wave.get('freq')
+                            folded_freq = np.abs(input_freq - LO_freq * round(input_freq/LO_freq))
+                            freq_idx = np.abs(samp_freq - folded_freq).argmin()
+                            nyfr_wave['amp'] = 2 * nyfr_signal_amp[freq_idx]
+                            nyfr_wave['freq'] = samp_freq[freq_idx]
+                            nyfr_wave['phase'] = nyfr_signal_phase[freq_idx]
+                            nyfr_waves.append(nyfr_wave)
+                        
+                        nyfr_wave_params.append(nyfr_waves)
+                    
+                    np.save(output_signal_file, nyfr_centered_signals)
+                    self.logger.info(f"Centered NYFR output file saved to {output_signal_file}")
+                    
+                    with open(nyfr_wave_file, 'wb') as file:
+                        pickle.dump(nyfr_wave_params, file)
+                    self.logger.info(f"NYFR folded wave parameter file saved to {nyfr_wave_file}")
+                
+                else:
+                    self.logger.error(f"NYFR output file {output_signal_file} does not exists for input set file {file_path}")
+        
+        self.logger.info(f"NYFR folded wave parameter creation complete")
         
     
     def create_premultiply_set(self,

@@ -10,6 +10,7 @@ from keras import (
     optimizers,
 )
 import tensorflow as tf
+import h5py
 from sklearn.model_selection import train_test_split
 
 class MLP:
@@ -270,8 +271,7 @@ class MLP:
             h5_out_output: str,
             max_signals_per_file: int | None = None,
             sample_signal: np.ndarray | None = None,
-            shuffle=True,
-            random_state=None,
+            shuffle=True
     ):
         """
         Convert many signal set files into two shuffled HDF5 datasets (input + output)
@@ -308,9 +308,6 @@ class MLP:
             chunk_shape_in = None
             chunk_shape_out = None
 
-        # --- Initialize RNG ---
-        rng = np.random.default_rng(random_state)
-
         # --- First pass: count total samples ---
         total_samples = 0
         for in_file in input_file_list:
@@ -345,10 +342,9 @@ class MLP:
             )
 
             # --- Streaming insert with optional shuffle-buffer ---
-            idx = 0
             order = np.arange(total_samples)
             if shuffle:
-                rng.shuffle(order)
+                self.rng.shuffle(order)
 
             write_pos = 0
 

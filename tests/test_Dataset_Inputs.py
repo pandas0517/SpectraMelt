@@ -12,8 +12,8 @@ if __name__ == '__main__':
     import numpy as np
     import pickle
     import matplotlib.pyplot as plt
-    from scipy.fft import fft, fftshift
     import logging
+    from scipy.fft import fftshift
 
     load_dotenv()
     
@@ -31,13 +31,14 @@ if __name__ == '__main__':
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
     filenames = dataset.get_filenames()
-    input_signal_filename = filenames.get('input_signal', "signals.npy")
+    input_time_signal_filename = filenames.get('input_time_signal', "time_signals.npy")
+    input_freq_signal_filename = filenames.get('input_freq_signal', "freq_signals.npy")
     
     if test_max_min:
         input_signal_params = input_signal.get_adc_params()
         v_ref_range = tuple(input_signal_params.get('v_ref_range', (0, 5)))
         for file_path in input_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_signal_filename):
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 signals = np.load(file_path)
                 for signal in signals:
                     if (signal > v_ref_range[1]).any() or (signal < v_ref_range[0]).any():
@@ -54,33 +55,35 @@ if __name__ == '__main__':
         real_freq = np.load(input_dir / real_freq_filename)
         signals_per_file = 3
         for file_path in input_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_signal_filename):
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 # 1. Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
-                key_part = stem.split(input_signal_filename)[0]
+                key_part = stem.split(input_time_signal_filename)[0]
                 
                 # 2. Search for other files containing that portion
                 for other_file in input_dir.iterdir():
                     if key_part in other_file.name and other_file.name.endswith(input_wave_params_filename):
                         with open(other_file, "rb") as f:
                             wave_params = pickle.load(f)
+                    elif key_part in other_file.name and other_file.name.endswith(input_freq_signal_filename):
+                        freq_signals = np.load(other_file)
                                       
-                signals = np.load(file_path)
+                time_signals = np.load(file_path)
                     
-                for idx, signal in enumerate(signals[:signals_per_file]):
+                for idx, time_signal in enumerate(time_signals[:signals_per_file]):
                     wave_param = wave_params[idx]
                     num_tones = len(wave_param)
                     # Extract amps and freqs
                     amps = [w["amp"] / 2 for w in wave_param]
                     freqs = [w["freq"] for w in wave_param]
                     neg_freqs = [-f for f in freqs]
-                    signal_freq = fftshift(np.abs(fft(signal))) / len(real_freq)
+                    freq_signal = fftshift(freq_signals[idx])
                     
                     fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
-                    axes[0].plot(real_time, signal)
+                    axes[0].plot(real_time, time_signal)
                     axes[0].set_title("Time (File)")
                     axes[0].set_xlim(-0.0002, 0.0002)
-                    axes[1].plot(real_freq, signal_freq)
+                    axes[1].plot(real_freq, freq_signal)
                     axes[1].scatter(freqs, amps, marker='x', color='red', s=100)  # s is marker size
                     axes[1].scatter(neg_freqs, amps, marker='x', color='red', s=100)  # s is marker size
                     axes[1].set_title("Frequency (File)")

@@ -49,7 +49,8 @@ if __name__ == '__main__':
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")
         
-        input_signal_filename = filenames.get('input_signal', "signals.npy")
+        input_time_signal_filename = filenames.get('input_time_signal', "time_signals.npy")
+        input_freq_signal_filename = filenames.get('input_freq_signal', "freq_signals.npy")
         recovered_signal_filename = filenames.get("recovered", "recovered.npy")
         
         wbf_time_filename = filenames.get('wbf_time', "wbf_time.npy")
@@ -73,26 +74,33 @@ if __name__ == '__main__':
                 stem = file_path.name
                 key_part = stem.split(recovered_signal_filename)[0]
                 
-                input_signals = None
+                input_time_signals = None
+                input_freq_signals = None
                 # 2. Search for other files containing that portion
                 for input_file in input_dir.iterdir():
-                    if key_part in input_file.name and input_file.name.endswith(input_signal_filename):
-                        input_signals = np.load(input_file)
-                if input_signals is None:
+                    if key_part in input_file.name and input_file.name.endswith(input_time_signal_filename):
+                        input_time_signals = np.load(input_file)
+                    if key_part in input_file.name and input_file.name.endswith(input_freq_signal_filename):
+                        input_freq_signals = np.load(input_file)
+                if input_time_signals is None:
                     logger.error("No matching input set file")
                     raise ValueError("No matching input set file")  
                      
                 recovery_signals = np.load(file_path)
-                for idx, signal in enumerate(input_signals[:signals_per_file]):
-                    signal_freq = fftshift(np.abs(fft(signal))) / len(real_freq)
+                for idx, time_signal in enumerate(input_time_signals[:signals_per_file]):
+                    if input_freq_signals is None:
+                        freq_signal = fftshift(np.abs(fft(time_signal))) / len(real_freq)
+                    else:
+                        freq_signal = input_freq_signals[idx]
+                        
                     recovered_freq = recovery_signals[idx] / len(wbf_freq)
                     recovered_time = ifft(ifftshift(recovered_freq))
                     
                     fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-                    axes[0,0].plot(real_time, signal)
+                    axes[0,0].plot(real_time, time_signal)
                     axes[0,0].set_title("Time (File)")
                     axes[0,0].set_xlim(-0.0002, 0.0002)
-                    axes[0,1].plot(real_freq, signal_freq)
+                    axes[0,1].plot(real_freq, freq_signal)
                     axes[0,1].set_title("Frequency (File)")
                     axes[0,1].set_ylim(0, 0.25)
                     # axes[1].set_xlim(-400000, 400000)
