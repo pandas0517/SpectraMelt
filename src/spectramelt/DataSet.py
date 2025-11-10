@@ -9,6 +9,7 @@ import numpy as np
 import pickle
 import time
 import copy
+from importlib import import_module
 
 class DataSet:
     def __init__(self,
@@ -532,18 +533,25 @@ class DataSet:
         premultiply_file = premultiply_dir / outputset_path.name
         
         scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        scaled_dictionary = scale_dict * dictionary
+
         premultiply_signal_list = []
-        
+        cp = import_module("cupy")
+        Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.float32)
+        Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
         self.logger.info(f"Starting Premultiply Set Creation for {outputset_path}")
         start = time.time()
         
         for signal in output_signals:
-            premultiply_signal_list.append(np.dot(np.linalg.pinv(scale_dict * dictionary), signal))
+            Signal = cp.asarray(signal, dtype=cp.float32)
+            result_gpu = Pinv_Dict @ Signal           # stays on GPU
+            premultiply_signal_list.append(cp.asnumpy(result_gpu))  # move to CPU list
         
         stop = time.time()
         self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
         
-        np.save(premultiply_file, np.array(premultiply_signal_list))
+        # Save as NumPy array
+        np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.float32))
         self.logger.info(f"Premultiply Set Creation Complete for Output Set {outputset_path}")   
 
 
