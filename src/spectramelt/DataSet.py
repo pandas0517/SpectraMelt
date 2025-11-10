@@ -584,35 +584,37 @@ class DataSet:
         
         output_dir = self.directories.get('outputs', "Outputs")
         output_signal_filename = self.filenames.get('output_signal', "time_signals.npy")
+        
+        if input_config_name is not None:
+            self.set_input_config_name(input_config_name)
+        if DUT_config_name is not None:
+            self.set_DUT_config_name(DUT_config_name)
+            
+        if dictionary_path is None:
+            dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+            dictionary_path = output_dir / dictionary_filename
+        if not dictionary_path.exists():
+            self.logger.error("Dictionary File Does Not Exist")
+            raise ValueError("Dictionary File Does Not Exist")
+        dictionary = np.load(dictionary_path)
+            
+        premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        premultiply_dir.mkdir(parents=True, exist_ok=True)
+        premultiply_file = premultiply_dir / file_path.name
+        
+        scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        scaled_dictionary = scale_dict * dictionary
+
+        premultiply_signal_list = []
+        cp = import_module("cupy")
+        Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
+        Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
+        
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
 
                 output_signals = np.load(file_path)
-                
-                if input_config_name is not None:
-                    self.set_input_config_name(input_config_name)
-                if DUT_config_name is not None:
-                    self.set_DUT_config_name(DUT_config_name)
-                    
-                if dictionary_path is None:
-                    dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
-                    dictionary_path = output_dir / dictionary_filename
-                if not dictionary_path.exists():
-                    self.logger.error("Dictionary File Does Not Exist")
-                    raise ValueError("Dictionary File Does Not Exist")
-                dictionary = np.load(dictionary_path)
-                    
-                premultiply_dir = self.directories.get('premultiply', "Premultiply")
-                premultiply_dir.mkdir(parents=True, exist_ok=True)
-                premultiply_file = premultiply_dir / file_path.name
-                
-                scale_dict = self.outputset_params.get('scale_dict', 1.0)
-                scaled_dictionary = scale_dict * dictionary
 
-                premultiply_signal_list = []
-                cp = import_module("cupy")
-                Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
-                Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
                 self.logger.info(f"Starting Premultiply Set Creation for {file_path}")
                 start = time.time()
                 
