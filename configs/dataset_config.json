@@ -14,7 +14,6 @@
             "NYFR"
         ],
         "DUT_type": "NYFR",
-        "premultiply": false,
         "scale_dict": 1.0
     },
     "log_params": {

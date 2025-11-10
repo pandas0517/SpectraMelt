@@ -128,7 +128,6 @@ class DataSet:
                 "valid_types": [
                     "NYFR"
                 ],
-                "premultiply": False,
                 "scale_dict": 1.0
             }
         
@@ -383,17 +382,9 @@ class DataSet:
         self.logger.info("All Input Sets Created and Saved")
 
 
-    def create_output_set(self, DUT, inputset_path, input_signal=None):
-        if not inputset_path.exists():
-            self.logger.error("Input Set File Does Not Exist")
-            raise ValueError("Input Set File Does Not Exist")           
-        input_signals = np.load(inputset_path)
+    def create_output_set(self, DUT, input_signal=None):
+        self.logger.info(f"Starting Output Set Creation...")
         
-        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
-        # Extract identifying portion (for example, everything up to "signals.npy")
-        stem = inputset_path.name
-        key_part = stem.split(input_time_signal_filename)[0]
-
         # --- Setup and pre-saves ---
         if input_signal is not None:
             self.set_input_config_name(input_signal.get_config_name())
@@ -410,9 +401,10 @@ class DataSet:
                 raise ValueError("DUT not a valid type")
             self.set_DUT_config_name(DUT.get_config_name())
         
-        input_dirs = self.directories.get('inputs', "Inputs")
+        input_dir = self.directories.get('inputs', "Inputs")
+        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
         real_time_filename = self.filenames.get('real_time', "real_time.npy")
-        real_time_file = input_dirs / real_time_filename
+        real_time_file = input_dir / real_time_filename
         if real_time_file.exists():
             real_time = np.load(real_time_file)
         elif input_signal is not None:
@@ -422,7 +414,6 @@ class DataSet:
             raise ValueError("No time file found and Input Signal Object Not Set")
         
         output_dirs = self.directories.get('outputs', "Outputs")
-        premultiply_dir = self.directories.get('premultiply', "Premultiply")
         
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
         output_signal_filename = self.filenames.get("output_signal", "signals.npy")
@@ -436,9 +427,6 @@ class DataSet:
         
         output_dirs.mkdir(parents=True, exist_ok=True)
         output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
-        
-        premultiply_dir.mkdir(parents=True, exist_ok=True)
-        premultiply_file = premultiply_dir / f"{key_part}{output_signal_filename}"
         
         dictionary_file = output_dirs / dictionary_filename
         
@@ -461,63 +449,63 @@ class DataSet:
             save_to_json(DUT_config, DUT_config_file)
             
         DUT_type = outputset_params.get('DUT_type', "nyfr")        
-        # Premultiply signals used for ML sets
-        premultiply = outputset_params.get('premultiply', False)
-        scale_dict = outputset_params.get('scale_dict', 1.0)
-        premultiply_signals = np.zeros_like(input_signals)
         
-        dictionary = None
-        output_signal_list = []
-        
-        self.logger.info(f"Starting Output Set Creation for {inputset_path}")
-        start = time.time()
-        for idx, signal in enumerate(input_signals):
-            quantized_signals = DUT.create_output_signal(signal, real_time)
-            output_signal = quantized_signals.get('quantized_values')
-            output_signal_list.append(output_signal)
-            
-            if idx == 0:
-                if not dictionary_file.exists():
-                    match DUT_type:
-                        case "nyfr":               
-                            lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
-                            dictionary = DUT.create_dictionary(lo_phase_mod_mid)
-                    np.save(dictionary_file, dictionary)
-                    self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
+        for file_path in input_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
+          
+                input_signals = np.load(file_path)
+                
+                # Extract identifying portion (for example, everything up to "signals.npy")
+                stem = file_path.name
+                key_part = stem.split(input_time_signal_filename)[0]
+                
+                dictionary = None
+                output_signal_list = []
+                
+                self.logger.info(f"Starting Output Set Creation for {file_path}")
+                start = time.time()
+                for idx, signal in enumerate(input_signals):
+                    quantized_signals = DUT.create_output_signal(signal, real_time)
+                    output_signal = quantized_signals.get('quantized_values')
+                    output_signal_list.append(output_signal)
                     
-                if not samp_time_file.exists():
-                    np.save(samp_time_file, quantized_signals.get('mid_times'))
-                    self.logger.info(f"DUT {DUT_type} Sample time array saved to file {samp_time_file}")
-                
-                if not samp_freq_file.exists():
-                    np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
-                    self.logger.info(f"DUT {DUT_type} Sample frequency array saved to file {samp_freq_file}")
+                    if idx == 0:
+                        if not dictionary_file.exists():
+                            match DUT_type:
+                                case "nyfr":               
+                                    lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
+                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid)
+                            np.save(dictionary_file, dictionary)
+                            self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
+                            
+                        if not samp_time_file.exists():
+                            np.save(samp_time_file, quantized_signals.get('mid_times'))
+                            self.logger.info(f"DUT {DUT_type} Sample time array saved to file {samp_time_file}")
+                        
+                        if not samp_freq_file.exists():
+                            np.save(samp_freq_file, quantized_signals.get('sampled_frequency'))
+                            self.logger.info(f"DUT {DUT_type} Sample frequency array saved to file {samp_freq_file}")
+                            
+                        if not wbf_time_file.exists():
+                            np.save(wbf_time_file, DUT.get_wbf_time())
+                            self.logger.info(f"DUT {DUT_type} Wideband Filter time array saved to file {wbf_time_file}")
+                        
+                        if not wbf_freq_file.exists():
+                            np.save(wbf_freq_file, DUT.get_wbf_freq())
+                            self.logger.info(f"DUT {DUT_type} Wideband Filter frequency array saved to file {wbf_freq_file}")
+                        
+                stop = time.time()
+                self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
                     
-                if not wbf_time_file.exists():
-                    np.save(wbf_time_file, DUT.get_wbf_time())
-                    self.logger.info(f"DUT {DUT_type} Wideband Filter time array saved to file {wbf_time_file}")
+                np.save(output_signal_file, np.array(output_signal_list))
                 
-                if not wbf_freq_file.exists():
-                    np.save(wbf_freq_file, DUT.get_wbf_freq())
-                    self.logger.info(f"DUT {DUT_type} Wideband Filter frequency array saved to file {wbf_freq_file}")
+                self.logger.info(f"Output Set Creation Complete for Input Set {file_path}")
                 
-            if premultiply:
-                premultiply_signals[idx] = np.dot(np.linalg.pinv(scale_dict * dictionary), output_signal)
-                
-        stop = time.time()
-        self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
-        
-        if premultiply:
-            np.save(premultiply_file, premultiply_signals)
-            self.logger.info(f"Premultiply Set Creation Complete for Input Set {inputset_path}")
-            
-        np.save(output_signal_file, np.array(output_signal_list))
-        
-        self.logger.info(f"Output Set Creation Complete for Input Set {inputset_path}")
-
+        self.logger.info(f"Output Set Creation Complete")
 
     def create_nyfr_wave_params(self, nyfr):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")
+        
         DUT_type = self.outputset_params.get('DUT_type', None).lower()
         DUT_config_name = self.DUT_config_name
         class_name = nyfr.__class__.__name__.lower()
@@ -589,55 +577,58 @@ class DataSet:
         
     
     def create_premultiply_set(self,
-                               outputset_path,
                                dictionary_path=None,
                                input_config_name=None,
                                DUT_config_name=None):
-        if not outputset_path.exists():
-            self.logger.error("Output Set File Does Not Exist")
-            raise ValueError("Output Set File Does Not Exist")
-        output_signals = np.load(outputset_path)
+        self.logger.info(f"Starting Premultiply Set Creation...")
         
-        if input_config_name is not None:
-            self.set_input_config_name(input_config_name)
-        if DUT_config_name is not None:
-            self.set_DUT_config_name(DUT_config_name)
-             
-        if dictionary_path is None:
-            output_dirs = self.directories.get('outputs', "Outputs")
-            dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
-            dictionary_path = output_dirs / dictionary_filename
-        if not dictionary_path.exists():
-            self.logger.error("Dictionary File Does Not Exist")
-            raise ValueError("Dictionary File Does Not Exist")
-        dictionary = np.load(dictionary_path)
-            
-        premultiply_dir = self.directories.get('premultiply', "Premultiply")
-        premultiply_dir.mkdir(parents=True, exist_ok=True)
-        premultiply_file = premultiply_dir / outputset_path.name
-        
-        scale_dict = self.outputset_params.get('scale_dict', 1.0)
-        scaled_dictionary = scale_dict * dictionary
+        output_dir = self.directories.get('outputs', "Outputs")
+        output_signal_filename = self.filenames.get('output_signal', "time_signals.npy")
+        for file_path in output_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
 
-        premultiply_signal_list = []
-        cp = import_module("cupy")
-        Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
-        Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
-        self.logger.info(f"Starting Premultiply Set Creation for {outputset_path}")
-        start = time.time()
-        
-        for signal in output_signals:
-            Signal = cp.asarray(signal, dtype=cp.complex64)
-            result_gpu = Pinv_Dict @ Signal           # stays on GPU
-            premultiply_signal_list.append(cp.asnumpy(result_gpu))  # move to CPU list
-        
-        stop = time.time()
-        self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
-        
-        # Save as NumPy array
-        np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.complex64))
-        self.logger.info(f"Premultiply Set Creation Complete for Output Set {outputset_path}")   
+                output_signals = np.load(file_path)
+                
+                if input_config_name is not None:
+                    self.set_input_config_name(input_config_name)
+                if DUT_config_name is not None:
+                    self.set_DUT_config_name(DUT_config_name)
+                    
+                if dictionary_path is None:
+                    dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
+                    dictionary_path = output_dir / dictionary_filename
+                if not dictionary_path.exists():
+                    self.logger.error("Dictionary File Does Not Exist")
+                    raise ValueError("Dictionary File Does Not Exist")
+                dictionary = np.load(dictionary_path)
+                    
+                premultiply_dir = self.directories.get('premultiply', "Premultiply")
+                premultiply_dir.mkdir(parents=True, exist_ok=True)
+                premultiply_file = premultiply_dir / file_path.name
+                
+                scale_dict = self.outputset_params.get('scale_dict', 1.0)
+                scaled_dictionary = scale_dict * dictionary
 
+                premultiply_signal_list = []
+                cp = import_module("cupy")
+                Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
+                Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
+                self.logger.info(f"Starting Premultiply Set Creation for {file_path}")
+                start = time.time()
+                
+                for signal in output_signals:
+                    Signal = cp.asarray(signal, dtype=cp.complex64)
+                    result_gpu = Pinv_Dict @ Signal           # stays on GPU
+                    premultiply_signal_list.append(cp.asnumpy(result_gpu))  # move to CPU list
+                
+                stop = time.time()
+                self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
+                
+                # Save as NumPy array
+                np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.complex64))
+                self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
+                 
+        self.logger.info(f"Premultiply Set Creation Complete")
 
     def create_recovery_set(self,
                             recovery,
