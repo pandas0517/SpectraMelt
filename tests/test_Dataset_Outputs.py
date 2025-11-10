@@ -22,8 +22,8 @@ if __name__ == '__main__':
     create_nyfr_wave_params = True
     display_nyfr_signals = True
     
-    create_premultiply_set = True
-    display_premultiply_signals = True
+    create_premultiply_set = False
+    display_premultiply_signals = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -32,6 +32,15 @@ if __name__ == '__main__':
                       DUT_config_name=nyfr.get_config_name(),
                       config_file_path=Path(getenv('DATASET_CONF')))
 
+    if create_output_set:
+        dataset.create_output_set(nyfr)
+
+    if create_nyfr_wave_params:
+        dataset.create_nyfr_wave_params(nyfr)
+                
+    if create_premultiply_set:
+        dataset.create_premultiply_set()
+        
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
     output_dir = directories.get('outputs', "Outputs")    
@@ -42,23 +51,6 @@ if __name__ == '__main__':
     output_signal_filename = filenames.get('output_signal', "signals.npy")
     logging.getLogger('matplotlib').setLevel(logging.INFO)
     logging.getLogger("PIL").setLevel(logging.INFO)
-
-    if create_output_set:
-        logger.info(f"Starting Output Set Creation...")
-        for file_path in input_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
-                dataset.create_output_set(nyfr, file_path)
-        logger.info(f"Output Set Creation Complete")
-
-    if create_nyfr_wave_params:
-        dataset.create_nyfr_wave_params(nyfr)
-                
-    if create_premultiply_set:
-        logger.info(f"Starting Premultiply Set Creation...")
-        for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
-                dataset.create_premultiply_set(file_path)
-        logger.info(f"Premultiply Set Creation Complete")
         
     if display_nyfr_signals:
         DUT_type = type(nyfr).__name__

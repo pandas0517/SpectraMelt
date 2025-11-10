@@ -29,22 +29,17 @@ if __name__ == '__main__':
                       recovery_config_name=recovery.get_config_name(),
                       config_file_path=Path(getenv('DATASET_CONF')))
     
-    directories = dataset.get_directories()
-    filenames = dataset.get_filenames()
-    
-    output_dir = directories.get('outputs', "Outputs")
-    output_signal_filename = filenames.get('output_signal', "signals.npy")
-    
     if create_set:
-        logger.info(f"Starting Recovery Set Creation...")
-        for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
-                dataset.create_recovery_set(recovery, file_path)
-        logger.info(f"Recovery Set Creation Complete")
+        dataset.create_recovery_set(recovery)
                         
     if display_recovered_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
+        
+        directories = dataset.get_directories()
+        filenames = dataset.get_filenames()
+        
+        output_dir = directories.get('outputs', "Outputs")
         
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")

@@ -632,19 +632,13 @@ class DataSet:
 
     def create_recovery_set(self,
                             recovery,
-                            outputset_path,
                             dictionary_path=None,
                             input_config_name=None,
                             DUT_config_name=None):
-        if not outputset_path.exists():
-            self.logger.error("Output Set File Does Not Exist")
-            raise ValueError("Output Set File Does Not Exist")
-        output_signals = np.load(outputset_path)
+        self.logger.info(f"Starting Recovery Set Creation...")
         
+        output_dir = self.directories.get('outputs', "Outputs")        
         output_signal_filename = self.filenames.get('output_signal', "signals.npy")
-        # Extract identifying portion (for example, everything up to "signals.npy")
-        stem = outputset_path.name
-        key_part = stem.split(output_signal_filename)[0]
         
         if input_config_name is not None:
             self.set_input_config_name(input_config_name)
@@ -666,7 +660,7 @@ class DataSet:
             raise ValueError("Recovery Object Not Set")
         else:
             self.set_recovery_config_name(recovery.get_config_name())
-      
+    
         recovery_dirs = self.directories.get('recovery', "Recovery")
         recovery_dirs.mkdir(parents=True, exist_ok=True)
         recovered_signal_filename = self.filenames.get("recovered", "recovered.npy")
@@ -684,20 +678,29 @@ class DataSet:
             save_to_json(recovery_config, recovery_config_file)
             
         recovery_method = recovery_params.get('method')
-        recovered_sig_list = []
-
-        self.logger.info(f"Starting Recovery Set Creation for {outputset_path}")
-        start = time.time() 
-         
-        for signal in output_signals:
-            recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
-            
-        stop = time.time()
-        self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
-                  
-        np.save(recovery_file, np.array(recovered_sig_list))
-        self.logger.info(f"Recovery Set Creation Complete for Output Set {outputset_path} using Recovery Method {recovery_method}")
         
+        for file_path in output_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+                output_signals = np.load(file_path)
+                # Extract identifying portion (for example, everything up to "signals.npy")
+                stem = file_path.name
+                key_part = stem.split(output_signal_filename)[0]
+                
+                recovered_sig_list = []
+
+                self.logger.info(f"Starting Recovery Set Creation for {file_path}")
+                start = time.time() 
+                
+                for signal in output_signals:
+                    recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
+                    
+                stop = time.time()
+                self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                        
+                np.save(recovery_file, np.array(recovered_sig_list))
+                self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
+        
+        self.logger.info(f"Recovery Set Creation Complete")
         
     # -------------------------------
     # Getters
