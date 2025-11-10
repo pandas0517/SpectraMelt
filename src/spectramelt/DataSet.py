@@ -10,6 +10,7 @@ import pickle
 import time
 import copy
 from importlib import import_module
+from scipy.fft import fft
 
 class DataSet:
     def __init__(self,
@@ -319,7 +320,8 @@ class DataSet:
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
-            input_signals = np.zeros((num_input_sigs, real_time.size))
+            input_signals_time = np.zeros((num_input_sigs, real_time.size))
+            input_signals_freq = np.zeros((num_input_sigs, real_time.size))
             wave_param_list = [] # reset for this tone set
             start = time.time()
             for input_sig in range(num_input_sigs):
@@ -354,7 +356,10 @@ class DataSet:
                 params["waves"] = wave
                 input_signal.set_wave_params(params)
                 input_signal.create_input_signal()
-                input_signals[input_sig] = input_signal.get_input_signal()
+                input_signal_time = input_signal.get_input_signal()
+                input_signal_freq = (fft(input_signal_time)) / len(real_freq)
+                input_signals_time[input_sig] = input_signal_time
+                input_signals_freq[input_sig] = input_signal_freq
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
@@ -363,10 +368,15 @@ class DataSet:
             inputset_wave_params_path = input_dirs / f"{tones}_tone_{input_wave_params_filename}" 
             with open(inputset_wave_params_path, 'wb') as file:
                 pickle.dump(wave_param_list, file)
-
-            inputset_path = input_dirs / f"{tones}_tone_{input_signal_filename}"
-            np.save(inputset_path, input_signals)
-            self.logger.info(f"{tones}-Tone Input Set saved to file {inputset_path}")
+                
+            inputset_time_path = input_dirs / f"{tones}_tone_time_{input_signal_filename}"
+            inputset_freq_path = input_dirs / f"{tones}_tone_freq_{input_signal_filename}"
+            
+            np.save(inputset_time_path, input_signals_time)
+            self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
+            
+            np.save(inputset_freq_path, input_signals_freq)
+            self.logger.info(f"{tones}-Tone Frequency Input Set saved to file {inputset_freq_path}") 
 
         self.logger.info("All Input Sets Created and Saved")
 
@@ -537,13 +547,13 @@ class DataSet:
 
         premultiply_signal_list = []
         cp = import_module("cupy")
-        Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.float32)
+        Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
         Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
         self.logger.info(f"Starting Premultiply Set Creation for {outputset_path}")
         start = time.time()
         
         for signal in output_signals:
-            Signal = cp.asarray(signal, dtype=cp.float32)
+            Signal = cp.asarray(signal, dtype=cp.complex64)
             result_gpu = Pinv_Dict @ Signal           # stays on GPU
             premultiply_signal_list.append(cp.asnumpy(result_gpu))  # move to CPU list
         
@@ -551,7 +561,7 @@ class DataSet:
         self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
         
         # Save as NumPy array
-        np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.float32))
+        np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.complex64))
         self.logger.info(f"Premultiply Set Creation Complete for Output Set {outputset_path}")   
 
 
