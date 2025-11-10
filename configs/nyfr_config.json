@@ -1,5 +1,5 @@
 {
-    "config_name": "NYFR_Config_1",
+    "config_name": "NYFR_Config_2",
     "store_internal_sigs": true,
     "dict_type": "real",
     "create_dict": true,
@@ -14,7 +14,7 @@
         "store_sh_sigs": true,
         "adc_samp_freq": 100000,
         "allow_clipping": true,
-        "v_ref_range": [0, 5],
+        "v_ref_range": [-10, 10],
         "num_bits": 8,
         "thermal_noise_std_dev": 0.0,
         "non_linearity_mode": null,

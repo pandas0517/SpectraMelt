@@ -44,6 +44,8 @@ if __name__ == '__main__':
                         
     if display_recovered_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
+        logging.getLogger("PIL").setLevel(logging.INFO)
+        
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")
         

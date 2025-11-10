@@ -46,6 +46,7 @@ if __name__ == '__main__':
 
     if display_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
+        logging.getLogger("PIL").setLevel(logging.INFO)
         input_wave_params_filename = filenames.get('input_wave_params', "wave_params.pkl")
         real_time_filename = filenames.get('real_time', "real_time.npy")
         real_freq_filename = filenames.get('real_freq', "real_freq.npy")
@@ -83,7 +84,7 @@ if __name__ == '__main__':
                     axes[1].scatter(freqs, amps, marker='x', color='red', s=100)  # s is marker size
                     axes[1].scatter(neg_freqs, amps, marker='x', color='red', s=100)  # s is marker size
                     axes[1].set_title("Frequency (File)")
-                    axes[1].set_ylim(0, 0.15)
+                    axes[1].set_ylim(0, 1)
                     axes[1].set_xlim(-200000, 200000)
                     fig.suptitle(f"Simulated Analog\n{num_tones}-Tone Signals")
                     fig.tight_layout()

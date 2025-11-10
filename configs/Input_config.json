@@ -1,5 +1,5 @@
 {
-    "config_name": "Input_Config_Ideal_1",
+    "config_name": "Input_Config_Ideal_2",
     "time_params": {
         "time_range": [-0.006, 0.006],
         "sim_freq": 10000000
@@ -12,7 +12,7 @@
     },
     "adc_params": {
         "adc_samp_freq": 100000,
-        "v_ref_range": [0, 5],
+        "v_ref_range": [-10, 10],
         "allow_clipping": true
     },
     "env_params": {
@@ -30,7 +30,7 @@
     "wave_params":{
         "num_waves": 5,
         "freq_range": [10000, 200000],
-        "amp_range": [0.1, 0.25],
+        "amp_range": [0.7, 1.0],
         "phase_range": [0.25,0.75],
         "waves": [
             {"amp": 0.25,
