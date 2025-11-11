@@ -794,7 +794,7 @@ class DataSet:
                         # --- Save ---
                         np.save(save_path, arr)
                         self.logger.info(f"{key_part} {mode.upper()} premultiply set saved to {save_path}")
-                        
+                premultiply_signals[:] = 0        
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
                  
         self.logger.info(f"Premultiply Set Creation Complete\n")
