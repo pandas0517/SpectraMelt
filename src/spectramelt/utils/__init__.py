@@ -19,7 +19,8 @@ from .config_utils import (
 )
 
 from .file_utils import (
-    build_flat_paths
+    build_flat_paths,
+    flatten_files
 )
 
 # Optional: define __all__ for clean "from utils import *"
@@ -34,5 +35,6 @@ __all__ = [
     "create_training_json",
     "create_wave_json",
     "find_project_root",
-    "build_flat_paths"
+    "build_flat_paths",
+    "flatten_files"
 ]

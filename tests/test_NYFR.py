@@ -26,6 +26,7 @@ if __name__ == '__main__':
     display_conditioned_signals = True
     display_ADC_signals = True
     display_recovered_signals = False
+    display_premultiply_signals = True
     
     input_conf_1 = load_config_from_json(Path(getenv('INPUT_CONF')))
     input_signal_1 = InputSignal(input_conf_1)
@@ -76,6 +77,8 @@ if __name__ == '__main__':
     samp_freq_nyfr_1 = nyfr_1.get_output_signals().get('sampled_frequency')
     quant_freq_nyfr_1 = fftshift(np.abs(fft(quantized_nyfr_1))) / len(samp_freq_nyfr_1)
     dictionary_1 = nyfr_1.get_nyfr_dict()
+    pinv_1 = np.linalg.pinv(100*dictionary_1)
+    premultiply_1 = pinv_1 @ quantized_nyfr_1
     wbf_time_1 = nyfr_1.get_wbf_time()
     wbf_freq_1 = nyfr_1.get_wbf_freq()
     recovery_config_path = Path(getenv('RECOVERY_CONF'))
@@ -122,6 +125,8 @@ if __name__ == '__main__':
     samp_freq_nyfr_2 = nyfr_2.get_output_signals().get('sampled_frequency')
     quant_freq_nyfr_2 = fftshift(np.abs(fft(quantized_nyfr_2))) / len(samp_freq_nyfr_2)
     dictionary_2 = nyfr_2.get_nyfr_dict()
+    pinv_2 = np.linalg.pinv(dictionary_2)
+    premultiply_2 = pinv_2 @ quantized_nyfr_2
     wbf_time_2 = nyfr_2.get_wbf_time()
     wbf_freq_2 = nyfr_2.get_wbf_freq()
 
@@ -279,7 +284,7 @@ if __name__ == '__main__':
         fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
         axes[0,0].plot(real_freq_1, real_input_freq_1)
         axes[0,0].set_title("Frequency (File)")
-        axes[0,1].set_ylim(0, 1)
+        axes[0,0].set_ylim(0, 1)
         axes[0,0].set_xlim(-50000, 50000)
         #axes[0,0].set_xlim(-0.0002, 0.0002)
         axes[0,1].plot(wbf_freq_1, recovered_sig_freq_1)
@@ -296,4 +301,27 @@ if __name__ == '__main__':
         fig.tight_layout()
         plt.show()
     
+    if display_premultiply_signals:
+        premult_mag_1 = fftshift(np.abs(fft(premultiply_1))) / len(premultiply_1)
+        premult_mag_2 = fftshift(np.abs(fft(premultiply_2))) / len(premultiply_2)
+        fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
+        axes[0,0].plot(real_freq_1, wbf_sig_freq_1)
+        axes[0,0].set_title("Frequency (File)")
+        axes[0,0].set_xlim(-160000, 160000)
+        axes[0,1].plot(wbf_freq_1, premult_mag_1)
+        axes[0,1].set_title("Premultiply Frequency (File)")
+        # axes[0].set_ylim(0, 1)
+        # axes[0].set_xlim(-50000, 50000)
+        #axes[0,0].set_xlim(-0.0002, 0.0002)
+        axes[1,0].plot(real_freq_2, wbf_sig_freq_2)
+        axes[1,0].set_title("Frequency (File)")
+        axes[1,0].set_xlim(-1600, 1600)
+        axes[1,1].plot(wbf_freq_2, premult_mag_2)
+        axes[1,1].set_title("Premultiply Frequency (Default)")
+        # axes[1].set_ylim(0, 1)
+        # axes[1].set_xlim(-50000, 50000)
+        fig.suptitle("Premultiply Signals")
+        fig.tight_layout()
+        plt.show()
+             
     atexit.register(logger.info, "Completed Test\n")

@@ -45,17 +45,17 @@ if __name__ == '__main__':
     input_dir = directories.get('inputs', "Inputs")
     output_dir = directories.get('outputs', "Outputs")    
     
-    filenames = dataset.get_filenames()
-    input_time_signal_filename = filenames.get('input_time_signal', "time_signals.npy")
-    input_signal_wave_params = filenames.get('input_wave_params', "wave_params.pkl")
-    output_signal_filename = filenames.get('output_signal', "signals.npy")
+    flat_filenames = dataset.get_flat_filenames()
+    input_time_signal_filename = flat_filenames.get('input.time_signal', "time_signals.npy")
+    input_signal_wave_params = flat_filenames.get('input.wave_params', "wave_params.pkl")
+    output_signal_filename = flat_filenames.get('output_signal', "signals.npy")
     logging.getLogger('matplotlib').setLevel(logging.INFO)
     logging.getLogger("PIL").setLevel(logging.INFO)
         
     if display_nyfr_signals:
         DUT_type = type(nyfr).__name__
-        samp_time_filename = filenames.get('samp_time', "sampled_time.npy")
-        samp_freq_filename = filenames.get('samp_freq', "sampled_freq.npy")
+        samp_time_filename = flat_filenames.get('samp_time', "sampled_time.npy")
+        samp_freq_filename = flat_filenames.get('samp_freq', "sampled_freq.npy")
         samp_time = np.load(output_dir / samp_time_filename)
         samp_freq = np.load(output_dir / samp_freq_filename)
         signals_per_file = 3

@@ -192,10 +192,8 @@ class NYFR:
         dft_matrix = dft(self.K_band)
 
         # Build M_index pattern vectorized
-        half_zones = self.Zones // 2
-        M_index = np.empty(2 * half_zones, dtype=int)
-        M_index[0::2] = np.arange(half_zones)
-        M_index[1::2] = -np.arange(1, half_zones + 1)
+        positive_half_zones = self.Zones
+        M_index = [x for i in range(positive_half_zones) for x in (i, -(i+1))]
 
         # Choose real or complex dictionary construction
         if self.dict_type == 'complex':

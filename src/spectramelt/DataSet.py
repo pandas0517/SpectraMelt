@@ -2,6 +2,7 @@ from .utils import (
     load_config_from_json,
     get_logger,
     build_flat_paths,
+    flatten_files,
     find_project_root,
     save_to_json
 )
@@ -13,6 +14,13 @@ from importlib import import_module
 from scipy.fft import fft, fftshift
 
 class DataSet:
+    VALID_SAVED_FREQ_MODES = {
+        "complex", "real", "imag",
+        "real_imag", "mag", "ang", "mag_ang"
+    }
+    VALID_DUT_TYPES = {
+        "nyfr"
+    }
     def __init__(self,
                  input_config_name=None,
                  DUT_config_name=None,
@@ -115,8 +123,13 @@ class DataSet:
                 "num_sigs": 5000,
                 "tones_per_sig": [1],
                 "wave_precision": None,
+                "saved_freq_modes": [],
                 "seed": None
             }
+        saved_freq_modes = inputset_params.get('saved_freq_modes', [])
+        if not self.is_valid_saved_freq_mode(saved_freq_modes):
+            self.logger.error("Saved Frequency Mode List Contains invalid Mode")
+            raise ValueError("Saved Frequency Mode List Contains invalid Mode")            
         self.input_rng = np.random.default_rng(inputset_params.get('seed', None))
         self.inputset_params = inputset_params
         
@@ -125,14 +138,13 @@ class DataSet:
         if outputset_params is None:
             outputset_params = {
                 "DUT_type": "NYFR",
-                "valid_types": [
-                    "NYFR"
-                ],
                 "scale_dict": 1.0
             }
         
-        valid_types = outputset_params.get('valid_types', ["nyfr"])
-        outputset_params['valid_types'] = [w.lower() for w in valid_types]
+        DUT_type = outputset_params.get('DUT_type', None)
+        if not self.is_valid_dut_type(DUT_type):
+            self.logger.error(f"DUT type {DUT_type} not currently valid")
+            raise ValueError(f"DUT type {DUT_type} not currently valid")
                     
         self.outputset_params = outputset_params
 
@@ -237,24 +249,59 @@ class DataSet:
                 "wbf_freq": "wbf_freq.npy",
                 "samp_time": "sampled_time.npy",
                 "samp_freq": "sampled_freq.npy",
-                "input_time_signal": "time_signals.npy",
-                "input_freq_signal": "freq_signals.npy",
-                "input_wave_params": "wave_params.pkl",
-                "inputset_config": "inputset_config.json",
+                "input": {
+                    "config": "inputset_config.json",
+                    "time_signal": "time_signals.npy",
+                    "wave_params": "wave_params.pkl",
+                    "freq": {
+                        "signal": "freq_signals.npy",
+                        "mag_ang_sig": "freq_mag_ang_signals.npy",
+                        "mag_sig": "freq_mag_signals.npy",
+                        "ang_sig": "freq_ang_signals.npy",
+                        "real_imag_sig": "freq_real_imag_signals.npy",
+                        "real_sig": "freq_real_signals.npy",
+                        "imag_sig": "freq_imag_signals.npy"
+                    }              
+                },
                 "output_signal": "time_signals.npy",
-                "premultiply": "premult_signals.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
                 "recovery_config": "recovery_config.json",
                 "ml_model": "ml_model.keras"
             }
-
+        self.flat_filenames = flatten_files(filenames)
         self.filenames = filenames
 
     # -------------------------------
     # Core functional methods
     # -------------------------------
+    
+    def is_valid_saved_freq_mode(self, name) -> bool:
+        if isinstance(name, str):
+            name = [name]
+        return all(n.lower() in self.VALID_SAVED_FREQ_MODES for n in name)
+    
+
+    def is_valid_dut_type(self, dut_type) -> bool:
+        """
+        Check if a DUT type or list of DUT types is valid.
+
+        Parameters
+        ----------
+        dut_type : str or list of str
+            DUT type(s) to check.
+
+        Returns
+        -------
+        bool
+            True if all DUT types are valid, False otherwise.
+        """
+        if isinstance(dut_type, str):
+            dut_type = [dut_type]
+        
+        return all(d.lower() in {t.lower() for t in self.VALID_DUT_TYPES} for d in dut_type)
+    
         
     def create_input_set(self, input_signal):
         """
@@ -276,10 +323,10 @@ class DataSet:
         input_dirs = self.directories.get('inputs', "Inputs")
         real_time_filename = self.filenames.get('real_time', "real_time.npy")
         real_freq_filename = self.filenames.get('real_freq', "real_freq.npy")
-        inputset_config_filename = self.filenames.get('inputset_config', "inputset_config.json")
-        input_wave_params_filename = self.filenames.get('input_wave_params', "wave_params.pkl")
-        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
-        input_freq_signal_filename = self.filenames.get('input_freq_signal', "freq_signals.npy")
+        inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
+        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
+        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
 
         input_dirs.mkdir(parents=True, exist_ok=True)
         real_time_file = input_dirs / real_time_filename
@@ -319,11 +366,14 @@ class DataSet:
         num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)   
         tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
         wave_precision = self.inputset_params.get('wave_precision', None)
+        
+        input_signals_time = np.zeros((num_input_sigs, real_time.size))
+        
+        if saved_freq_modes:
+            input_signals_freq = np.zeros((num_input_sigs, real_time.size), dtype=np.complex128)
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
-            input_signals_time = np.zeros((num_input_sigs, real_time.size))
-            input_signals_freq = np.zeros((num_input_sigs, real_time.size), dtype=np.complex128)
             wave_param_list = [] # reset for this tone set
             start = time.time()
             for input_sig in range(num_input_sigs):
@@ -359,9 +409,11 @@ class DataSet:
                 input_signal.set_wave_params(params)
                 input_signal.create_input_signal()
                 input_signal_time = input_signal.get_input_signal()
-                input_signal_freq = fft(input_signal_time)
                 input_signals_time[input_sig] = input_signal_time
-                input_signals_freq[input_sig] = input_signal_freq
+                
+                if saved_freq_modes:
+                    input_signal_freq = fft(input_signal_time)
+                    input_signals_freq[input_sig] = input_signal_freq
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
@@ -372,14 +424,69 @@ class DataSet:
                 pickle.dump(wave_param_list, file)
                 
             inputset_time_path = input_dirs / f"{tones}_tone_{input_time_signal_filename}"
-            inputset_freq_path = input_dirs / f"{tones}_tone_{input_freq_signal_filename}"
             
             np.save(inputset_time_path, input_signals_time)
+            input_signals_time[:] = 0
             self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
-            
-            np.save(inputset_freq_path, input_signals_freq)
-            self.logger.info(f"{tones}-Tone Frequency Input Set saved to file {inputset_freq_path}") 
 
+            # --- After you've built input_signals_freq with FFT results ---
+            if saved_freq_modes:
+                # Map modes to flattened filename keys
+                FREQ_FILE_KEYS = {
+                    "complex":  "input.freq.signal",
+                    "mag_ang":  "input.freq.mag_ang_sig",
+                    "mag":      "input.freq.mag_sig",
+                    "ang":      "input.freq.ang_sig",
+                    "real_imag":"input.freq.real_imag_sig",
+                    "real":     "input.freq.real_sig",
+                    "imag":     "input.freq.imag_sig",
+                }
+                for mode in saved_freq_modes:
+
+                    if mode not in self.VALID_SAVED_FREQ_MODES:
+                        self.logger.warning(f"Skipping invalid freq mode: {mode}")
+                        continue
+
+                    key = FREQ_FILE_KEYS[mode]
+                    filename = self.flat_filenames.get(key)
+                    if not filename:
+                        self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                        continue
+
+                    save_path = input_dirs / f"{tones}_tone_{filename}"
+
+                    # --- Generate correct representation ---
+                    if mode == "complex":
+                        arr = input_signals_freq
+
+                    elif mode == "real":
+                        arr = input_signals_freq.real
+
+                    elif mode == "imag":
+                        arr = input_signals_freq.imag
+
+                    elif mode == "real_imag":
+                        arr = np.concatenate(
+                            (input_signals_freq.real, input_signals_freq.imag), axis=1
+                        )
+
+                    elif mode == "mag":
+                        arr = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
+
+                    elif mode == "ang":
+                        arr = np.angle(fftshift(input_signals_freq, axes=1))
+
+                    elif mode == "mag_ang":
+                        mag = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
+                        ang = np.angle(fftshift(input_signals_freq, axes=1))
+                        arr = np.concatenate((mag, ang), axis=1)
+
+                    # --- Save ---
+                    np.save(save_path, arr)
+                    self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
+                    
+                input_signals_freq[:] = 0
+                
         self.logger.info("All Input Sets Created and Saved\n")
 
 
@@ -389,21 +496,18 @@ class DataSet:
         # --- Setup and pre-saves ---
         if input_signal is not None:
             self.set_input_config_name(input_signal.get_config_name())
-            
+        
+        outputset_params = self.outputset_params
         if DUT is None:
             self.logger.error("DUT Object not set")
             raise ValueError("DUT Object Not Set")
         else:
-            DUT_type = type(DUT).__name__.lower()
-            if DUT_type in self.outputset_params['valid_types']:
-                self.outputset_params['DUT_type'] = DUT_type
-            else:
-                self.logger.error("DUT not a valid type")
-                raise ValueError("DUT not a valid type")
+            outputset_params['DUT_type'] = type(DUT).__name__
+            self.set_outputset_params(outputset_params)
             self.set_DUT_config_name(DUT.get_config_name())
         
         input_dir = self.directories.get('inputs', "Inputs")
-        input_time_signal_filename = self.filenames.get('input_time_signal', "time_signals.npy")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         real_time_filename = self.filenames.get('real_time', "real_time.npy")
         real_time_file = input_dir / real_time_filename
         if real_time_file.exists():
@@ -440,7 +544,7 @@ class DataSet:
         # --- Config file ---
         DUT_config_file = output_dirs.parent / DUT_config_filename
         DUT_params = DUT.get_all_params()
-        outputset_params = self.outputset_params
+        
         if not DUT_config_file.exists():
             DUT_config = {
                 "config_name": self.config_name,
@@ -524,17 +628,17 @@ class DataSet:
         LO_params = nyfr.get_lo_params()
         LO_freq = LO_params.get('freq')
         input_dir = self.directories.get('inputs', "Inputs")
-        input_signal_wave_params = self.filenames.get('input_wave_params', "wave_params.pkl")
+        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
         output_dir = self.directories.get('outputs', "Outputs")
         output_signal_filename = self.filenames.get('output_signal', "signals.npy")
         samp_freq_filename = self.filenames.get('samp_freq', "sampled_freq.npy")
         samp_freq = np.load(output_dir / samp_freq_filename)
         for file_path in input_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_signal_wave_params):
+            if file_path.is_file() and file_path.name.endswith(input_wave_params_filename):
                 stem = file_path.name
-                key_part = stem.split(input_signal_wave_params)[0]
+                key_part = stem.split(input_wave_params_filename)[0]
                 output_signal_file = output_dir / f"{key_part}{output_signal_filename}"
-                nyfr_wave_file = output_dir / f"{key_part}{input_signal_wave_params}"
+                nyfr_wave_file = output_dir / f"{key_part}{input_wave_params_filename}"
                 
                 if output_signal_file.exists():
                     with open(file_path, "rb") as f:
@@ -583,6 +687,7 @@ class DataSet:
                                DUT_config_name=None):
         self.logger.info(f"Starting Premultiply Set Creation...")
         
+        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
         output_dir = self.directories.get('outputs', "Outputs")
         output_signal_filename = self.filenames.get('output_signal', "time_signals.npy")
         
@@ -601,12 +706,10 @@ class DataSet:
             
         premultiply_dir = self.directories.get('premultiply', "Premultiply")
         premultiply_dir.mkdir(parents=True, exist_ok=True)
-        premultiply_filename = self.filenames.get('premultiply', "premult_signals.npy")
         
         scale_dict = self.outputset_params.get('scale_dict', 1.0)
         scaled_dictionary = scale_dict * dictionary
 
-        premultiply_signal_list = []
         cp = import_module("cupy")
         Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
         Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
@@ -615,11 +718,12 @@ class DataSet:
             if file_path.is_file() and file_path.name.endswith(output_signal_filename):
                 stem = file_path.name
                 key_part = stem.split(output_signal_filename)[0]
-                premultiply_file = premultiply_dir / f"{key_part}{premultiply_filename}"
+                
                 output_signals = np.load(file_path)
 
                 self.logger.info(f"Starting Premultiply Set Creation for {file_path}")
                 start = time.time()
+                premultiply_signal_list = []
                 
                 for signal in output_signals:
                     Signal = cp.asarray(signal, dtype=cp.complex64)
@@ -630,7 +734,67 @@ class DataSet:
                 self.logger.info(f"{len(output_signals)} Signal Premultiply Set Creation Time: {stop - start:.6f} seconds")
                 
                 # Save as NumPy array
-                np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.complex64))
+                premultiply_signals = np.array(premultiply_signal_list, dtype=np.complex64)
+                if not saved_freq_modes:
+                    premultiply_filename = self.flat_filenames.get('input.freq.signal', "freq_signals.npy")
+                    premultiply_file = premultiply_dir / f"{key_part}{premultiply_filename}"
+                    np.save(premultiply_file, premultiply_signals)
+                    self.logger.info(f"{key_part} premultiply set saved to {premultiply_file}")
+                else:
+                    # Map modes to flattened filename keys
+                    FREQ_FILE_KEYS = {
+                        "complex":  "input.freq.signal",
+                        "mag_ang":  "input.freq.mag_ang_sig",
+                        "mag":      "input.freq.mag_sig",
+                        "ang":      "input.freq.ang_sig",
+                        "real_imag":"input.freq.real_imag_sig",
+                        "real":     "input.freq.real_sig",
+                        "imag":     "input.freq.imag_sig",
+                    }
+                    for mode in saved_freq_modes:
+
+                        if mode not in self.VALID_SAVED_FREQ_MODES:
+                            self.logger.warning(f"Skipping invalid freq mode: {mode}")
+                            continue
+
+                        key = FREQ_FILE_KEYS[mode]
+                        filename = self.flat_filenames.get(key)
+                        if not filename:
+                            self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                            continue
+
+                        save_path = premultiply_dir / f"{key_part}{filename}"
+
+                        # --- Generate correct representation ---
+                        if mode == "complex":
+                            arr = premultiply_signals
+
+                        elif mode == "real":
+                            arr = premultiply_signals.real
+
+                        elif mode == "imag":
+                            arr = premultiply_signals.imag
+
+                        elif mode == "real_imag":
+                            arr = np.concatenate(
+                                (premultiply_signals.real, premultiply_signals.imag), axis=1
+                            )
+
+                        elif mode == "mag":
+                            arr = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
+
+                        elif mode == "ang":
+                            arr = np.angle(fftshift(premultiply_signals, axes=1))
+
+                        elif mode == "mag_ang":
+                            mag = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
+                            ang = np.angle(fftshift(premultiply_signals, axes=1))
+                            arr = np.concatenate((mag, ang), axis=1)
+
+                        # --- Save ---
+                        np.save(save_path, arr)
+                        self.logger.info(f"{key_part} {mode.upper()} premultiply set saved to {save_path}")
+                        
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
                  
         self.logger.info(f"Premultiply Set Creation Complete\n")
@@ -734,6 +898,10 @@ class DataSet:
     def get_directories(self):
         return self.directories
 
+
+    def get_flat_filenames(self):
+        return self.flat_filenames
+    
     
     def get_filenames(self):
         return self.filenames
@@ -767,6 +935,7 @@ class DataSet:
             "directory_params": self.directory_params,
             "log_params": self.log_params,
             "directories": self.directories,
-            "filenames": self.filenames
+            "filenames": self.filenames,
+            "filenames_flat": self.filenames_flat
         }
         return dataset_params

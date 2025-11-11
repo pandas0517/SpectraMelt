@@ -37,26 +37,26 @@ if __name__ == '__main__':
         logging.getLogger("PIL").setLevel(logging.INFO)
         
         directories = dataset.get_directories()
-        filenames = dataset.get_filenames()
+        flat_filenames = dataset.get_flat_filenames()
         
         output_dir = directories.get('outputs', "Outputs")
         
         input_dir = directories.get('inputs', "Inputs")
         recovery_dir = directories.get('recovery', "Recovery")
         
-        input_time_signal_filename = filenames.get('input_time_signal', "time_signals.npy")
-        input_freq_signal_filename = filenames.get('input_freq_signal', "freq_signals.npy")
-        recovered_signal_filename = filenames.get("recovered", "recovered.npy")
+        input_time_signal_filename = flat_filenames.get('input.time_signal', "time_signals.npy")
+        input_freq_signal_filename = flat_filenames.get('input.freq.mag_sig', "freq_mag_signals.npy")
+        recovered_signal_filename = flat_filenames.get("recovered", "recovered.npy")
         
-        wbf_time_filename = filenames.get('wbf_time', "wbf_time.npy")
-        wbf_freq_filename = filenames.get('wbf_freq', "wbf_freq.npy")    
+        wbf_time_filename = flat_filenames.get('wbf_time', "wbf_time.npy")
+        wbf_freq_filename = flat_filenames.get('wbf_freq', "wbf_freq.npy")    
         wbf_time_file = output_dir / wbf_time_filename
         wbf_freq_file = output_dir / wbf_freq_filename
         wbf_time = np.load(wbf_time_file)
         wbf_freq = np.load(wbf_freq_file)
         
-        real_time_filename = filenames.get('real_time', "real_time.npy")
-        real_freq_filename = filenames.get('real_freq', "real_freq.npy")
+        real_time_filename = flat_filenames.get('real_time', "real_time.npy")
+        real_freq_filename = flat_filenames.get('real_freq', "real_freq.npy")
         real_time_file = input_dir / real_time_filename
         real_freq_file = input_dir / real_freq_filename
         real_time = np.load(real_time_file)

@@ -74,7 +74,7 @@ def setup_logger(
     level=logging.INFO,
     max_bytes=5_000_000,
     backup_count=5,
-    console=True  # <-- Add this parameter
+    console=True
 ):
     """
     Configure application logging with rotation, colors, and optional console output.
@@ -110,6 +110,7 @@ def setup_logger(
         backupCount=backup_count,
         encoding="utf-8"
     )
+    file_handler.setLevel(level)  # <-- Set file handler level
     file_handler.setFormatter(formatter)
 
     # Initialize handlers list with file handler

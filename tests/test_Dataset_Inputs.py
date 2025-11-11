@@ -13,7 +13,6 @@ if __name__ == '__main__':
     import pickle
     import matplotlib.pyplot as plt
     import logging
-    from scipy.fft import fftshift
 
     load_dotenv()
     
@@ -30,9 +29,9 @@ if __name__ == '__main__':
         
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
-    filenames = dataset.get_filenames()
-    input_time_signal_filename = filenames.get('input_time_signal', "time_signals.npy")
-    input_freq_signal_filename = filenames.get('input_freq_signal', "freq_signals.npy")
+    flat_filenames = dataset.get_flat_filenames()
+    input_time_signal_filename = flat_filenames.get('input.time_signal', "time_signals.npy")
+    input_freq_signal_filename = flat_filenames.get('input.freq.mag_sig', "freq_mag_signals.npy")
     
     if test_max_min:
         input_signal_params = input_signal.get_adc_params()
@@ -48,9 +47,9 @@ if __name__ == '__main__':
     if display_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
-        input_wave_params_filename = filenames.get('input_wave_params', "wave_params.pkl")
-        real_time_filename = filenames.get('real_time', "real_time.npy")
-        real_freq_filename = filenames.get('real_freq', "real_freq.npy")
+        input_wave_params_filename = flat_filenames.get('input.wave_params', "wave_params.pkl")
+        real_time_filename = flat_filenames.get('real_time', "real_time.npy")
+        real_freq_filename = flat_filenames.get('real_freq', "real_freq.npy")
         real_time = np.load(input_dir / real_time_filename)
         real_freq = np.load(input_dir / real_freq_filename)
         signals_per_file = 3
@@ -77,7 +76,7 @@ if __name__ == '__main__':
                     amps = [w["amp"] / 2 for w in wave_param]
                     freqs = [w["freq"] for w in wave_param]
                     neg_freqs = [-f for f in freqs]
-                    freq_signal = fftshift(np.abs(freq_signals[idx])) / len(real_freq)
+                    freq_signal = freq_signals[idx]
 
                     fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
                     axes[0].plot(real_time, time_signal)

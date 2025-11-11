@@ -294,7 +294,7 @@ class InputSignal:
                 effects['phase_inversion'].append(phase_inversion)
                 
         if store_internal_sigs:
-            self.logger.info("Storing Environmental Effects")
+            self.logger.debug("Storing Environmental Effects")
             self.effects = effects
             
         return signal

@@ -7,14 +7,12 @@
             2, 3, 4, 5, 6,
             7, 8, 9, 10, 11
         ],
+        "saved_freq_modes": ["mag", "mag_ang"],
         "seed": null
     },
     "outputset_params": {
-        "valid_types": [
-            "NYFR"
-        ],
         "DUT_type": "NYFR",
-        "scale_dict": 1.0
+        "scale_dict": 100.0
     },
     "log_params": {
         "enabled": true,
@@ -53,12 +51,21 @@
         "wbf_freq": "wbf_freq.npy",
         "samp_time": "sampled_time.npy",
         "samp_freq": "sampled_freq.npy",
-        "input_time_signal": "time_signals.npy",
-        "input_freq_signal": "freq_signals.npy",
-        "input_wave_params": "wave_params.pkl",
-        "inputset_config": "inputset_config.json",
+        "input": {
+            "config": "inputset_config.json",
+            "time_signal": "time_signals.npy",
+            "wave_params": "wave_params.pkl",
+            "freq": {
+                "signal": "freq_signals.npy",
+                "mag_ang_sig": "freq_mag_ang_signals.npy",
+                "mag_sig": "freq_mag_signals.npy",
+                "ang_sig": "freq_ang_signals.npy",
+                "real_imag_sig": "freq_real_imag_signals.npy",
+                "real_sig": "freq_real_signals.npy",
+                "imag_sig": "freq_imag_signals.npy"
+            }              
+        },
         "output_signal": "time_signals.npy",
-        "premultiply": "premult_signals.npy",
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
         "recovered": "recovered.npy",

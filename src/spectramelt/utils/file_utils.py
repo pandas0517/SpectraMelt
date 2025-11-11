@@ -110,3 +110,14 @@ def build_flat_paths(directories):
 
     recursive_build([], directories["base"], directories["tail"])
     return flat_paths
+
+
+def flatten_files(d, parent_key="", sep="."):
+    items = {}
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.update(flatten_files(v, new_key, sep=sep))
+        else:
+            items[new_key] = v
+    return items
