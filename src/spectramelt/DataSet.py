@@ -323,7 +323,7 @@ class DataSet:
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
             input_signals_time = np.zeros((num_input_sigs, real_time.size))
-            input_signals_freq = np.zeros((num_input_sigs, real_time.size))
+            input_signals_freq = np.zeros((num_input_sigs, real_time.size), dtype=np.complex128)
             wave_param_list = [] # reset for this tone set
             start = time.time()
             for input_sig in range(num_input_sigs):
@@ -359,7 +359,7 @@ class DataSet:
                 input_signal.set_wave_params(params)
                 input_signal.create_input_signal()
                 input_signal_time = input_signal.get_input_signal()
-                input_signal_freq = (fft(input_signal_time)) / len(real_freq)
+                input_signal_freq = fft(input_signal_time)
                 input_signals_time[input_sig] = input_signal_time
                 input_signals_freq[input_sig] = input_signal_freq
 
@@ -380,7 +380,7 @@ class DataSet:
             np.save(inputset_freq_path, input_signals_freq)
             self.logger.info(f"{tones}-Tone Frequency Input Set saved to file {inputset_freq_path}") 
 
-        self.logger.info("All Input Sets Created and Saved")
+        self.logger.info("All Input Sets Created and Saved\n")
 
 
     def create_output_set(self, DUT, input_signal=None):
@@ -502,7 +502,7 @@ class DataSet:
                 
                 self.logger.info(f"Output Set Creation Complete for Input Set {file_path}")
                 
-        self.logger.info(f"Output Set Creation Complete")
+        self.logger.info("Output Set Creation Complete\n")
 
     def create_nyfr_wave_params(self, nyfr):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")
@@ -574,7 +574,7 @@ class DataSet:
                 else:
                     self.logger.error(f"NYFR output file {output_signal_file} does not exists for input set file {file_path}")
         
-        self.logger.info(f"NYFR folded wave parameter creation complete")
+        self.logger.info("NYFR folded wave parameter creation complete\n")
         
     
     def create_premultiply_set(self,
@@ -633,7 +633,7 @@ class DataSet:
                 np.save(premultiply_file, np.array(premultiply_signal_list, dtype=np.complex64))
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
                  
-        self.logger.info(f"Premultiply Set Creation Complete")
+        self.logger.info(f"Premultiply Set Creation Complete\n")
 
     def create_recovery_set(self,
                             recovery,
@@ -705,7 +705,7 @@ class DataSet:
                 np.save(recovery_file, np.array(recovered_sig_list))
                 self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
         
-        self.logger.info(f"Recovery Set Creation Complete")
+        self.logger.info("Recovery Set Creation Complete\n")
         
     # -------------------------------
     # Getters

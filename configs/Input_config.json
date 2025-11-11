@@ -1,5 +1,5 @@
 {
-    "config_name": "Input_Config_Ideal_2",
+    "config_name": "Input_Config_Ideal_1",
     "time_params": {
         "time_range": [-0.006, 0.006],
         "sim_freq": 10000000

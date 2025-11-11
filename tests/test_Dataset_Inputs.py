@@ -77,8 +77,8 @@ if __name__ == '__main__':
                     amps = [w["amp"] / 2 for w in wave_param]
                     freqs = [w["freq"] for w in wave_param]
                     neg_freqs = [-f for f in freqs]
-                    freq_signal = fftshift(freq_signals[idx])
-                    
+                    freq_signal = fftshift(np.abs(freq_signals[idx])) / len(real_freq)
+
                     fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
                     axes[0].plot(real_time, time_signal)
                     axes[0].set_title("Time (File)")
