@@ -21,6 +21,16 @@ class DataSet:
     VALID_DUT_TYPES = {
         "nyfr"
     }
+    # Map modes to flattened filename keys
+    FREQ_FILE_KEYS = {
+        "complex":  "input.freq.signal",
+        "mag_ang":  "input.freq.mag_ang_sig",
+        "mag":      "input.freq.mag_sig",
+        "ang":      "input.freq.ang_sig",
+        "real_imag":"input.freq.real_imag_sig",
+        "real":     "input.freq.real_sig",
+        "imag":     "input.freq.imag_sig",
+    }
     def __init__(self,
                  input_config_name=None,
                  DUT_config_name=None,
@@ -431,23 +441,13 @@ class DataSet:
 
             # --- After you've built input_signals_freq with FFT results ---
             if saved_freq_modes:
-                # Map modes to flattened filename keys
-                FREQ_FILE_KEYS = {
-                    "complex":  "input.freq.signal",
-                    "mag_ang":  "input.freq.mag_ang_sig",
-                    "mag":      "input.freq.mag_sig",
-                    "ang":      "input.freq.ang_sig",
-                    "real_imag":"input.freq.real_imag_sig",
-                    "real":     "input.freq.real_sig",
-                    "imag":     "input.freq.imag_sig",
-                }
                 for mode in saved_freq_modes:
 
                     if mode not in self.VALID_SAVED_FREQ_MODES:
                         self.logger.warning(f"Skipping invalid freq mode: {mode}")
                         continue
 
-                    key = FREQ_FILE_KEYS[mode]
+                    key = self.FREQ_FILE_KEYS[mode]
                     filename = self.flat_filenames.get(key)
                     if not filename:
                         self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
@@ -576,7 +576,7 @@ class DataSet:
                     
                     if idx == 0:
                         if not dictionary_file.exists():
-                            match DUT_type:
+                            match DUT_type.lower():
                                 case "nyfr":               
                                     lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
                                     dictionary = DUT.create_dictionary(lo_phase_mod_mid)
@@ -741,23 +741,13 @@ class DataSet:
                     np.save(premultiply_file, premultiply_signals)
                     self.logger.info(f"{key_part} premultiply set saved to {premultiply_file}")
                 else:
-                    # Map modes to flattened filename keys
-                    FREQ_FILE_KEYS = {
-                        "complex":  "input.freq.signal",
-                        "mag_ang":  "input.freq.mag_ang_sig",
-                        "mag":      "input.freq.mag_sig",
-                        "ang":      "input.freq.ang_sig",
-                        "real_imag":"input.freq.real_imag_sig",
-                        "real":     "input.freq.real_sig",
-                        "imag":     "input.freq.imag_sig",
-                    }
                     for mode in saved_freq_modes:
 
                         if mode not in self.VALID_SAVED_FREQ_MODES:
                             self.logger.warning(f"Skipping invalid freq mode: {mode}")
                             continue
 
-                        key = FREQ_FILE_KEYS[mode]
+                        key = self.FREQ_FILE_KEYS[mode]
                         filename = self.flat_filenames.get(key)
                         if not filename:
                             self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
@@ -921,6 +911,18 @@ class DataSet:
     
     def get_outputset_params(self):
         return self.outputset_params
+    
+    
+    def get_valid_saved_freq_modes(cls):
+        return cls.VALID_SAVED_FREQ_MODES
+    
+    
+    def get_valid_dut_types(cls):
+        return cls.VALID_DUT_TYPES
+    
+    
+    def get_freq_file_keys(cls):
+        return cls.FREQ_FILE_KEYS
     
     
     def get_all_params(self):
