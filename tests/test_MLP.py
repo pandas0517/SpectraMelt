@@ -62,7 +62,9 @@ if __name__ == '__main__':
             premultiply_file_list = []
             premultiply_test_sig = None
             for file_path in premultiply_dir.iterdir():
-                if file_path.is_file() and file_path.name.endswith(filename):
+                if (file_path.is_file() and
+                    file_path.name.endswith(filename) and 
+                    "recovery" not in file_path.name.lower()):
                     premultiply_file_list.append(file_path)
                     if get_test_signal:
                         premultiply_signals = np.load(file_path)
@@ -76,7 +78,9 @@ if __name__ == '__main__':
             input_file_list = []
             input_test_sig = None
             for file_path in input_dir.iterdir():
-                if file_path.is_file() and file_path.name.endswith(filename):
+                if (file_path.is_file() and
+                    file_path.name.endswith(filename) and 
+                    "recovery" not in file_path.name.lower()):
                     input_file_list.append(file_path)
                     if get_test_signal:
                         input_signals = np.load(file_path)
