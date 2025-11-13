@@ -122,7 +122,7 @@ class MLP:
                     "restore_best_weights" :True
                 },
                 "seed": None,
-                "shuffle": False
+                "shuffle": True
             }
             
         self.rng = np.random.default_rng(training_params.get('seed', None))
@@ -135,10 +135,10 @@ class MLP:
         else:
             training_params['loss_type'] = loss_type
 
-        train_test_split = training_params.get('train_test_split', None)
-        if not self.is_valid_train_test_split(train_test_split):
-            self.logger.error(f"{train_test_split} is not a valid percentage")
-            raise ValueError(f"{train_test_split} is not a valid percentage")
+        test_fraction = training_params.get('test_fraction', None)
+        if not self.is_valid_test_fraction(test_fraction):
+            self.logger.error(f"{test_fraction} is not a valid percentage")
+            raise ValueError(f"{test_fraction} is not a valid percentage")
   
         early_stopping_params = training_params.get('early_stopping', {})
         monitor = early_stopping_params.get('monitor', "val_loss")
@@ -169,7 +169,7 @@ class MLP:
         return name.lower() in self.VALID_MONITORS
     
     
-    def is_valid_train_test_split(self, split):
+    def is_valid_test_fraction(self, value):
         """Return True if value is a float between 0 and 1 inclusive."""
         try:
             value = float(value)  # Convert in case it’s a string or int
@@ -270,7 +270,7 @@ class MLP:
             h5_out_output: str,
             max_signals_per_file: int | None = None,
             sample_signal: np.ndarray | None = None,
-            shuffle=True
+            shuffle=None
     ):
         """
         Convert many signal set files into two shuffled HDF5 datasets (input + output)
@@ -293,6 +293,10 @@ class MLP:
         # --- Determine chunk shape if sample signal is given ---
         # HDF5 chunking works best when a chunk contains a small batch of whole signals.
         # A reasonable default is (batch_of_128, signal_length...)
+        if shuffle is None:
+            training_params = self.training_params
+            shuffle = training_params.get('shuffle', True)
+            
         if sample_signal is not None:
             sample_signal = np.asarray(sample_signal)
             # Choose chunk batch dimension based on signal size

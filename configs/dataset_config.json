@@ -70,6 +70,7 @@
         "dictionary": "dictionary.npy",
         "recovered": "recovered.npy",
         "recovery_config": "recovery_config.json",
-        "ml_model": "ml_model.keras"
+        "ml_model": "ml_model.keras",
+        "ml_config": "ml_config.json"
     }
 }

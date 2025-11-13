@@ -26,6 +26,6 @@
             "restore_best_weights" :true
         },
         "seed": null,
-        "shuffle": false
+        "shuffle": true
     }
 }

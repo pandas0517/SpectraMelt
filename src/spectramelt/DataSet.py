@@ -278,7 +278,8 @@ class DataSet:
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
                 "recovery_config": "recovery_config.json",
-                "ml_model": "ml_model.keras"
+                "ml_model": "ml_model.keras",
+                "ml_config": "ml_config.json"
             }
         self.flat_filenames = flatten_files(filenames)
         self.filenames = filenames
@@ -531,7 +532,6 @@ class DataSet:
         wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
         
         output_dirs.mkdir(parents=True, exist_ok=True)
-        output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
         
         dictionary_file = output_dirs / dictionary_filename
         
@@ -563,6 +563,7 @@ class DataSet:
                 # Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
                 key_part = stem.split(input_time_signal_filename)[0]
+                output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
                 
                 dictionary = None
                 output_signal_list = []

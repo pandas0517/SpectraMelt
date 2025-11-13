@@ -4,7 +4,11 @@
 if __name__ == '__main__':
     from os import getenv
     from dotenv import load_dotenv
-    from spectramelt.utils import load_config_from_json, get_logger
+    from spectramelt.utils import (
+        load_config_from_json,
+        get_logger,
+        save_to_json
+    )
     from pathlib import Path
     from spectramelt.MLP import MLP
     from spectramelt.DataSet import DataSet
@@ -15,13 +19,8 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = True
-
-    create_nyfr_wave_params = True
-    display_nyfr_signals = True
-    
-    create_premultiply_set = True
-    display_premultiply_signals = True
+    create_mlp_model = True
+    train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -34,15 +33,21 @@ if __name__ == '__main__':
     directories = dataset.get_directories()
     premultiply_dir = directories.get('premultiply', "Premultiply")
     ml_models_dir = directories.get('ml_models', "ML_Models")
-    input_dir = directories.get('outputs', "Outputs")
+    ml_models_dir.mkdir(parents=True, exist_ok=True)
+    input_dir = directories.get('inputs', "Inputs")
     
     inputset_params = dataset.get_inputset_params()
     saved_freq_modes = inputset_params.get('saved_freq_modes', [])
     # Currently: Get Magnitude Mode
-    selected_freq_modes = saved_freq_modes[0]
+    selected_freq_modes = saved_freq_modes[0:1]
     freq_file_keys = dataset.get_freq_file_keys()
     flat_filenames = dataset.get_flat_filenames()
     ml_model_filename = flat_filenames.get('ml_model', "ml_model.keras")
+    ml_config_filename = flat_filenames.get('ml_config', "ml_config.json")
+    ml_config_file = ml_models_dir.parent / ml_config_filename
+
+    if not ml_config_file.exists():
+        save_to_json(mlp.get_mlp_params(), ml_config_file)
 
     if saved_freq_modes:
         for mode in selected_freq_modes:
@@ -72,6 +77,15 @@ if __name__ == '__main__':
                     input_file_list.append(file_path)
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
+            if create_mlp_model:
+                mlp.create_model(len(premultiply_test_sig), model_file_path=ml_model_file)
+
+            if train_mlp_model:
+                mlp.prepare_large_dataset(premultiply_file_list,
+                                          input_file_list,
+                                          premultiply_h5_file,
+                                          input_h5_file,
+                                          sample_signal=premultiply_test_sig)
             pass
     
     atexit.register(logger.info, "Completed Test\n")
