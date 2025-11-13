@@ -11,6 +11,7 @@ from keras import (
 )
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.activations import get as get_activation
 
 class MLP:
     """
@@ -24,7 +25,7 @@ class MLP:
     
     def __init__(self,
                  mlp_params=None,
-                 model_file_path=None,
+                 model_params=None,
                  training_params=None,
                  log_params=None,
                  config_name=None,
@@ -38,7 +39,7 @@ class MLP:
             mlp_params = load_config_from_json(config_file_path)
         elif mlp_params is None:
             mlp_params = {}
-            mlp_params['model_file_path'] = model_file_path
+            mlp_params['model_params'] = model_params
             mlp_params['training_params'] = training_params
             mlp_params['config_name'] = config_name
             mlp_params['log_params'] = log_params
@@ -55,7 +56,7 @@ class MLP:
     def set_mlp_params(self, mlp_params=None):
         if mlp_params is None:
             mlp_params = {}
-        model_file_path = mlp_params.get('model_file_path', None)
+        model_params = mlp_params.get('model_params', None)
         training_params = mlp_params.get('training_params', None)
         config_name = mlp_params.get('config_name', None)
         log_params = mlp_params.get('log_params', None)
@@ -73,7 +74,7 @@ class MLP:
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
         
-        self.set_model_file_path(model_file_path)
+        self.set_model_params(model_params)
         self.set_training_params(training_params)
         self.set_config_name(config_name)
         
@@ -84,10 +85,23 @@ class MLP:
         self.config_name = config_name
         
 
-    def set_model_file_path(self, model_file_path):
-        if model_file_path is None:
-            model_file_path = "ml_model.keras"
-        self.model_file_path = model_file_path
+    def set_model_params(self, model_params):
+        if model_params is None:
+            model_params = {
+                "file_path": "ml_model.keras",
+                "hidden_layer_width_mult": [1.0],
+                "activation_per_layer": [
+                    "linear",
+                    "linear",
+                    "linear"
+                ]
+            }
+        activation_per_layer = model_params.get('activation_per_layer',
+                                                ["linear", "linear", "linear"])
+        if not self.is_valid_keras_activation(activation_per_layer):
+            self.logger.error("Activation function list contains invalid entries")
+            raise ValueError("Activation function list contains invalid entries")
+        self.model_params = model_params
         
     
     def set_log_params(self, log_params):
@@ -151,7 +165,29 @@ class MLP:
     # -------------------------------
     # Core functional methods
     # -------------------------------
-    
+
+    def is_valid_keras_activation(self, name):
+        """Check if a single activation name is valid in Keras."""
+        try:
+            get_activation(name)
+            return True
+        except (ValueError, TypeError):
+            return False
+
+
+    def validate_activation_list(self, activation_list):
+        """Validate a list of activation names."""
+        if not isinstance(activation_list, (list, tuple)):
+            self.logger.error("activation_list must be a list or tuple of strings")
+            raise TypeError("activation_list must be a list or tuple of strings")
+        
+        invalid = [a for a in activation_list if not self.is_valid_keras_activation(a)]
+        if invalid:
+            self.logger.info(f"Invalid activation(s): {invalid}")
+            return False
+        return True
+
+
     def is_valid_keras_loss(self, name: str) -> bool:
         # Check custom losses first
         if name in self.CUSTOM_LOSSES:
@@ -187,18 +223,33 @@ class MLP:
         tf.compat.v1.keras.backend.clear_session()
 
 
-    def create_model(self, input_signal_size, model_file_path=None):
+    def create_model(self, input_signal_size, output_signal_size, model_file_path=None):
         if model_file_path is None:
-            model_file_path = self.model_file_path
+            model_file_path = self.model_params.get('file_path', "ml_model.keras")
             
         loss_type = self.training_params.get('loss_type', "mean_squared_error")
         learning_rate = self.training_params.get('learning_rate', 0.00001)
-
+        hidden_layer_width_mult = self.model_params.get('hidden_layer_width_mult', [1])
+        activation_functions = self.model_params.get('activation_per_layer',
+                                                     ["linear", "linear", "linear"])
         
         mlp_model = Sequential()
-        mlp_model.add(Input(shape=(input_signal_size,)))
-        mlp_model.add(layers.Dense(input_signal_size, name="mlp_model_layer_1"))
-        mlp_model.add(layers.Dense(input_signal_size, name="mlp_model_out"))
+        mlp_model.add(Input(shape=(input_signal_size,),
+                            activation=activation_functions[0],
+                            name="mlp_model_in"))
+        
+        for idx, layer_width_mult in enumerate(hidden_layer_width_mult, start=1):
+            size = int(layer_width_mult * input_signal_size)
+            activation_function = activation_functions[idx]
+            layer_name = f"mlp_model_layer_{idx}"
+            mlp_model.add(layers.Dense(size,
+                                       activation=activation_function,
+                                       name=layer_name))
+            
+        mlp_model.add(layers.Dense(output_signal_size,
+                                   activation=activation_functions[-1],
+                                   name="mlp_model_out"))
+        
         mlp_opt = optimizers.Adam(learning_rate=learning_rate)
         if loss_type == "root_mean_squared_error":
             mlp_model.compile(optimizer=mlp_opt, loss=self.root_mean_squared_error)
@@ -207,9 +258,10 @@ class MLP:
         
         mlp_model.save(model_file_path, overwrite=True)
         
-    def fit_model(self, input_set, output_set, model_file_path=None):
+
+    def load_model(self, model_file_path=None):
         if model_file_path is None:
-            model_file_path = self.model_file_path
+            model_file_path = self.model_params.get('file_path', "ml_model.keras")
             
         loss_type = self.training_params.get('loss_type', "mean_squared_error")
         if model_file_path.exists():
@@ -223,9 +275,11 @@ class MLP:
             self.logger.error(f"Model File {model_file_path} does not exists")
             raise ValueError(f"Model File {model_file_path} does not exists")
         
-        if input_set is None or output_set is None:
-            self.logger.error("Must provide both input and output sets")
-            raise ValueError("Must provide both input and output sets")
+        return mlp_model      
+    
+        
+    def fit_model(self, input_set, output_set, model_file_path=None):
+        mlp_model = self.load_model(model_file_path)
         
         test_fraction = self.training_params.get('test_fraction', 0.3)
         # Using np.random.Generator
@@ -374,9 +428,7 @@ class MLP:
             self,
             h5_input_path: str,
             h5_output_path: str,
-            test_fraction: float = 0.1,
-            batch_size: int = 32,
-            epochs: int = 50
+            model_file_path: None,
     ):
         """
         Train the existing Keras model on the prepared HDF5 datasets.
@@ -400,6 +452,23 @@ class MLP:
                 idx = self.indices[i * self.batch_size:(i + 1) * self.batch_size]
                 return self.h5_x[idx], self.h5_y[idx]
 
+        mlp_model = self.load_model(model_file_path)
+
+        num_epochs = self.training_params.get('num_epochs', 200)
+        test_fraction = self.training_params.get('test_fraction', 0.3)
+        batch_sz = self.training_params.get('batch_sz', 128) 
+        early_stopping_params = self.training_params.get('early_stopping', {})
+        monitor = early_stopping_params.get('monitor', "val_loss")
+        min_delta = early_stopping_params.get('min_delta', 0.1)
+        patience = early_stopping_params.get('patience', 4)
+        verbose = early_stopping_params.get('verbose', 1)
+        start_from_epoch = early_stopping_params.get('start_from_epoch', 5)
+        restore_best_weights = early_stopping_params.get('restore_best_weights', True)
+        
+        early_stopping = EarlyStopping(monitor=monitor, min_delta=min_delta, patience=patience,
+                                       verbose=verbose, start_from_epoch=start_from_epoch,
+                                       restore_best_weights=restore_best_weights)
+
         hf_x = h5py.File(h5_input_path, 'r')
         hf_y = h5py.File(h5_output_path, 'r')
 
@@ -412,14 +481,15 @@ class MLP:
         train_idx = np.arange(0, split)
         test_idx  = np.arange(split, N)
 
-        train_seq = H5Sequence(X, y, train_idx, batch_size)
-        test_seq  = H5Sequence(X, y, test_idx,  batch_size)
+        train_seq = H5Sequence(X, y, train_idx, batch_sz)
+        test_seq  = H5Sequence(X, y, test_idx,  batch_sz)
 
-        self.model.fit(
+        mlp_model.fit(
             train_seq,
             validation_data=test_seq,
-            epochs=epochs,
+            epochs=num_epochs,
             workers=4,
+            callbacks=[early_stopping],
             use_multiprocessing=True
         )
 
@@ -438,8 +508,8 @@ class MLP:
         return self.training_params
     
     
-    def get_model_file_path(self):
-        return self.model_file_path
+    def get_model_params(self):
+        return self.model_params
     
     
     def get_config_name(self):
@@ -450,7 +520,7 @@ class MLP:
         mlp_params ={
             "log_params": self.log_params,
             "training_params": self.training_params,
-            "model_file_path": self.model_file_path,
+            "model_params": self.model_params,
             "config_name": self.config_name
         }
         return mlp_params

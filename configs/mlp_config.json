@@ -6,7 +6,15 @@
         "level": "INFO",
         "console": true
     },
-    "model_file_path": null,
+    "model_params": {
+        "file_path": null,
+        "hidden_layer_width_mult": [1.0],
+        "activation_per_layer": [
+            "linear",
+            "linear",
+            "linear"
+        ]
+    },
     "training_params": {
         "modes": [
             "mag"

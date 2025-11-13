@@ -131,6 +131,7 @@ class DataSet:
         if inputset_params is None:
             inputset_params = {
                 "num_sigs": 5000,
+                "num_recovery_sigs": 100,
                 "tones_per_sig": [1],
                 "wave_precision": None,
                 "saved_freq_modes": [],
@@ -374,7 +375,8 @@ class DataSet:
         amp_range = input_signal_wave_params.get('amp_range', (0.1, 1.0))
         phase_range = input_signal_wave_params.get('phase_range', (0, 1))
 
-        num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)   
+        num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)
+        num_recovery_sigs = self.inputset_params.get('num_recovery_sigs', 100)
         tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
         wave_precision = self.inputset_params.get('wave_precision', None)
         
@@ -487,6 +489,116 @@ class DataSet:
                     self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
                     
                 input_signals_freq[:] = 0
+
+        input_recovery_signals_time = np.zeros((num_recovery_sigs, real_time.size))
+        
+        if saved_freq_modes:
+            input_recovery_signals_freq = np.zeros((num_recovery_sigs, real_time.size), dtype=np.complex128)
+       
+        # --- Generate all recovery tone sets ---
+        for tones in tones_per_sig:
+            wave_param_list = [] # reset for this tone set
+            start = time.time()
+            for input_sig in range(num_recovery_sigs):
+                amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
+                if wave_precision is not None:
+                    amps = np.round(amps, wave_precision)
+
+                # Randomly choose unique bins, then scale back to Hz
+                freqs = self.input_rng.choice(freq_bins, size=tones, replace=False)
+
+                # Remove chosen bins from freq_bins (in place)
+                freq_bins = freq_bins[~np.isin(freq_bins, freqs)]
+                if tones > len(freq_bins):
+                    self.logger.debug("Ran out of unique frequency bins for input signals. Resetting...")
+                    freq_bins = np.copy(freq_subset)
+
+                if phase_range:
+                    t_shift = self.input_rng.uniform(phase_range[0], phase_range[1], tones) / freqs  # seconds
+                    phases = 2 * np.pi * freqs * t_shift
+                    if wave_precision is not None:
+                        phases = np.round(phases, wave_precision)
+                else:
+                    phases = np.zeros(tones)
+                # Save generated wave dictionaries into waves
+                wave = [
+                    {"amp": float(amps[i]), "freq": float(freqs[i]), "phase": float(phases[i])}
+                    for i in range(tones)
+                ]
+                wave_param_list.append(wave)
+
+                params = input_signal_wave_params
+                params["waves"] = wave
+                input_signal.set_wave_params(params)
+                input_signal.create_input_signal()
+                input_signal_time = input_signal.get_input_signal()
+                input_recovery_signals_time[input_sig] = input_signal_time
+                
+                if saved_freq_modes:
+                    input_signal_freq = fft(input_signal_time)
+                    input_recovery_signals_freq[input_sig] = input_signal_freq
+
+            stop = time.time()
+            self.logger.info(f"{num_recovery_sigs} {tones}-Tone Recovery Signal Input Set Creation Time: {stop - start:.6f} seconds")
+
+            # --- Save outputs ---
+            inputset_wave_params_path = input_dirs / f"{tones}_tone_recovery_{input_wave_params_filename}" 
+            with open(inputset_wave_params_path, 'wb') as file:
+                pickle.dump(wave_param_list, file)
+                
+            inputset_time_path = input_dirs / f"{tones}_tone_recovery_{input_time_signal_filename}"
+            
+            np.save(inputset_time_path, input_recovery_signals_time)
+            input_recovery_signals_time[:] = 0
+            self.logger.info(f"{tones}-Tone Recovery Time Input Set saved to file {inputset_time_path}")
+
+            # --- After you've built input_signals_freq with FFT results ---
+            if saved_freq_modes:
+                for mode in saved_freq_modes:
+
+                    if mode not in self.VALID_SAVED_FREQ_MODES:
+                        self.logger.warning(f"Skipping invalid freq mode: {mode}")
+                        continue
+
+                    key = self.FREQ_FILE_KEYS[mode]
+                    filename = self.flat_filenames.get(key)
+                    if not filename:
+                        self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                        continue
+
+                    save_path = input_dirs / f"{tones}_tone_recovery_{filename}"
+
+                    # --- Generate correct representation ---
+                    if mode == "complex":
+                        arr = input_recovery_signals_freq
+
+                    elif mode == "real":
+                        arr = input_recovery_signals_freq.real
+
+                    elif mode == "imag":
+                        arr = input_recovery_signals_freq.imag
+
+                    elif mode == "real_imag":
+                        arr = np.concatenate(
+                            (input_recovery_signals_freq.real, input_recovery_signals_freq.imag), axis=1
+                        )
+
+                    elif mode == "mag":
+                        arr = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
+
+                    elif mode == "ang":
+                        arr = np.angle(fftshift(input_recovery_signals_freq, axes=1))
+
+                    elif mode == "mag_ang":
+                        mag = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
+                        ang = np.angle(fftshift(input_recovery_signals_freq, axes=1))
+                        arr = np.concatenate((mag, ang), axis=1)
+
+                    # --- Save ---
+                    np.save(save_path, arr)
+                    self.logger.info(f"{tones}-Tone {mode.upper()} freq recovery set saved to {save_path}")
+                    
+                input_recovery_signals_freq[:] = 0
                 
         self.logger.info("All Input Sets Created and Saved\n")
 

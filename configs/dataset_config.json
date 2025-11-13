@@ -2,6 +2,7 @@
     "config_name": "Dataset_Config_1",
     "inputset_params": {
         "num_sigs": 5000,
+        "num_recovery_sigs": 100,
         "wave_precision": 3,
         "tones_per_sig": [
             2, 3, 4, 5, 6,

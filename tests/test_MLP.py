@@ -20,6 +20,7 @@ if __name__ == '__main__':
     load_dotenv()
     
     create_mlp_model = True
+    prepare_large_dataset = True
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -51,13 +52,13 @@ if __name__ == '__main__':
 
     if saved_freq_modes:
         for mode in selected_freq_modes:
-            get_test_signal = True
             key = freq_file_keys[mode]
             
             filename = flat_filenames.get(key)
             premultiply_file = premultiply_dir / filename
             premultiply_h5_file = Path(premultiply_file).with_suffix(".h5")
             
+            get_test_signal = True
             premultiply_file_list = []
             premultiply_test_sig = None
             for file_path in premultiply_dir.iterdir():
@@ -71,21 +72,34 @@ if __name__ == '__main__':
             input_file = input_dir / filename
             input_h5_file = Path(input_file).with_suffix(".h5")
             
+            get_test_signal = True
             input_file_list = []
+            input_test_sig = None
             for file_path in input_dir.iterdir():
                 if file_path.is_file() and file_path.name.endswith(filename):
                     input_file_list.append(file_path)
+                    if get_test_signal:
+                        input_signals = np.load(file_path)
+                        input_test_sig = input_signals[0]
+                        get_test_signal = False
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
+            model_params = mlp.get_model_params()
+            model_params['file_path'] = ml_model_file
+            mlp.set_model_params(model_params)
+            
             if create_mlp_model:
-                mlp.create_model(len(premultiply_test_sig), model_file_path=ml_model_file)
+                mlp.create_model(len(premultiply_test_sig), len(input_test_sig))
 
-            if train_mlp_model:
+            if prepare_large_dataset:
                 mlp.prepare_large_dataset(premultiply_file_list,
                                           input_file_list,
                                           premultiply_h5_file,
                                           input_h5_file,
                                           sample_signal=premultiply_test_sig)
+                
+            if train_mlp_model:
+                mlp.train_on_hdf5(premultiply_h5_file, input_h5_file)
             pass
     
     atexit.register(logger.info, "Completed Test\n")
