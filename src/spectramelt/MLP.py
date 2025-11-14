@@ -1,17 +1,19 @@
 import numpy as np
 from .utils import load_config_from_json, get_logger
-from keras._tf_keras.keras.callbacks import EarlyStopping
-from keras import (
+import tensorflow as tf
+
+from tensorflow.keras import (
     layers,
     losses,
     backend,
     Sequential,
-    Input,
     optimizers,
+    Input
 )
-import tensorflow as tf
-from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.activations import get as get_activation
+
+from sklearn.model_selection import train_test_split
 
 class MLP:
     """
@@ -323,8 +325,7 @@ class MLP:
             h5_out_input: str,
             h5_out_output: str,
             max_signals_per_file: int | None = None,
-            sample_signal: np.ndarray | None = None,
-            shuffle=None
+            sample_signal: np.ndarray | None = None
     ):
         """
         Convert many signal set files into two shuffled HDF5 datasets (input + output)
@@ -347,9 +348,6 @@ class MLP:
         # --- Determine chunk shape if sample signal is given ---
         # HDF5 chunking works best when a chunk contains a small batch of whole signals.
         # A reasonable default is (batch_of_128, signal_length...)
-        if shuffle is None:
-            training_params = self.training_params
-            shuffle = training_params.get('shuffle', True)
             
         if sample_signal is not None:
             sample_signal = np.asarray(sample_signal)
@@ -398,11 +396,7 @@ class MLP:
                 chunks=chunk_shape_out
             )
 
-            # --- Streaming insert with optional shuffle-buffer ---
             order = np.arange(total_samples)
-            if shuffle:
-                self.rng.shuffle(order)
-
             write_pos = 0
 
             for in_file, out_file in zip(input_file_list, output_file_list):
@@ -432,18 +426,26 @@ class MLP:
     ):
         """
         Train the existing Keras model on the prepared HDF5 datasets.
-        No shuffling is required here if prepare_large_dataset already shuffled.
+        Efficient HDF5 loading + shuffling via index arrays.
         """
 
         import h5py
+        import numpy as np
+        from tensorflow.keras.callbacks import EarlyStopping
+
         from tensorflow.keras.utils import Sequence
 
-        class H5Sequence(Sequence):
-            def __init__(self, h5_x, h5_y, indices, batch_size):
+        class ShuffledH5Sequence(Sequence):
+            def __init__(self, h5_x, h5_y, indices, batch_size, shuffle=True, rng=None):
                 self.h5_x = h5_x
                 self.h5_y = h5_y
-                self.indices = indices
+                self.indices = np.array(indices)
                 self.batch_size = batch_size
+                self.shuffle = shuffle
+                self.rng = rng if rng is not None else np.random.default_rng()
+
+                if self.shuffle:
+                    self.rng.shuffle(self.indices)
 
             def __len__(self):
                 return len(self.indices) // self.batch_size
@@ -452,45 +454,51 @@ class MLP:
                 idx = self.indices[i * self.batch_size:(i + 1) * self.batch_size]
                 return self.h5_x[idx], self.h5_y[idx]
 
+            def on_epoch_end(self):
+                if self.shuffle:
+                    self.rng.shuffle(self.indices)
+
         mlp_model = self.load_model(model_file_path)
 
+        # ---- Parameters ----
         num_epochs = self.training_params.get('num_epochs', 200)
         test_fraction = self.training_params.get('test_fraction', 0.3)
         batch_sz = self.training_params.get('batch_sz', 128) 
         early_stopping_params = self.training_params.get('early_stopping', {})
-        monitor = early_stopping_params.get('monitor', "val_loss")
-        min_delta = early_stopping_params.get('min_delta', 0.1)
-        patience = early_stopping_params.get('patience', 4)
-        verbose = early_stopping_params.get('verbose', 1)
-        start_from_epoch = early_stopping_params.get('start_from_epoch', 5)
-        restore_best_weights = early_stopping_params.get('restore_best_weights', True)
-        
-        early_stopping = EarlyStopping(monitor=monitor, min_delta=min_delta, patience=patience,
-                                       verbose=verbose, start_from_epoch=start_from_epoch,
-                                       restore_best_weights=restore_best_weights)
 
+        early_stopping = EarlyStopping(
+            monitor=early_stopping_params.get('monitor', "val_loss"),
+            min_delta=early_stopping_params.get('min_delta', 0.1),
+            patience=early_stopping_params.get('patience', 4),
+            verbose=early_stopping_params.get('verbose', 1),
+            start_from_epoch=early_stopping_params.get('start_from_epoch', 5),
+            restore_best_weights=early_stopping_params.get('restore_best_weights', True),
+        )
+
+        # ---- Open HDF5 files ----
         hf_x = h5py.File(h5_input_path, 'r')
         hf_y = h5py.File(h5_output_path, 'r')
-
         X = hf_x["X"]
         y = hf_y["y"]
         N = X.shape[0]
 
-        # Deterministic split index
+        # ---- Train/Test Split ----
         split = int(N * (1 - test_fraction))
         train_idx = np.arange(0, split)
         test_idx  = np.arange(split, N)
 
-        train_seq = H5Sequence(X, y, train_idx, batch_sz)
-        test_seq  = H5Sequence(X, y, test_idx,  batch_sz)
+        # ---- Sequences ----
+        train_seq = ShuffledH5Sequence(X, y, train_idx, batch_sz, shuffle=True, rng=self.rng)
+        test_seq  = ShuffledH5Sequence(X, y, test_idx,  batch_sz, shuffle=False)
 
+        # ---- Training ----
         mlp_model.fit(
             train_seq,
             validation_data=test_seq,
             epochs=num_epochs,
             workers=4,
-            callbacks=[early_stopping],
-            use_multiprocessing=True
+            use_multiprocessing=True,
+            callbacks=[early_stopping]
         )
 
         hf_x.close()
