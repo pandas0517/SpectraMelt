@@ -14,13 +14,13 @@ if __name__ == '__main__':
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy.fft import fft, ifft, fftshift, ifftshift
+    # import matplotlib.pyplot as plt
+    # from scipy.fft import fft, ifft, fftshift, ifftshift
 
     load_dotenv()
     
     create_mlp_model = True
-    prepare_large_dataset = True
+    prepare_large_dataset = False
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     premultiply_dir = directories.get('premultiply', "Premultiply")
     ml_models_dir = directories.get('ml_models', "ML_Models")
     ml_models_dir.mkdir(parents=True, exist_ok=True)
-    input_dir = directories.get('inputs', "Inputs")
+    output_dir = directories.get('outputs', "Outputs")
     
     inputset_params = dataset.get_inputset_params()
     saved_freq_modes = inputset_params.get('saved_freq_modes', [])
@@ -71,20 +71,21 @@ if __name__ == '__main__':
                         premultiply_test_sig = premultiply_signals[0]
                         get_test_signal = False
                         
-            input_file = input_dir / filename
-            input_h5_file = Path(input_file).with_suffix(".h5")
+            output_file = output_dir / f"wbf_{filename}"
+            output_h5_file = Path(output_file).with_suffix(".h5")
             
             get_test_signal = True
-            input_file_list = []
-            input_test_sig = None
-            for file_path in input_dir.iterdir():
+            output_file_list = []
+            output_test_sig = None
+            for file_path in output_dir.iterdir():
                 if (file_path.is_file() and
-                    file_path.name.endswith(filename) and 
+                    file_path.name.endswith(filename) and
+                    "wbf" in file_path.name.lower() and 
                     "recovery" not in file_path.name.lower()):
-                    input_file_list.append(file_path)
+                    output_file_list.append(file_path)
                     if get_test_signal:
-                        input_signals = np.load(file_path)
-                        input_test_sig = input_signals[0]
+                        output_signals = np.load(file_path)
+                        output_test_sig = output_signals[0]
                         get_test_signal = False
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
@@ -93,17 +94,17 @@ if __name__ == '__main__':
             mlp.set_model_params(model_params)
             
             if create_mlp_model:
-                mlp.create_model(len(premultiply_test_sig), len(input_test_sig))
+                mlp.create_model(len(premultiply_test_sig), len(output_test_sig))
 
             if prepare_large_dataset:
                 mlp.prepare_large_dataset(premultiply_file_list,
-                                          input_file_list,
+                                          output_file_list,
                                           premultiply_h5_file,
-                                          input_h5_file,
+                                          output_h5_file,
                                           sample_signal=premultiply_test_sig)
                 
             if train_mlp_model:
-                mlp.train_on_hdf5(premultiply_h5_file, input_h5_file)
+                mlp.train_on_hdf5(premultiply_h5_file, output_h5_file)
             pass
     
     atexit.register(logger.info, "Completed Test\n")

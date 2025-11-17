@@ -311,13 +311,21 @@ class NYFR:
         # Multiply by 2 to account for Nyquist rate
         points_per_second = round(wbf_cutoff_freq * 2)
         num_time_points = int(round(total_time * points_per_second))        
+        # real_time = original time vector of wbf_signal
+        # Find the indices in real_time that match conditioned_time
+        # This works if all values in conditioned_time are guaranteed to be in real_time
+        indices = np.nonzero(np.in1d(real_time, conditioned_time))[0]
 
-        self.wbf_time = np.linspace(
-            conditioned_time[0],
-            conditioned_time[-1],
-            num_time_points,
-            endpoint=False
-        )
+        # Extract the aligned wbf_signal
+        wbf_aligned_signal = wbf_signal[indices]
+
+        # wbf_aligned_signal is now matched to conditioned_time
+        # --- Subsample indices ---
+        orig_len = len(wbf_aligned_signal)
+        indices = np.linspace(0, orig_len - 1, num=num_time_points, dtype=int)
+
+        self.wbf_signal_sub = wbf_aligned_signal[indices]
+        self.wbf_time = conditioned_time[indices]
 
         self.wbf_freq = np.linspace(
             -points_per_second / 2,
@@ -403,6 +411,9 @@ class NYFR:
     
     def get_lo_phase_mod_mid(self):
         return self.lo_phase_mod_mid
+    
+    def get_wbf_signal_sub(self):
+        return self.wbf_signal_sub
     
     def get_wbf_time(self):
         return self.wbf_time

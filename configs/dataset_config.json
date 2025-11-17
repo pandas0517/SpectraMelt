@@ -1,7 +1,7 @@
 {
     "config_name": "Dataset_Config_1",
     "inputset_params": {
-        "num_sigs": 5000,
+        "num_sigs": 4000,
         "num_recovery_sigs": 100,
         "wave_precision": 3,
         "tones_per_sig": [
@@ -31,11 +31,11 @@
             "ml_models"
         ],
         "base": {
-            "inputs": "F:\\",
-            "outputs": "F:\\",
-            "premultiply": "F:\\",
-            "recovery": "F:\\",
-            "ml_models": "F:\\"
+            "inputs": "/mnt/fdata",
+            "outputs": "/mnt/fdata",
+            "premultiply": "/mnt/fdata",
+            "recovery": "/mnt/fdata",
+            "ml_models": "/mnt/fdata"
         },
         "tail": {
             "inputs": "Inputs",
@@ -66,7 +66,6 @@
                 "imag_sig": "freq_imag_signals.npy"
             }              
         },
-        "output_signal": "time_signals.npy",
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
         "recovered": "recovered.npy",

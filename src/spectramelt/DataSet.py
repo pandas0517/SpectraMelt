@@ -274,7 +274,6 @@ class DataSet:
                         "imag_sig": "freq_imag_signals.npy"
                     }              
                 },
-                "output_signal": "time_signals.npy",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
@@ -348,8 +347,10 @@ class DataSet:
         real_freq = input_signal.get_analog_frequency()
         if not real_time_file.exists():
             np.save(real_time_file, real_time)
+            self.logger.info(f"Real Time Input Signal saved to file {real_time_file}")
         if not real_freq_file.exists():
             np.save(real_freq_file, real_freq)
+            self.logger.info(f"Real Frequency Input Signal saved to file {real_freq_file}")
         
         # --- Config file ---
         inputset_config_file = input_dirs.parent / inputset_config_filename
@@ -366,6 +367,7 @@ class DataSet:
                 "input": input_signal_params
             }
             save_to_json(inputset_config, inputset_config_file)
+            self.logger.info(f"Saved Input Set configuration to file {inputset_config_file}")
 
         # Build discrete frequency grid
         freq_range = input_signal_wave_params.get('freq_range', (100, 1000))
@@ -375,7 +377,7 @@ class DataSet:
         amp_range = input_signal_wave_params.get('amp_range', (0.1, 1.0))
         phase_range = input_signal_wave_params.get('phase_range', (0, 1))
 
-        num_input_sigs = self.inputset_params.get('num_input_sigs', 5000)
+        num_input_sigs = self.inputset_params.get('num_sigs', 5000)
         num_recovery_sigs = self.inputset_params.get('num_recovery_sigs', 100)
         tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
         wave_precision = self.inputset_params.get('wave_precision', None)
@@ -435,7 +437,8 @@ class DataSet:
             inputset_wave_params_path = input_dirs / f"{tones}_tone_{input_wave_params_filename}" 
             with open(inputset_wave_params_path, 'wb') as file:
                 pickle.dump(wave_param_list, file)
-                
+            self.logger.info(f"{tones}-Tone Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
+
             inputset_time_path = input_dirs / f"{tones}_tone_{input_time_signal_filename}"
             
             np.save(inputset_time_path, input_signals_time)
@@ -461,28 +464,26 @@ class DataSet:
                     # --- Generate correct representation ---
                     if mode == "complex":
                         arr = input_signals_freq
+                    else:
+                        if mode == "real":
+                            arr = input_signals_freq.real
+                        elif mode == "imag":
+                            arr = input_signals_freq.imag
+                        elif mode == "real_imag":
+                            arr = np.concatenate(
+                                (input_signals_freq.real, input_signals_freq.imag), axis=1
+                            )
+                        elif mode == "mag":
+                            arr = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
+                        elif mode == "ang":
+                            arr = np.angle(fftshift(input_signals_freq, axes=1))
+                        elif mode == "mag_ang":
+                            mag = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
+                            ang = np.angle(fftshift(input_signals_freq, axes=1))
+                            arr = np.concatenate((mag, ang), axis=1)
 
-                    elif mode == "real":
-                        arr = input_signals_freq.real
-
-                    elif mode == "imag":
-                        arr = input_signals_freq.imag
-
-                    elif mode == "real_imag":
-                        arr = np.concatenate(
-                            (input_signals_freq.real, input_signals_freq.imag), axis=1
-                        )
-
-                    elif mode == "mag":
-                        arr = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
-
-                    elif mode == "ang":
-                        arr = np.angle(fftshift(input_signals_freq, axes=1))
-
-                    elif mode == "mag_ang":
-                        mag = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
-                        ang = np.angle(fftshift(input_signals_freq, axes=1))
-                        arr = np.concatenate((mag, ang), axis=1)
+                        # Cast to float32 for all non-complex modes
+                        arr = arr.astype(np.float32)
 
                     # --- Save ---
                     np.save(save_path, arr)
@@ -545,7 +546,8 @@ class DataSet:
             inputset_wave_params_path = input_dirs / f"{tones}_tone_recovery_{input_wave_params_filename}" 
             with open(inputset_wave_params_path, 'wb') as file:
                 pickle.dump(wave_param_list, file)
-                
+            self.logger.info(f"{tones}-Tone Recovery Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
+
             inputset_time_path = input_dirs / f"{tones}_tone_recovery_{input_time_signal_filename}"
             
             np.save(inputset_time_path, input_recovery_signals_time)
@@ -571,28 +573,26 @@ class DataSet:
                     # --- Generate correct representation ---
                     if mode == "complex":
                         arr = input_recovery_signals_freq
+                    else:
+                        if mode == "real":
+                            arr = input_recovery_signals_freq.real
+                        elif mode == "imag":
+                            arr = input_recovery_signals_freq.imag
+                        elif mode == "real_imag":
+                            arr = np.concatenate(
+                                (input_recovery_signals_freq.real, input_recovery_signals_freq.imag), axis=1
+                            )
+                        elif mode == "mag":
+                            arr = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
+                        elif mode == "ang":
+                            arr = np.angle(fftshift(input_recovery_signals_freq, axes=1))
+                        elif mode == "mag_ang":
+                            mag = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
+                            ang = np.angle(fftshift(input_recovery_signals_freq, axes=1))
+                            arr = np.concatenate((mag, ang), axis=1)
 
-                    elif mode == "real":
-                        arr = input_recovery_signals_freq.real
-
-                    elif mode == "imag":
-                        arr = input_recovery_signals_freq.imag
-
-                    elif mode == "real_imag":
-                        arr = np.concatenate(
-                            (input_recovery_signals_freq.real, input_recovery_signals_freq.imag), axis=1
-                        )
-
-                    elif mode == "mag":
-                        arr = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
-
-                    elif mode == "ang":
-                        arr = np.angle(fftshift(input_recovery_signals_freq, axes=1))
-
-                    elif mode == "mag_ang":
-                        mag = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
-                        ang = np.angle(fftshift(input_recovery_signals_freq, axes=1))
-                        arr = np.concatenate((mag, ang), axis=1)
+                        # Cast to float32 for all non-complex modes
+                        arr = arr.astype(np.float32)
 
                     # --- Save ---
                     np.save(save_path, arr)
@@ -634,7 +634,6 @@ class DataSet:
         output_dirs = self.directories.get('outputs', "Outputs")
         
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
-        output_signal_filename = self.filenames.get("output_signal", "signals.npy")
         dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
         
         samp_time_filename = self.filenames.get('samp_time', "sampled_time.npy")
@@ -644,7 +643,7 @@ class DataSet:
         wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
         
         output_dirs.mkdir(parents=True, exist_ok=True)
-        
+        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
         dictionary_file = output_dirs / dictionary_filename
         
         samp_time_file = output_dirs / samp_time_filename
@@ -656,7 +655,8 @@ class DataSet:
         # --- Config file ---
         DUT_config_file = output_dirs.parent / DUT_config_filename
         DUT_params = DUT.get_all_params()
-        
+        DUT_type = outputset_params.get('DUT_type', "nyfr")
+
         if not DUT_config_file.exists():
             DUT_config = {
                 "config_name": self.config_name,
@@ -664,8 +664,7 @@ class DataSet:
                 "outputset": outputset_params
             }
             save_to_json(DUT_config, DUT_config_file)
-            
-        DUT_type = outputset_params.get('DUT_type', "nyfr")        
+            self.logger.info(f"Saved DUT {DUT_type} configuration to file {DUT_config_file}")
         
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
@@ -675,18 +674,24 @@ class DataSet:
                 # Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
                 key_part = stem.split(input_time_signal_filename)[0]
-                output_signal_file = output_dirs / f"{key_part}{output_signal_filename}"
-                
+                output_signal_file = output_dirs / f"{key_part}{input_time_signal_filename}"
+                wbf_dut_signal_file = output_dirs / f"{key_part}wbf_{input_time_signal_filename}"
                 dictionary = None
                 output_signal_list = []
-                
+                wbf_signal_list = []
+                wbf_signal_freq_list = []
                 self.logger.info(f"Starting Output Set Creation for {file_path}")
                 start = time.time()
                 for idx, signal in enumerate(input_signals):
                     quantized_signals = DUT.create_output_signal(signal, real_time)
+                    wbf_signal = DUT.get_wbf_signal_sub()
                     output_signal = quantized_signals.get('quantized_values')
                     output_signal_list.append(output_signal)
-                    
+                    wbf_signal_list.append(wbf_signal)
+                    if saved_freq_modes:
+                        wbf_signal_freq = fft(wbf_signal)
+                        wbf_signal_freq_list.append(wbf_signal_freq)
+
                     if idx == 0:
                         if not dictionary_file.exists():
                             match DUT_type.lower():
@@ -716,8 +721,56 @@ class DataSet:
                 self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
                     
                 np.save(output_signal_file, np.array(output_signal_list))
-                
-                self.logger.info(f"Output Set Creation Complete for Input Set {file_path}")
+                self.logger.info(f"Output Set for Input Set {file_path} saved to file {output_signal_file}")
+
+                np.save(wbf_dut_signal_file, np.array(wbf_signal_list))
+                self.logger.info(f"Wideband Filter Set for Input Set {file_path} saved to file {wbf_dut_signal_file}")
+
+                # --- After you've built wbf_signals_freq with FFT results ---
+                if saved_freq_modes:
+                    wbf_signal_freqs = np.array(wbf_signal_freq_list)
+                    for mode in saved_freq_modes:
+
+                        if mode not in self.VALID_SAVED_FREQ_MODES:
+                            self.logger.warning(f"Skipping invalid freq mode: {mode}")
+                            continue
+
+                        key = self.FREQ_FILE_KEYS[mode]
+                        filename = self.flat_filenames.get(key)
+                        if not filename:
+                            self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                            continue
+
+                        save_path = output_dirs / f"{key_part}wbf_{filename}"
+
+                        # --- Generate correct representation ---
+                        if mode == "complex":
+                            arr = wbf_signal_freqs
+                        else:
+
+                            if mode == "real":
+                                arr = wbf_signal_freqs.real
+                            elif mode == "imag":
+                                arr = wbf_signal_freqs.imag
+                            elif mode == "real_imag":
+                                arr = np.concatenate(
+                                    (wbf_signal_freqs.real, wbf_signal_freqs.imag), axis=1
+                                )
+                            elif mode == "mag":
+                                arr = np.abs(fftshift(wbf_signal_freqs, axes=1)) / wbf_signal_freqs.shape[1]
+                            elif mode == "ang":
+                                arr = np.angle(fftshift(wbf_signal_freqs, axes=1))
+                            elif mode == "mag_ang":
+                                mag = np.abs(fftshift(wbf_signal_freqs, axes=1)) / wbf_signal_freqs.shape[1]
+                                ang = np.angle(fftshift(wbf_signal_freqs, axes=1))
+                                arr = np.concatenate((mag, ang), axis=1)
+
+                            # Cast to float32 for all non-complex modes
+                            arr = arr.astype(np.float32)
+
+                        # --- Save ---
+                        np.save(save_path, arr)
+                        self.logger.info(f"{key_part}{mode.upper()} wideband filter freq set saved to {save_path}")
                 
         self.logger.info("Output Set Creation Complete\n")
 
@@ -743,14 +796,14 @@ class DataSet:
         input_dir = self.directories.get('inputs', "Inputs")
         input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
         output_dir = self.directories.get('outputs', "Outputs")
-        output_signal_filename = self.filenames.get('output_signal', "signals.npy")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         samp_freq_filename = self.filenames.get('samp_freq', "sampled_freq.npy")
         samp_freq = np.load(output_dir / samp_freq_filename)
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_wave_params_filename):
                 stem = file_path.name
                 key_part = stem.split(input_wave_params_filename)[0]
-                output_signal_file = output_dir / f"{key_part}{output_signal_filename}"
+                output_signal_file = output_dir / f"{key_part}{input_time_signal_filename}"
                 nyfr_wave_file = output_dir / f"{key_part}{input_wave_params_filename}"
                 
                 if output_signal_file.exists():
@@ -802,7 +855,7 @@ class DataSet:
         
         saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
         output_dir = self.directories.get('outputs', "Outputs")
-        output_signal_filename = self.filenames.get('output_signal', "time_signals.npy")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         
         if input_config_name is not None:
             self.set_input_config_name(input_config_name)
@@ -828,9 +881,9 @@ class DataSet:
         Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
         
         for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename) and "wbf" not in file_path.name.lower():
                 stem = file_path.name
-                key_part = stem.split(output_signal_filename)[0]
+                key_part = stem.split(input_time_signal_filename)[0]
                 
                 output_signals = np.load(file_path)
 
@@ -872,27 +925,31 @@ class DataSet:
                         if mode == "complex":
                             arr = premultiply_signals
 
-                        elif mode == "real":
-                            arr = premultiply_signals.real
+                        else:
+                            if mode == "real":
+                                arr = premultiply_signals.real
 
-                        elif mode == "imag":
-                            arr = premultiply_signals.imag
+                            elif mode == "imag":
+                                arr = premultiply_signals.imag
 
-                        elif mode == "real_imag":
-                            arr = np.concatenate(
-                                (premultiply_signals.real, premultiply_signals.imag), axis=1
-                            )
+                            elif mode == "real_imag":
+                                arr = np.concatenate(
+                                    (premultiply_signals.real, premultiply_signals.imag), axis=1
+                                )
 
-                        elif mode == "mag":
-                            arr = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
+                            elif mode == "mag":
+                                arr = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
 
-                        elif mode == "ang":
-                            arr = np.angle(fftshift(premultiply_signals, axes=1))
+                            elif mode == "ang":
+                                arr = np.angle(fftshift(premultiply_signals, axes=1))
 
-                        elif mode == "mag_ang":
-                            mag = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
-                            ang = np.angle(fftshift(premultiply_signals, axes=1))
-                            arr = np.concatenate((mag, ang), axis=1)
+                            elif mode == "mag_ang":
+                                mag = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
+                                ang = np.angle(fftshift(premultiply_signals, axes=1))
+                                arr = np.concatenate((mag, ang), axis=1)
+
+                            # Cast to float32 for all non-complex modes
+                            arr = arr.astype(np.float32)
 
                         # --- Save ---
                         np.save(save_path, arr)
@@ -910,7 +967,7 @@ class DataSet:
         self.logger.info(f"Starting Recovery Set Creation...")
         
         output_dir = self.directories.get('outputs', "Outputs")        
-        output_signal_filename = self.filenames.get('output_signal', "signals.npy")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         
         if input_config_name is not None:
             self.set_input_config_name(input_config_name)
@@ -948,15 +1005,16 @@ class DataSet:
                 "recovery": recovery_params
             }
             save_to_json(recovery_config, recovery_config_file)
+            self.logger.info(f"Saved recovery configuration file to {recovery_config_file}")
             
         recovery_method = recovery_params.get('method')
         
         for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 output_signals = np.load(file_path)
                 # Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
-                key_part = stem.split(output_signal_filename)[0]
+                key_part = stem.split(input_time_signal_filename)[0]
                 
                 recovered_sig_list = []
 

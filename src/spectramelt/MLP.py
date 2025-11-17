@@ -1,8 +1,9 @@
 import numpy as np
 from .utils import load_config_from_json, get_logger
 import tensorflow as tf
-
-from tensorflow.keras import (
+import h5py
+import keras
+from keras import (
     layers,
     losses,
     backend,
@@ -10,10 +11,14 @@ from tensorflow.keras import (
     optimizers,
     Input
 )
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.activations import get as get_activation
-
+from keras.callbacks import EarlyStopping
+from keras.activations import get as get_activation
+from keras.utils import get_custom_objects
 from sklearn.model_selection import train_test_split
+
+@keras.saving.register_keras_serializable(package="CustomLosses")
+def root_mean_squared_error(y_true, y_pred):
+    return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
 
 class MLP:
     """
@@ -50,6 +55,9 @@ class MLP:
         
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
+
+        # Ensure custom losses are registered
+        get_custom_objects().update({"root_mean_squared_error": root_mean_squared_error})
  
     # -------------------------------
     # Setters
@@ -94,13 +102,12 @@ class MLP:
                 "hidden_layer_width_mult": [1.0],
                 "activation_per_layer": [
                     "linear",
-                    "linear",
                     "linear"
                 ]
             }
         activation_per_layer = model_params.get('activation_per_layer',
-                                                ["linear", "linear", "linear"])
-        if not self.is_valid_keras_activation(activation_per_layer):
+                                                ["linear", "linear"])
+        if not self.validate_activation_list(activation_per_layer):
             self.logger.error("Activation function list contains invalid entries")
             raise ValueError("Activation function list contains invalid entries")
         self.model_params = model_params
@@ -214,9 +221,6 @@ class MLP:
         except (TypeError, ValueError):
             return False
         return 0 <= value <= 1   
-    
-    def root_mean_squared_error(self, y_true, y_pred):
-        return tf.math.sqrt(losses.mean_squared_error(y_true, y_pred))
 
     
     def reset_tensorflow_session(self):
@@ -233,14 +237,13 @@ class MLP:
         learning_rate = self.training_params.get('learning_rate', 0.00001)
         hidden_layer_width_mult = self.model_params.get('hidden_layer_width_mult', [1])
         activation_functions = self.model_params.get('activation_per_layer',
-                                                     ["linear", "linear", "linear"])
-        
+                                                     ["linear", "linear"])
+
         mlp_model = Sequential()
         mlp_model.add(Input(shape=(input_signal_size,),
-                            activation=activation_functions[0],
                             name="mlp_model_in"))
         
-        for idx, layer_width_mult in enumerate(hidden_layer_width_mult, start=1):
+        for idx, layer_width_mult in enumerate(hidden_layer_width_mult):
             size = int(layer_width_mult * input_signal_size)
             activation_function = activation_functions[idx]
             layer_name = f"mlp_model_layer_{idx}"
@@ -253,31 +256,23 @@ class MLP:
                                    name="mlp_model_out"))
         
         mlp_opt = optimizers.Adam(learning_rate=learning_rate)
-        if loss_type == "root_mean_squared_error":
-            mlp_model.compile(optimizer=mlp_opt, loss=self.root_mean_squared_error)
-        else:
-            mlp_model.compile(optimizer=mlp_opt, loss=loss_type)
-        
+        mlp_model.compile(optimizer=mlp_opt, loss=get_custom_objects().get(loss_type, loss_type))
         mlp_model.save(model_file_path, overwrite=True)
         
 
     def load_model(self, model_file_path=None):
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
-            
-        loss_type = self.training_params.get('loss_type', "mean_squared_error")
-        if model_file_path.exists():
-            if loss_type == "root_mean_squared_error":
-                mlp_model = tf.keras.models.load_model(
-                    model_file_path, custom_objects={'root_mean_squared_error': self.root_mean_squared_error}
-                )
-            else:
-                mlp_model = tf.keras.models.load_model(model_file_path)
-        else:
-            self.logger.error(f"Model File {model_file_path} does not exists")
-            raise ValueError(f"Model File {model_file_path} does not exists")
-        
-        return mlp_model      
+
+        if not model_file_path.exists():
+            self.logger.error(f"Model file {model_file_path} does not exist")
+            raise ValueError(f"Model file {model_file_path} does not exist")
+
+
+        # Load model normally; custom losses are already registered
+        mlp_model = tf.keras.models.load_model(model_file_path)
+
+        return mlp_model   
     
         
     def fit_model(self, input_set, output_set, model_file_path=None):
@@ -328,42 +323,39 @@ class MLP:
             sample_signal: np.ndarray | None = None
     ):
         """
-        Convert many signal set files into two shuffled HDF5 datasets (input + output)
-        with deterministic shuffling across both.
-
-        If `sample_signal` is provided, its shape is used to determine an optimal
-        HDF5 chunk size for faster I/O and model training throughput.
-
-        Args:
-            input_file_list:  list of paths to large input .npy sets
-            output_file_list: list of paths to output .npy sets (same number of samples)
-            h5_out_input:     destination HDF5 for inputs
-            h5_out_output:    destination HDF5 for outputs
-            max_signals_per_file: optional cap for subsampling each file
-            sample_signal:    if given, used to determine chunk size for HDF5
-            shuffle:          shuffle entire combined dataset
-            random_state:     RNG seed or instance
+        Convert multiple .npy signal files into two large HDF5 datasets (X and y),
+        written sequentially for speed and then globally shuffled in-place.
         """
-        import h5py
-        # --- Determine chunk shape if sample signal is given ---
-        # HDF5 chunking works best when a chunk contains a small batch of whole signals.
-        # A reasonable default is (batch_of_128, signal_length...)
-            
+
+        # ------------------------------------------------------------
+        # 1. Determine chunk sizes if sample_signal is provided
+        # ------------------------------------------------------------
         if sample_signal is not None:
             sample_signal = np.asarray(sample_signal)
-            # Choose chunk batch dimension based on signal size
-            # Smaller signals → bigger batch chunks, larger signals → smaller batch chunks
-            item_bytes = sample_signal.nbytes
-            target_chunk_bytes = 1024 * 1024  # ~1MB per chunk (tunable)
-            batch = max(1, target_chunk_bytes // item_bytes)
-            chunk_shape_in = (batch, *sample_signal.shape)
-            # Output is assumed real, same length
-            chunk_shape_out = (batch,) if sample_signal.ndim == 1 else (batch, *sample_signal.shape[:-1])
-        else:
-            chunk_shape_in = None
-            chunk_shape_out = None
 
-        # --- First pass: count total samples ---
+            item_bytes = sample_signal.nbytes
+            target_chunk_bytes = 1 * 1024 * 1024  # 1 MB
+            batch = max(1, target_chunk_bytes // item_bytes)
+
+            chunk_shape_in = (batch, *sample_signal.shape)
+
+            # Output is real-valued, same length as input signal (your assumption)
+            if sample_signal.ndim == 1:
+                out_shape = (sample_signal.shape[0],)
+                chunk_shape_out = (batch, sample_signal.shape[0])
+            else:
+                out_shape = sample_signal.shape[:-1]
+                chunk_shape_out = (batch, *out_shape)
+
+            input_dtype = sample_signal.dtype
+        else:
+            # Fallback if no sample provided
+            self.logger.error("sample_signal must be provided for shape inference.")
+            raise ValueError("sample_signal must be provided for shape inference.")
+
+        # ------------------------------------------------------------
+        # 2. First pass: count number of total samples
+        # ------------------------------------------------------------
         total_samples = 0
         for in_file in input_file_list:
             n = np.load(in_file, mmap_mode='r').shape[0]
@@ -371,101 +363,161 @@ class MLP:
                 n = min(n, max_signals_per_file)
             total_samples += n
 
-        # --- Create HDF5 datasets ---
-        with h5py.File(h5_out_input, 'w') as hf_in, h5py.File(h5_out_output, 'w') as hf_out:
+        self.logger.info(f"Total samples across all files: {total_samples}")
+
+        # ------------------------------------------------------------
+        # 3. Create HDF5 files and datasets
+        # ------------------------------------------------------------
+        with h5py.File(h5_out_input, "w") as hf_in, \
+            h5py.File(h5_out_output, "w") as hf_out:
 
             dset_in = hf_in.create_dataset(
                 "X",
-                shape=(total_samples, *sample_signal.shape) if sample_signal is not None else None,
-                maxshape=(None,) + (() if sample_signal is None else sample_signal.shape),
-                dtype=sample_signal.dtype if sample_signal is not None else 'complex64',
-                chunks=chunk_shape_in
+                shape=(total_samples, *sample_signal.shape),
+                maxshape=(None,) + sample_signal.shape,
+                dtype=input_dtype,
+                chunks=chunk_shape_in,
             )
-
-            # Infer real output dataset shape
-            if sample_signal is not None:
-                out_shape = () if sample_signal.ndim == 1 else sample_signal.shape[:-1]
-            else:
-                out_shape = ()
 
             dset_out = hf_out.create_dataset(
                 "y",
                 shape=(total_samples, *out_shape),
                 maxshape=(None,) + out_shape,
-                dtype='float32',
-                chunks=chunk_shape_out
+                dtype="float32",
+                chunks=chunk_shape_out,
             )
 
-            order = np.arange(total_samples)
+            # --------------------------------------------------------
+            # 4. Sequential write — NO FANCY INDEXING
+            # --------------------------------------------------------
             write_pos = 0
-
             for in_file, out_file in zip(input_file_list, output_file_list):
-                X_block = np.load(in_file, mmap_mode='r')
-                y_block = np.load(out_file, mmap_mode='r')
+
+                X_block = np.load(in_file, mmap_mode="r")
+                y_block = np.load(out_file, mmap_mode="r")
 
                 n_block = X_block.shape[0]
                 if max_signals_per_file:
                     n_block = min(n_block, max_signals_per_file)
 
-                sel = order[write_pos:write_pos + n_block]
+                self.logger.debug(f"[WRITE] {in_file}  → indices [{write_pos}:{write_pos+n_block}]")
 
-                dset_in[sel] = X_block[:n_block]
-                dset_out[sel] = y_block[:n_block]
+                # Write sequentially — ALWAYS SAFE, ALWAYS FAST
+                dset_in[write_pos:write_pos + n_block] = X_block[:n_block]
+                dset_out[write_pos:write_pos + n_block] = y_block[:n_block]
 
                 write_pos += n_block
 
             hf_in.flush()
             hf_out.flush()
 
+        # ------------------------------------------------------------
+        # 5. Global shuffle (deterministic)
+        # ------------------------------------------------------------
+        self.logger.info("Applying deterministic global shuffle…")
 
-    def train_on_hdf5(
-            self,
-            h5_input_path: str,
-            h5_output_path: str,
-            model_file_path: None,
-    ):
+        # Generate permutation
+        perm = self.rng.permutation(total_samples)
+
+        with h5py.File(h5_out_input, "r+") as hf_in, \
+            h5py.File(h5_out_output, "r+") as hf_out:
+
+            X = hf_in["X"]
+            y = hf_out["y"]
+
+            # Create temporary datasets
+            Xtmp = hf_in.create_dataset(
+                "X_shuffled",
+                shape=X.shape,
+                dtype=X.dtype,
+                chunks=X.chunks
+            )
+            ytmp = hf_out.create_dataset(
+                "y_shuffled",
+                shape=y.shape,
+                dtype=y.dtype,
+                chunks=y.chunks
+            )
+
+            # Shuffle in manageable batches
+            batch = 8192
+            for start in range(0, total_samples, batch):
+                end = min(start + batch, total_samples)
+                
+                idx = perm[start:end]        # unsorted permutation
+                sorted_idx = np.sort(idx)    # h5py requires increasing order
+
+                # Read block using sorted indices
+                X_block_sorted = X[sorted_idx]
+                y_block_sorted = y[sorted_idx]
+
+                # Map sorted block back into true perm order
+                # inverse map of argsort
+                inv_order = np.argsort(np.argsort(idx))
+
+                # Reorder to match the permutation
+                X_block = X_block_sorted[inv_order]
+                y_block = y_block_sorted[inv_order]
+
+                # Write back into [start:end]
+                Xtmp[start:end] = X_block
+                ytmp[start:end] = y_block
+
+            # Replace original datasets
+            del hf_in["X"]
+            del hf_out["y"]
+            hf_in.move("X_shuffled", "X")
+            hf_out.move("y_shuffled", "y")
+
+        self.logger.info("[DONE] Dataset creation and shuffle complete.")
+
+
+    def make_hdf5_batch_loader(self, h5_input_path, h5_output_path):
         """
-        Train the existing Keras model on the prepared HDF5 datasets.
-        Efficient HDF5 loading + shuffling via index arrays.
+        Returns a function that TensorFlow can call inside tf.py_function
+        to load HDF5 slices efficiently. Handles arbitrary index order.
         """
+        hf_x = h5py.File(h5_input_path, "r")
+        hf_y = h5py.File(h5_output_path, "r")
+        X = hf_x["X"]
+        Y = hf_y["y"]
+        N = X.shape[0]
 
-        import h5py
-        import numpy as np
-        from tensorflow.keras.callbacks import EarlyStopping
+        def get_batch(indices):
+            # Convert Tensor -> numpy array
+            indices_np = indices.numpy()
 
-        from tensorflow.keras.utils import Sequence
+            # HDF5 fancy indexing requires sorted indices
+            sorted_idx = np.sort(indices_np)
+            rev = np.argsort(np.argsort(indices_np))  # to restore original order
 
-        class ShuffledH5Sequence(Sequence):
-            def __init__(self, h5_x, h5_y, indices, batch_size, shuffle=True, rng=None):
-                self.h5_x = h5_x
-                self.h5_y = h5_y
-                self.indices = np.array(indices)
-                self.batch_size = batch_size
-                self.shuffle = shuffle
-                self.rng = rng if rng is not None else np.random.default_rng()
+            # Efficient contiguous reads
+            batch_x_sorted = X[sorted_idx]
+            batch_y_sorted = Y[sorted_idx]
 
-                if self.shuffle:
-                    self.rng.shuffle(self.indices)
+            # Restore original index order
+            batch_x = batch_x_sorted[rev].astype("float32")
+            batch_y = batch_y_sorted[rev].astype("float32")
 
-            def __len__(self):
-                return len(self.indices) // self.batch_size
+            return batch_x, batch_y
 
-            def __getitem__(self, i):
-                idx = self.indices[i * self.batch_size:(i + 1) * self.batch_size]
-                return self.h5_x[idx], self.h5_y[idx]
+        return get_batch, N
+    
 
-            def on_epoch_end(self):
-                if self.shuffle:
-                    self.rng.shuffle(self.indices)
+    def train_on_hdf5(self, h5_input_path, h5_output_path, model_file_path=None):
+        """
+        Train the existing Keras model on large HDF5 datasets using efficient batched loading.
+        Splits train/test deterministically before batching to avoid empty datasets.
+        """
 
         mlp_model = self.load_model(model_file_path)
 
-        # ---- Parameters ----
-        num_epochs = self.training_params.get('num_epochs', 200)
-        test_fraction = self.training_params.get('test_fraction', 0.3)
-        batch_sz = self.training_params.get('batch_sz', 128) 
-        early_stopping_params = self.training_params.get('early_stopping', {})
+        num_epochs = self.training_params.get("num_epochs", 200)
+        batch_sz   = self.training_params.get("batch_sz", 128)
+        test_frac  = self.training_params.get("test_fraction", 0.3)
 
+        # Early stopping
+        early_stopping_params = self.training_params.get('early_stopping', {})
         early_stopping = EarlyStopping(
             monitor=early_stopping_params.get('monitor', "val_loss"),
             min_delta=early_stopping_params.get('min_delta', 0.1),
@@ -475,35 +527,48 @@ class MLP:
             restore_best_weights=early_stopping_params.get('restore_best_weights', True),
         )
 
-        # ---- Open HDF5 files ----
-        hf_x = h5py.File(h5_input_path, 'r')
-        hf_y = h5py.File(h5_output_path, 'r')
-        X = hf_x["X"]
-        y = hf_y["y"]
-        N = X.shape[0]
+        # Build HDF5 loader
+        get_batch, N = self.make_hdf5_batch_loader(h5_input_path, h5_output_path)
 
-        # ---- Train/Test Split ----
-        split = int(N * (1 - test_fraction))
-        train_idx = np.arange(0, split)
-        test_idx  = np.arange(split, N)
+        # Generate train/test split BEFORE batching
+        all_indices = np.arange(N)
+        self.rng.shuffle(all_indices)  # deterministic if self.rng seeded
 
-        # ---- Sequences ----
-        train_seq = ShuffledH5Sequence(X, y, train_idx, batch_sz, shuffle=True, rng=self.rng)
-        test_seq  = ShuffledH5Sequence(X, y, test_idx,  batch_sz, shuffle=False)
+        test_size = int(N * test_frac)
+        test_indices  = all_indices[:test_size]
+        train_indices = all_indices[test_size:]
 
-        # ---- Training ----
+        # Convert indices to TF datasets
+        train_ds = tf.data.Dataset.from_tensor_slices(train_indices)
+        test_ds  = tf.data.Dataset.from_tensor_slices(test_indices)
+
+        # Batch indices
+        train_ds = train_ds.batch(batch_sz, drop_remainder=False)
+        test_ds  = test_ds.batch(batch_sz, drop_remainder=False)
+
+        # Map indices -> actual data
+        train_ds = train_ds.map(
+            lambda idx: tf.py_function(func=get_batch, inp=[idx], Tout=(tf.float32, tf.float32)),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+        test_ds = test_ds.map(
+            lambda idx: tf.py_function(func=get_batch, inp=[idx], Tout=(tf.float32, tf.float32)),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+
+        # Prefetch to GPU
+        train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
+        test_ds  = test_ds.prefetch(tf.data.AUTOTUNE)
+
+        # Train
         mlp_model.fit(
-            train_seq,
-            validation_data=test_seq,
+            train_ds,
+            validation_data=test_ds,
             epochs=num_epochs,
-            workers=4,
-            use_multiprocessing=True,
             callbacks=[early_stopping]
         )
 
-        hf_x.close()
-        hf_y.close()
- 
+
     # -------------------------------
     # Getters
     # -------------------------------

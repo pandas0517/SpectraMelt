@@ -20,9 +20,9 @@ if __name__ == '__main__':
     create_output_set = True
 
     create_nyfr_wave_params = True
-    display_nyfr_signals = True
+    display_nyfr_signals = False
     
-    create_premultiply_set = False
+    create_premultiply_set = True
     display_premultiply_signals = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     flat_filenames = dataset.get_flat_filenames()
     input_time_signal_filename = flat_filenames.get('input.time_signal', "time_signals.npy")
     input_signal_wave_params = flat_filenames.get('input.wave_params', "wave_params.pkl")
-    output_signal_filename = flat_filenames.get('output_signal', "signals.npy")
+
     logging.getLogger('matplotlib').setLevel(logging.INFO)
     logging.getLogger("PIL").setLevel(logging.INFO)
         
@@ -61,9 +61,9 @@ if __name__ == '__main__':
         signals_per_file = 3
         for file_path in output_dir.iterdir():
             
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 stem = file_path.name
-                key_part = stem.split(output_signal_filename)[0]
+                key_part = stem.split(input_time_signal_filename)[0]
                 nyfr_wave_file = output_dir / f"{key_part}{input_signal_wave_params}"
                 with open(nyfr_wave_file, "rb") as f:
                     nyfr_wave_params = pickle.load(f)
@@ -93,8 +93,8 @@ if __name__ == '__main__':
     if display_premultiply_signals:
         premultiply_dir = directories.get('premultiply', "Premultiply")
         
-        wbf_time_filename = filenames.get('wbf_time', "wbf_time.npy")
-        wbf_freq_filename = filenames.get('wbf_freq', "wbf_freq.npy")    
+        wbf_time_filename = flat_filenames.get('wbf_time', "wbf_time.npy")
+        wbf_freq_filename = flat_filenames.get('wbf_freq', "wbf_freq.npy")    
         wbf_time_file = output_dir / wbf_time_filename
         wbf_freq_file = output_dir / wbf_freq_filename
         wbf_time = np.load(wbf_time_file)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
         signals_per_file = 3
         for file_path in premultiply_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(output_signal_filename):                  
+            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):                  
                 signals = np.load(file_path)
                 for idx, signal in enumerate(signals[:signals_per_file]):
                     signal_time = ifft(ifftshift(signal))
