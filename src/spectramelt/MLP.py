@@ -320,8 +320,8 @@ class MLP:
             output_file_list,
             h5_out_input: str,
             h5_out_output: str,
-            max_signals_per_file: int | None = None,
-            sample_signal: np.ndarray | None = None
+            sample_signal: np.ndarray,
+            max_signals_per_file: int | None = None
     ):
         """
         Convert multiple .npy signal files into two large HDF5 datasets (X and y),
