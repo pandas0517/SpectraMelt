@@ -2,6 +2,7 @@ import numpy as np
 from .utils import load_config_from_json, get_logger
 import tensorflow as tf
 import h5py
+import time
 import keras
 from keras import (
     layers,
@@ -528,13 +529,13 @@ class MLP:
         )
 
         # Build HDF5 loader
-        get_batch, N = self.make_hdf5_batch_loader(h5_input_path, h5_output_path)
+        get_batch, total_num_sigs = self.make_hdf5_batch_loader(h5_input_path, h5_output_path)
 
         # Generate train/test split BEFORE batching
-        all_indices = np.arange(N)
+        all_indices = np.arange(total_num_sigs)
         self.rng.shuffle(all_indices)  # deterministic if self.rng seeded
 
-        test_size = int(N * test_frac)
+        test_size = int(total_num_sigs * test_frac)
         test_indices  = all_indices[:test_size]
         train_indices = all_indices[test_size:]
 
@@ -560,6 +561,8 @@ class MLP:
         train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
         test_ds  = test_ds.prefetch(tf.data.AUTOTUNE)
 
+        self.logger.info(f"Starting mlp model training for {model_file_path}")
+        start = time.time()
         # Train
         mlp_model.fit(
             train_ds,
@@ -567,7 +570,9 @@ class MLP:
             epochs=num_epochs,
             callbacks=[early_stopping]
         )
-
+        stop = time.time()
+        self.logger.info(f"{total_num_sigs} Signal Training and Testing Time for {model_file_path}: {stop - start:.6f} seconds")
+        mlp_model.save(model_file_path, overwrite=True)
 
     # -------------------------------
     # Getters
