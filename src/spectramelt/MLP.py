@@ -512,6 +512,8 @@ class MLP:
         """
 
         mlp_model = self.load_model(model_file_path)
+        if model_file_path is None:
+            model_file_path = self.model_params.get('file_path', "ml_model.keras")
 
         num_epochs = self.training_params.get("num_epochs", 200)
         batch_sz   = self.training_params.get("batch_sz", 128)
