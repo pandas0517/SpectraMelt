@@ -277,6 +277,7 @@ class DataSet:
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
                 "recovered": "recovered.npy",
+                "recovery_df": "recovery_df.pkl",
                 "recovery_config": "recovery_config.json",
                 "ml_model": "ml_model.keras",
                 "ml_config": "ml_config.json"
