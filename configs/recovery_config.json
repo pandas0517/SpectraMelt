@@ -8,35 +8,10 @@
     },
     "recovery_params": {
         "method": "spgl1",
-        "threshold_frac": 0.05,
-        "auto_threshold": false,
+        "premultiply": false,
         "recovery_type": "complex",
         "model_file_path": null,
         "sigma": 0.001,
         "dict_mag_adj": 1.0
-    },
-    "dataframe_params": {
-        "file_path": null,
-        "save_as_csv": true,
-        "meta_column_names": {
-            "input_file_name": "str",
-            "recovery_file_name": "str",
-            "input_config_name": "str",
-            "DUT_config_name": "str"
-        },
-        "signal_column_names": {
-            "num_rec_freq_" : "float64",
-            "num_spur_freq_": "float64",
-            "ave_rec_mag_err_": "float64",
-            "total_input_tones_": "float64",
-            "rec_tone_thresh_": "float64",
-            "ave_rec_mag_": "float64",
-            "max_rec_mag_": "float64",
-            "min_rec_mag_": "float64",
-            "ave_spur_mag_": "float64",
-            "max_spur_mag_": "float64",
-            "min_spur_mag_": "float64"
-        }
     }
-
 }

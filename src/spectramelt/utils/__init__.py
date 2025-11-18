@@ -18,9 +18,15 @@ from .config_utils import (
     create_wave_json
 )
 
+# From file_utils.py
 from .file_utils import (
     build_flat_paths,
     flatten_files
+)
+
+# From signal_utils.py
+from .signal_utils import (
+    sparse_fft
 )
 
 # Optional: define __all__ for clean "from utils import *"
@@ -36,5 +42,6 @@ __all__ = [
     "create_wave_json",
     "find_project_root",
     "build_flat_paths",
-    "flatten_files"
+    "flatten_files",
+    "sparse_fft"
 ]

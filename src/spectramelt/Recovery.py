@@ -1,22 +1,28 @@
 import numpy as np
-import os
 from importlib import import_module
-from .utils import load_config_from_json, get_logger
-from scipy.fft import fft
-import pandas as pd
-from pathlib import Path
+from .utils import(
+    load_config_from_json,
+    get_logger,
+)
+import pickle
+
+VALID_SAVED_FREQ_MODES = {
+    "complex", "real", "imag",
+    "real_imag", "mag", "ang", "mag_ang"
+}
 
 class Recovery:
+    VALID_RECOVERY_METHODS = {
+        "complex", "real", "imag",
+        "real_imag", "mag", "ang", "mag_ang"
+    }    
 
     def __init__(self,
                 signal=None,
                 dictionary=None,
                 recovery_params=None,
-                dataframe_params=None,
                 log_params=None,
                 config_name=None,
-                inputset_config_file=None,
-                DUT_config_file=None,
                 num_waves=1,
                 config_file_path=None) -> None:
         if config_file_path is not None:
@@ -24,7 +30,6 @@ class Recovery:
         else:
             all_params = {}
             all_params["recovery_params"] = recovery_params
-            all_params["dataframe_params"] = dataframe_params
             all_params["log_params"] = log_params
             all_params["config_name"] = config_name
             self.set_recovery_params(recovery_params)
@@ -37,18 +42,11 @@ class Recovery:
         
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-        
-        self.inputset_config = None
-        if inputset_config_file is not None:
-            self.inputset_config = load_config_from_json(inputset_config_file)
-            
-        self.DUT_config = None
-        if DUT_config_file is not None:
-            self.DUT_config = load_config_from_json(DUT_config_file)
                 
         self.recovered_coefs = None
         if signal is not None and dictionary is not None:
             self.recovered_coefs = self.recover_signal(signal, dictionary, num_waves)
+
     # -------------------------------
     # Setters
     # -------------------------------
@@ -59,7 +57,6 @@ class Recovery:
             
         recovery_params = all_params.get('recovery_params', None)
         log_params = all_params.get('log_params', None)
-        dataframe_params = all_params.get('dataframe_params', None)
         
         config_name = all_params.get('config_name', "Recovery_Config_1")
         if recovery_params is None:
@@ -75,12 +72,13 @@ class Recovery:
     
         self.set_log_params(log_params)
         self.set_recovery_params(recovery_params)
-        self.set_dataframe_params(dataframe_params)
         self.set_config_name(config_name)
+
 
     def set_config_name(self, config_name):
         self.config_name = config_name
         
+
     def set_log_params(self, log_params=None):
         if log_params is None:
             log_params = {
@@ -91,99 +89,57 @@ class Recovery:
             }
         self.log_params = log_params 
 
+
     def set_recovery_params(self, recovery_params=None):
         if recovery_params is None:
             recovery_params = {
                 "method": "SPGL1",
-                "threshold_frac": 0.05,
-                "auto_threshold": False,
+                "premultiply": False,
                 "recovery_type": "complex",
                 "model_file_path": None,
                 "sigma": 0.001,
                 "dict_mag_adj": 1.0
             }
         self.recovery_params = recovery_params
+        self.set_recovery_type(recovery_params.get('recovery_type', None))
+        self.set_recovery_method(recovery_params.get('method', None))
+        
+        
+    def set_recovery_type(self, recovery_type):
+        if recovery_type is None:
+            self.logger.error("Recovery type can not be None")
+            raise ValueError("Recovery type can not be None")
+        if self.is_valid_saved_freq_mode(recovery_type):
+            self.recovery_params["recovery_type"] = recovery_type
+        else:
+            self.logger.error(f"{recovery_type} Recovery type is not valid")
+            raise ValueError(f"{recovery_type} Recovery type is not valid")
         
     
-    def set_dataframe_params(self, dataframe_params=None):
-        if dataframe_params is None:
-            dataframe_params = {
-                "file_path": None,
-                "save_as_csv": True,
-                "meta_column_names": {
-                    "input_file_name": "str",
-                    "recovery_file_name": "str",
-                    "input_config_name": "str",
-                    "DUT_config_name": "str",
-                },
-                "signal_column_names": {
-                    "num_rec_freq_" : "float64",
-                    "num_spur_freq_": "float64",
-                    "ave_rec_mag_err_": "float64",
-                    "total_input_tones_": "float64",
-                    "rec_tone_thresh_": "float64",
-                    "ave_rec_mag_": "float64",
-                    "max_rec_mag_": "float64",
-                    "min_rec_mag_": "float64",
-                    "ave_spur_mag_": "float64",
-                    "max_spur_mag_": "float64",
-                    "min_spur_mag_": "float64"
-                }
-            }
-        self.dataframe_params = dataframe_params
-
+    def set_recovery_method(self, recovery_method):
+        if recovery_method is None:
+            self.logger.error("Recovery method can not be None")
+            raise ValueError("Recovery method can not be None")
+        if self.is_valid_recovery_type(recovery_method):
+            self.recovery_params["method"] = recovery_method
+        else:
+            self.logger.error(f"{recovery_method} Recovery method is not valid")
+            raise ValueError(f"{recovery_method} Recovery method is not valid")
               
     # -------------------------------
     # Core functional methods
     # -------------------------------
+    
+    def is_valid_saved_freq_mode(self, name) -> bool:
+        if isinstance(name, str):
+            name = [name]
+        return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
 
-    def _sparse_fft(self, signal):
-        """
-        Compute sparse magnitude and phase of a time-domain signal using time vector.
 
-        Parameters
-        ----------
-        signal : array_like
-            Input time-domain signal (real or complex)
-        threshold_frac : float, optional
-            Keep bins with magnitude > threshold_frac * max(magnitude)
-            Default = 0.05 (5%). Ignored if auto_threshold=True
-        auto_threshold : bool, optional
-            If True, automatically determine threshold using median + 2*std method
-
-        Returns
-        -------
-        magnitude_sparse : ndarray
-            Magnitude spectrum with zeroed values below threshold
-        phase_sparse : ndarray
-            Phase spectrum with zeroed values below threshold
-        mask : ndarray
-            Boolean mask of where significant tones are kept
-        """                      
-        threshold_frac = self.recovery_params.get('threshold_frac', 0.05)
-        auto_threshold = self.recovery_params.get('auto_threshold', False)
-
-        fft_vals = fft(signal)
-
-        # Magnitude + Phase
-        magnitude = np.abs(fft_vals)
-        phase = np.angle(fft_vals)
-
-        # Determine threshold
-        if auto_threshold:
-            # Automatic threshold: median + 2*std (adjust factor as needed)
-            threshold = np.median(magnitude) + 2*np.std(magnitude)
-        else:
-            threshold = np.max(magnitude) * threshold_frac
-
-        # Significant bin mask
-        mask = magnitude > threshold
-
-        # Zero output outside mask
-        magnitude_sparse = magnitude * mask
-        phase_sparse = phase * mask
-
-        return magnitude_sparse, phase_sparse, mask
+    def is_valid_recovery_type(self, name) -> bool:
+        if isinstance(name, str):
+            name = [name]
+        return all(n.lower() in self.VALID_RECOVERY_METHODS for n in name)
 
 
     def recover_signal(self, signal, dictionary, num_waves=1):
@@ -192,103 +148,44 @@ class Recovery:
         model_file_path = self.recovery_params.get('model_file_path', None)
         recovery_method = self.recovery_params.get('method', "splg1").lower()
         recovery_type = self.recovery_params.get('recovery_type', "complex").lower()
+        premultiply = self.recovery_params.get('premultiply', False)
 
         recovered_coef = None
-        sparse_signal = None
-
-        magnitude_sparse, phase_sparse, _ = self._sparse_fft(signal)
-        complex_sparse = magnitude_sparse * np.exp(1j * phase_sparse)
-
-        match recovery_type:
-            case 'complex':
-                if np.iscomplexobj(dictionary):
-                        if recovery_method == "mlp1":
-                            sparse_signal = np.concatenate([magnitude_sparse, phase_sparse])
-                        else:
-                            sparse_signal = complex_sparse
-                else:
-                    self.logger.error("Dictionary is not complex")
-                    raise ValueError("Dictionary is not complex")
-            case 'real':
-                sparse_signal = complex_sparse.real
-            case 'imag':
-                if np.iscomplexobj(dictionary):
-                        sparse_signal = complex_sparse.imag
-                else:
-                    self.logger.error("Dictionary is not complex")
-                    raise ValueError("Dictionary is not complex")
-            case 'mag':
-                sparse_signal = magnitude_sparse
-            case 'phase':
-                if np.iscomplexobj(dictionary):
-                        sparse_signal = phase_sparse
-                else:
-                    self.logger.error("Dictionary is not complex")
-                    raise ValueError("Dictionary is not complex")
+        complex_recovery = {"complex", "imag", "ang", "mag_ang", "real_imag"}
+        
+        if recovery_type in complex_recovery:
+            if not np.iscomplexobj(dictionary):
+                self.logger.error("Dictionary is not complex")
+                raise ValueError("Dictionary is not complex")
 
         match recovery_method:
             case 'iht':
                 IHT = import_module("IHT")
-                recovered_coef = IHT.CIHT(dict_mag_adj * dictionary, sparse_signal, 2*num_waves, learning_rate=sigma)
+                recovered_coef = IHT.CIHT(dict_mag_adj * dictionary, signal, 2*num_waves, learning_rate=sigma)
             case 'omp':
                 OMP = import_module("OMP")
-                signal_norm = np.linalg.norm(sparse_signal)
-                recovered_coef = OMP.OMP(dict_mag_adj * dictionary, sparse_signal/signal_norm)[0]
+                signal_norm = np.linalg.norm(signal)
+                recovered_coef = OMP.OMP(dict_mag_adj * dictionary, signal/signal_norm)[0]
             case 'spgl1':
                 spgl1 = import_module("spgl1")
-                signal_norm = np.linalg.norm(sparse_signal)
-                recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, sparse_signal/signal_norm, sigma=sigma)
+                signal_norm = np.linalg.norm(signal)
+                recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, signal/signal_norm, sigma=sigma)
             case 'mlp1':
                 NYFR_ML_Models = import_module("NYFR_ML_Models")
-                if not os.path.exists(model_file_path):
+                if not model_file_path.exists():
+                    self.logger.error(f"File not found: {model_file_path}")
                     raise FileNotFoundError(f"File not found: {model_file_path}")
-                pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
-                init_guess = np.dot(pseudo,sparse_signal)
+                if premultiply:
+                    pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
+                    init_guess = np.dot(pseudo,signal)
+                else:
+                    init_guess = signal
                 recovered_coef = NYFR_ML_Models.model_prediction(init_guess, model_file_path)
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 
+        self.recovered_coefs = recovered_coef
         return recovered_coef
-
-
-    def create_recovery_dataframe(self, inputset_config_file=None, recovery_df_file_path=None):
-        if recovery_df_file_path is None:
-            recovery_df_file_path = self.dataframe_params.get('file_path', "recovery_df.pkl")
-        if recovery_df_file_path.exists():
-            self.logger.warning(f"{recovery_df_file_path} exists.  Will be overwritten")
-            
-        if inputset_config_file is None:
-            if self.inputset_config is None:
-                self.logger.error(f"{inputset_config_file} not specified")
-                raise ValueError(f"{inputset_config_file} not specified")
-            else:
-                inputset_config = self.inputset_config
-        elif not inputset_config_file.exists():
-            self.logger.error(f"{inputset_config_file} does not exist")
-            raise ValueError(f"{inputset_config_file} does not exist")
-        else:
-            inputset_config = load_config_from_json(inputset_config_file)
-                        
-        meta_column_names = self.dataframe_params.get('meta_column_names')
-        signal_column_names = self.dataframe_params.get('signal_column_names')
-        num_recovery_sigs = inputset_config.get('num_recovery_sigs')
-        
-        # Build the master column dictionary
-        full_column_dict = dict(meta_column_names)   # start with static columns
-
-        for sig in range(num_recovery_sigs):
-            for prefix, dtype in signal_column_names.items():
-                full_column_dict[f"{prefix}{sig}"] = dtype
-
-        # Create empty DataFrame
-        recovery_df = pd.DataFrame({
-            col: pd.Series(dtype=dtype) for col, dtype in full_column_dict.items()
-        })
-
-        recovery_df.to_pickle(recovery_df_file_path)
-        recovery_df_file_path_csv = Path(recovery_df_file_path).with_suffix(".csv")
-        # Save the DataFrame to a CSV file
-        recovery_df.to_csv(recovery_df_file_path_csv, index=False)
 
 
     def set_recovery_dataframe(self,
@@ -357,8 +254,13 @@ class Recovery:
                     if p.is_file() and p.name.endswith(recovery_file_name)
                     and "recovery" in p.name.lower()}
         
+        input_wave_dict = {p.name: p for p in input_dir.iterdir()
+                    if p.is_file() and p.name.endswith(wave_param_file_name)
+                    and "recovery" in p.name.lower()}
+        
         missing_in_input = recovery_dict.keys() - input_dict.keys()
         missing_in_recovery = input_dict.keys() - recovery_dict.keys()
+        missing_in_wave = input_wave_dict.key() - input_dict.keys()
 
         if missing_in_input:
             self.logger.error("Files missing in input:", missing_in_input)
@@ -368,14 +270,24 @@ class Recovery:
             self.logger.error("Files missing in recovery:", missing_in_recovery)
             raise ValueError("Files missing in recovery:", missing_in_recovery)
         
+        if missing_in_wave:
+            self.logger.error("Files missing in input wave parameters:", missing_in_wave)
+            raise ValueError("Files missing in input wave parameters:", missing_in_wave)            
+        
         matched_recovery_files = [recovery_dict[name] for name in sorted(recovery_dict)]
         matched_input_files = [input_dict[name] for name in sorted(input_dict)]
+        matched_wave_file = [input_wave_dict[name] for name in sorted(input_wave_dict)]
         
         for idx, recovery_file in enumerate(matched_recovery_files):
-            input_file = matched_input_files[idx]
-            input_signals = np.load(input_file)
             recovered_signals = np.load(recovery_file)
             
+            input_file = matched_input_files[idx]
+            input_signals = np.load(input_file)
+            
+            input_wave_file = matched_wave_file[idx]
+            with open(input_wave_file, "rb") as f:
+                input_waves = pickle.load(f)
+                
             if (recovered_signals.shape[0] != num_recovery_sigs):
                 self.logger.error(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
                 raise ValueError(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
@@ -617,8 +529,8 @@ class Recovery:
         return self.recovery_params
     
     
-    def get_dataframe_params(self):
-        return self.dataframe_params
+    def get_valid_saved_freq_modes(cls):
+        return VALID_SAVED_FREQ_MODES
 
 
     def get_log_params(self):

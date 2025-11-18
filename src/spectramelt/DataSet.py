@@ -12,12 +12,11 @@ import time
 import copy
 from importlib import import_module
 from scipy.fft import fft, fftshift
+import pandas as pd
+from pathlib import Path
+from .Recovery import VALID_SAVED_FREQ_MODES
 
 class DataSet:
-    VALID_SAVED_FREQ_MODES = {
-        "complex", "real", "imag",
-        "real_imag", "mag", "ang", "mag_ang"
-    }
     VALID_DUT_TYPES = {
         "nyfr"
     }
@@ -43,6 +42,7 @@ class DataSet:
                  log_params=None,
                  filenames=None,
                  directory_params=None,
+                 dataframe_params=None,
                  config_file_path=None) -> None:
         """
         Parameters
@@ -59,6 +59,7 @@ class DataSet:
             dataset_params['directory_params'] = directory_params
             dataset_params['config_name'] = dataset_config_name
             dataset_params['log_params'] = log_params
+            dataset_params['dataframe_params'] = dataframe_params
             
         dataset_params['input_config_name'] = input_config_name
         dataset_params['DUT_config_name'] = DUT_config_name
@@ -87,6 +88,7 @@ class DataSet:
         filenames = dataset_params.get('filenames', None)
         directory_params = dataset_params.get('directory_params', None)
         log_params = dataset_params.get('log_params', None)
+        dataframe_params = dataset_params.get('dataframe_params', None)
         
         if (filenames is None and
             directory_params is None ):
@@ -110,6 +112,7 @@ class DataSet:
         self.set_DUT_config_name(DUT_config_name)
         self.set_recovery_config_name(recovery_config_name)
         self.set_ML_config_name(ML_config_name)
+        self.set_dataframe_params(dataframe_params)
 
         
     def set_log_params(self, log_params=None):
@@ -276,7 +279,6 @@ class DataSet:
                 },
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
-                "recovered": "recovered.npy",
                 "recovery_df": "recovery_df.pkl",
                 "recovery_config": "recovery_config.json",
                 "ml_model": "ml_model.keras",
@@ -284,6 +286,35 @@ class DataSet:
             }
         self.flat_filenames = flatten_files(filenames)
         self.filenames = filenames
+        
+
+    def set_dataframe_params(self, dataframe_params=None):
+        if dataframe_params is None:
+            dataframe_params = {
+                "file_path": None,
+                "save_as_csv": True,
+                "recovery_mag_thresh": 0.5,
+                "meta_column_names": {
+                    "input_file_name": "str",
+                    "recovery_file_name": "str",
+                    "input_config_name": "str",
+                    "DUT_config_name": "str",
+                },
+                "signal_column_names": {
+                    "num_rec_freq_" : "float64",
+                    "num_spur_freq_": "float64",
+                    "ave_rec_mag_err_": "float64",
+                    "total_input_tones_": "float64",
+                    "rec_tone_thresh_": "float64",
+                    "ave_rec_mag_": "float64",
+                    "max_rec_mag_": "float64",
+                    "min_rec_mag_": "float64",
+                    "ave_spur_mag_": "float64",
+                    "max_spur_mag_": "float64",
+                    "min_spur_mag_": "float64"
+                }
+            }
+        self.dataframe_params = dataframe_params
 
     # -------------------------------
     # Core functional methods
@@ -292,7 +323,7 @@ class DataSet:
     def is_valid_saved_freq_mode(self, name) -> bool:
         if isinstance(name, str):
             name = [name]
-        return all(n.lower() in self.VALID_SAVED_FREQ_MODES for n in name)
+        return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
     
 
     def is_valid_dut_type(self, dut_type) -> bool:
@@ -450,7 +481,7 @@ class DataSet:
             if saved_freq_modes:
                 for mode in saved_freq_modes:
 
-                    if mode not in self.VALID_SAVED_FREQ_MODES:
+                    if mode not in VALID_SAVED_FREQ_MODES:
                         self.logger.warning(f"Skipping invalid freq mode: {mode}")
                         continue
 
@@ -559,7 +590,7 @@ class DataSet:
             if saved_freq_modes:
                 for mode in saved_freq_modes:
 
-                    if mode not in self.VALID_SAVED_FREQ_MODES:
+                    if mode not in VALID_SAVED_FREQ_MODES:
                         self.logger.warning(f"Skipping invalid freq mode: {mode}")
                         continue
 
@@ -732,7 +763,7 @@ class DataSet:
                     wbf_signal_freqs = np.array(wbf_signal_freq_list)
                     for mode in saved_freq_modes:
 
-                        if mode not in self.VALID_SAVED_FREQ_MODES:
+                        if mode not in VALID_SAVED_FREQ_MODES:
                             self.logger.warning(f"Skipping invalid freq mode: {mode}")
                             continue
 
@@ -774,6 +805,7 @@ class DataSet:
                         self.logger.info(f"{key_part}{mode.upper()} wideband filter freq set saved to {save_path}")
                 
         self.logger.info("Output Set Creation Complete\n")
+
 
     def create_nyfr_wave_params(self, nyfr):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")
@@ -910,7 +942,7 @@ class DataSet:
                 else:
                     for mode in saved_freq_modes:
 
-                        if mode not in self.VALID_SAVED_FREQ_MODES:
+                        if mode not in VALID_SAVED_FREQ_MODES:
                             self.logger.warning(f"Skipping invalid freq mode: {mode}")
                             continue
 
@@ -960,6 +992,7 @@ class DataSet:
                  
         self.logger.info(f"Premultiply Set Creation Complete\n")
 
+
     def create_recovery_set(self,
                             recovery,
                             dictionary_path=None,
@@ -993,12 +1026,10 @@ class DataSet:
     
         recovery_dirs = self.directories.get('recovery', "Recovery")
         recovery_dirs.mkdir(parents=True, exist_ok=True)
-        recovered_signal_filename = self.filenames.get("recovered", "recovered.npy")
-        recovery_file = recovery_dirs / f"{key_part}{recovered_signal_filename}"
         
         # --- Config file ---     
         recovery_config_filename = self.filenames.get('recovery_config', "recovery_config.json")
-        recovery_config_file = recovery_dirs.parent / recovery_config_filename           
+        recovery_config_file = recovery_dirs.parent / recovery_config_filename         
         recovery_params = recovery.get_all_params()
         if not recovery_config_file.exists():
             recovery_config = {
@@ -1009,29 +1040,280 @@ class DataSet:
             self.logger.info(f"Saved recovery configuration file to {recovery_config_file}")
             
         recovery_method = recovery_params.get('method')
+        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
         
-        for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
-                output_signals = np.load(file_path)
-                # Extract identifying portion (for example, everything up to "signals.npy")
-                stem = file_path.name
-                key_part = stem.split(input_time_signal_filename)[0]
-                
-                recovered_sig_list = []
-
-                self.logger.info(f"Starting Recovery Set Creation for {file_path}")
-                start = time.time() 
-                
-                for signal in output_signals:
-                    recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
+        for mode in saved_freq_modes:
+            key = self.FREQ_FILE_KEYS[mode]
+            filename = self.flat_filenames.get(key)
+            
+            if not filename:
+                self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                continue
+            recovery.set_recovery_type(mode)
+             
+            for file_path in output_dir.iterdir():
+                if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
+                    output_signals = np.load(file_path)
+                    # Extract identifying portion (for example, everything up to "signals.npy")
+                    stem = file_path.name
+                    key_part = stem.split(input_time_signal_filename)[0]
+                    recovery_file = recovery_dirs / f"{key_part}{filename}"
                     
-                stop = time.time()
-                self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                    recovered_sig_list = []
+
+                    self.logger.info(f"Starting Recovery Set Creation for {file_path}")
+                    start = time.time() 
+                    
+                    for signal in output_signals:
+                        recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
                         
-                np.save(recovery_file, np.array(recovered_sig_list))
-                self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
+                    stop = time.time()
+                    self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                            
+                    np.save(recovery_file, np.array(recovered_sig_list))
+                    self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
         
         self.logger.info("Recovery Set Creation Complete\n")
+        
+        
+    def create_recovery_dataframe(self):
+        # --- Config file ---
+        input_dirs = self.directories.get('inputs', "Inputs")
+        inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
+        inputset_config_file = input_dirs.parent / inputset_config_filename
+        
+        recovery_dirs = self.directories.get('recovery', "Recovery")
+        recovery_df_filename = self.dataframe_params.get('file_path', "recovery_df.pkl")
+        recovery_df_file_path = recovery_dirs / recovery_df_filename
+
+        if recovery_df_file_path.exists():
+            self.logger.warning(f"{recovery_df_file_path} exists.  Will be overwritten")
+            
+        if not inputset_config_file.exists():
+            self.logger.error(f"{inputset_config_file} does not exist")
+            raise ValueError(f"{inputset_config_file} does not exist")
+        else:
+            inputset_config = load_config_from_json(inputset_config_file)
+                        
+        meta_column_names = self.dataframe_params.get('meta_column_names')
+        signal_column_names = self.dataframe_params.get('signal_column_names')
+        num_recovery_sigs = inputset_config.get('num_recovery_sigs')
+        
+        # Build the master column dictionary
+        full_column_dict = dict(meta_column_names)   # start with static columns
+
+        for sig in range(num_recovery_sigs):
+            for prefix, dtype in signal_column_names.items():
+                full_column_dict[f"{prefix}{sig}"] = dtype
+
+        # Create empty DataFrame
+        recovery_df = pd.DataFrame({
+            col: pd.Series(dtype=dtype) for col, dtype in full_column_dict.items()
+        })
+
+        recovery_df.to_pickle(recovery_df_file_path)
+        
+        save_as_csv = self.dataframe_params.get('save_as_csv', True)
+        if save_as_csv:
+            recovery_df_file_path_csv = Path(recovery_df_file_path).with_suffix(".csv")
+            recovery_df.to_csv(recovery_df_file_path_csv, index=False)
+            
+            
+    def set_recovery_dataframe(self):
+        input_dir = self.directories.get('inputs', "Inputs")
+        inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
+        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
+        inputset_config_file = input_dir.parent / inputset_config_filename
+        
+        output_dirs = self.directories.get('outputs', "Outputs")
+        wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
+        wbf_freq_file = output_dirs / wbf_freq_filename
+
+        DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
+        DUT_config_file = output_dirs.parent / DUT_config_filename
+        
+        recovery_dir = self.directories.get('recovery', "Recovery")
+        recovery_df_filename = self.dataframe_params.get('file_path', "recovery_df.pkl")
+        recovery_df_file_path = recovery_dir / recovery_df_filename
+
+        if not recovery_df_file_path.exists():
+            self.logger.error(f"{recovery_df_file_path} does not exist.")
+            raise ValueError(f"{recovery_df_file_path} does not exist.")
+        else:
+            recovery_df = pd.read_pickle(recovery_df_file_path)
+
+        if not inputset_config_file.exists():
+            self.logger.error(f"{inputset_config_file} does not exist")
+            raise ValueError(f"{inputset_config_file} does not exist")
+        else:
+            inputset_config = load_config_from_json(inputset_config_file)
+        
+        inputset_config_name = inputset_config.get('config_name')
+        num_recovery_sigs = inputset_config.get('num_recovery_sigs')
+
+        if not DUT_config_file.exists():
+            self.logger.error(f"{DUT_config_file} does not exist")
+            raise ValueError(f"{DUT_config_file} does not exist")
+        else:
+            DUT_config = load_config_from_json(DUT_config_file)
+        
+        DUT_config_name = DUT_config.get('config_name')
+        
+        recovery_mag_threshold = self.dataframe_params.get('recovery_mag_thresh', 0.5)
+        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
+
+        #Need to add support for real_imag, real, and imag modes in the future
+        unsupported_freq_modes = {"real_imag", "real", "imag"}
+        if any(t in saved_freq_modes for t in unsupported_freq_modes):
+            self.logger.warning("Unsupported frequency modes found. Removing")
+            saved_freq_modes = [x for x in saved_freq_modes if x not in unsupported_freq_modes]
+            
+        for mode in saved_freq_modes:
+            key = self.FREQ_FILE_KEYS[mode]
+            filename = self.flat_filenames.get(key)
+            if not filename:
+                self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                continue
+            
+            recovery_dict = {p.name: p for p in recovery_dir.iterdir()
+                            if p.is_file() and p.name.endswith(filename)
+                            and "recovery" in p.name.lower()}
+
+            input_dict = {p.name: p for p in input_dir.iterdir()
+                        if p.is_file() and p.name.endswith(filename)
+                        and "recovery" in p.name.lower()}
+            
+            input_wave_dict = {p.name: p for p in input_dir.iterdir()
+                        if p.is_file() and p.name.endswith(input_wave_params_filename)
+                        and "recovery" in p.name.lower()}
+            
+            wbf_freq_sig_dict = {p.name: p for p in input_dir.iterdir()
+                        if p.is_file() and p.name.endswith(filename)
+                        and "recovery" in p.name.lower()}
+            
+            missing_in_input = recovery_dict.keys() - input_dict.keys()
+            missing_in_recovery = input_dict.keys() - recovery_dict.keys()
+
+            if missing_in_input:
+                self.logger.error("Files missing in input:", missing_in_input)
+                raise ValueError("Files missing in input:", missing_in_input)
+
+            if missing_in_recovery:
+                self.logger.error("Files missing in recovery:", missing_in_recovery)
+                raise ValueError("Files missing in recovery:", missing_in_recovery)           
+            
+            matched_recovery_files = [recovery_dict[name] for name in sorted(recovery_dict)]
+            matched_input_files = [input_dict[name] for name in sorted(input_dict)]
+            matched_wave_file = [input_wave_dict[name] for name in sorted(input_wave_dict)]
+            
+            for idx, recovery_file in enumerate(matched_recovery_files):
+                recovered_signals = np.load(recovery_file)
+                
+                input_file = matched_input_files[idx]
+                input_signals = np.load(input_file)
+                
+                input_wave_file = matched_wave_file[idx]
+                with open(input_wave_file, "rb") as f:
+                    input_waves = pickle.load(f)
+                    
+                if (recovered_signals.shape[0] != num_recovery_sigs):
+                    self.logger.error(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
+                    raise ValueError(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
+                if (input_signals.shape[0] != num_recovery_sigs):
+                    self.logger.error(f"Input signal set size {input_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
+                    raise ValueError(f"Input signal set size {input_signals.shape[0]} does not equal expected size {num_recovery_sigs}")  
+                if (recovered_signals.shape[1] != input_signals.shape[1]):
+                    self.logger.error(f"Input signal length {input_signals.shape[1]} does not equal Recovered signal length {recovered_signals.shape[1]}")
+                    raise ValueError(f"Input signal length {input_signals.shape[1]} does not equal Recovered signal length {recovered_signals.shape[1]}")
+                                    
+                for idx,rec_sig in enumerate(recovered_signals):
+                    meta_data = self.__create_meta_data_dictionary(idx)
+                        
+                    input_sig_xf = fft(input_sig)
+                    input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
+                    input_tone_mag = np.abs(input_sig_xf)
+                    rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_threshold)[0]
+                    mask = np.in1d(rec_sig_tones,input_sig_tones)
+                    recovered_freq = np.where(mask)[0]
+                    spur_freq = np.where(~mask)[0]
+                    recovered_tones = rec_sig_tones[recovered_freq]
+                    spur_tones = rec_sig_tones[spur_freq]
+                    rec_mag = abs(rec_sig[recovered_tones])
+                    spur_mag = abs(rec_sig[spur_tones])
+                    meta_data['num_rec_freq']['value'] = recovered_freq.size
+                    meta_data['num_spur_freq']['value'] = spur_freq.size
+                    meta_data['total_input_tones']['value'] = input_sig_tones.size
+                    meta_data['rec_tone_thresh']['value'] = recovery_mag_threshold
+                    if ( recovered_freq.size == 0 ):
+                        meta_data['ave_rec_mag_err']['value'] = -1
+                        meta_data['ave_rec_mag']['value'] = -1
+                        meta_data['max_rec_mag']['value'] = -1
+                        meta_data['min_rec_mag']['value'] = -1
+                    else:
+                        meta_data['ave_rec_mag_err']['value'] = abs( np.average(input_tone_mag) - np.average(rec_mag) )
+                        meta_data['ave_rec_mag']['value'] = np.average(rec_mag)
+                        meta_data['max_rec_mag']['value'] = np.max(rec_mag)
+                        meta_data['min_rec_mag']['value'] = np.min(rec_mag)
+                    if ( spur_freq.size == 0 ):
+                        meta_data['ave_spur_mag']['value'] = -1
+                        meta_data['max_spur_mag']['value'] = -1
+                        meta_data['min_spur_mag']['value'] = -1
+                    else:
+                        meta_data['ave_spur_mag']['value'] = np.average(spur_mag)
+                        meta_data['max_spur_mag']['value'] = np.max(spur_mag)
+                        meta_data['min_spur_mag']['value'] = np.min(spur_mag)
+                    pass
+                    for data in meta_data:
+                        recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
+                
+    def __create_meta_data_dictionary(self, idx):
+        meta_data = {
+            'num_rec_freq': {
+                'col_name': "num_rec_freq_" + str(idx),
+                'value': 0
+            },
+            'num_spur_freq': {
+                'col_name': "num_spur_freq_" + str(idx),
+                'value': 0
+            },
+            'ave_rec_mag_err': {
+                'col_name': "ave_rec_mag_err_" + str(idx),
+                'value': 0
+            },
+            'total_input_tones': {
+                'col_name': "total_input_tones_" + str(idx),
+                'value': 0
+            },
+            'rec_tone_thresh': {
+                'col_name': "rec_tone_thresh_" + str(idx),
+                'value': 0
+            },
+            'ave_rec_mag': {
+                'col_name': "ave_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'max_rec_mag': {
+                'col_name': "max_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'min_rec_mag': {
+                'col_name': "min_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'ave_spur_mag': {
+                'col_name': "ave_spur_mag_" + str(idx),
+                'value': 0
+            },
+            'max_spur_mag': {
+                'col_name': "max_spur_mag_" + str(idx),
+                'value': 0
+            },
+            'min_spur_mag': {
+                'col_name': "min_spur_mag_" + str(idx),
+                'value': 0
+            }
+        }
+        return meta_data
         
     # -------------------------------
     # Getters
@@ -1086,7 +1368,7 @@ class DataSet:
     
     
     def get_valid_saved_freq_modes(cls):
-        return cls.VALID_SAVED_FREQ_MODES
+        return VALID_SAVED_FREQ_MODES
     
     
     def get_valid_dut_types(cls):

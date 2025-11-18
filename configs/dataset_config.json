@@ -68,10 +68,34 @@
         },
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
-        "recovered": "recovered.npy",
         "recovery_df": "recovery_df.pkl",
         "recovery_config": "recovery_config.json",
         "ml_model": "ml_model.keras",
         "ml_config": "ml_config.json"
+    },
+    "dataframe_params": {
+        "file_path": null,
+        "save_as_csv": true,
+        "recovery_mag_thresh": 0.5,
+        "meta_column_names": {
+            "input_file_name": "str",
+            "recovery_file_name": "str",
+            "input_config_name": "str",
+            "DUT_config_name": "str",
+            "Frequency_mode": "str"
+        },
+        "signal_column_names": {
+            "num_rec_freq_" : "float64",
+            "num_spur_freq_": "float64",
+            "ave_rec_mag_err_": "float64",
+            "total_input_tones_": "float64",
+            "rec_tone_thresh_": "float64",
+            "ave_rec_mag_": "float64",
+            "max_rec_mag_": "float64",
+            "min_rec_mag_": "float64",
+            "ave_spur_mag_": "float64",
+            "max_spur_mag_": "float64",
+            "min_spur_mag_": "float64"
+        }
     }
 }
