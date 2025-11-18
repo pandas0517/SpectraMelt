@@ -14,8 +14,6 @@ if __name__ == '__main__':
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
-    # import matplotlib.pyplot as plt
-    # from scipy.fft import fft, ifft, fftshift, ifftshift
 
     load_dotenv()
     
@@ -89,9 +87,7 @@ if __name__ == '__main__':
                         get_test_signal = False
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
-            model_params = mlp.get_model_params()
-            model_params['file_path'] = ml_model_file
-            mlp.set_model_params(model_params)
+            mlp.set_model_file_path(ml_model_file)
             
             if create_mlp_model:
                 mlp.create_model(len(premultiply_test_sig), len(output_test_sig))

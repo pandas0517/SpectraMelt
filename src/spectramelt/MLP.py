@@ -172,6 +172,16 @@ class MLP:
         
         self.training_params = training_params
 
+
+    def set_model_file_path(self, model_file_path):
+        if model_file_path is None:
+            model_file_path = "ml_model.keras"
+        if self.model_params is None:
+            self.logger.error("Model parameters not set")
+            raise ValueError("Model parameters not set")
+        
+        self.model_params["file_path"] = model_file_path
+
     # -------------------------------
     # Core functional methods
     # -------------------------------
@@ -510,10 +520,10 @@ class MLP:
         Train the existing Keras model on large HDF5 datasets using efficient batched loading.
         Splits train/test deterministically before batching to avoid empty datasets.
         """
-
-        mlp_model = self.load_model(model_file_path)
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
+
+        mlp_model = self.load_model(model_file_path)
 
         num_epochs = self.training_params.get("num_epochs", 200)
         batch_sz   = self.training_params.get("batch_sz", 128)
