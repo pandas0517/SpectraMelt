@@ -96,7 +96,6 @@ class Recovery:
                 "method": "SPGL1",
                 "premultiply": False,
                 "recovery_type": "complex",
-                "model_file_path": None,
                 "sigma": 0.001,
                 "dict_mag_adj": 1.0
             }
@@ -142,12 +141,13 @@ class Recovery:
         return all(n.lower() in self.VALID_RECOVERY_METHODS for n in name)
 
 
-    def recover_signal(self, signal, dictionary, num_waves=1):
+    def recover_signal(self, signal, dictionary,
+                       num_waves=1, MLP=None, model_file_path=None, recovery_type=None):
         sigma = self.recovery_params.get('sigma', 0.001)
         dict_mag_adj = self.recovery_params.get('dict_mag_adj', 1.0)
-        model_file_path = self.recovery_params.get('model_file_path', None)
         recovery_method = self.recovery_params.get('method', "splg1").lower()
-        recovery_type = self.recovery_params.get('recovery_type', "complex").lower()
+        if recovery_type is None:
+            recovery_type = self.recovery_params.get('recovery_type', "complex").lower()
         premultiply = self.recovery_params.get('premultiply', False)
 
         recovered_coef = None
@@ -171,16 +171,22 @@ class Recovery:
                 signal_norm = np.linalg.norm(signal)
                 recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, signal/signal_norm, sigma=sigma)
             case 'mlp1':
-                NYFR_ML_Models = import_module("NYFR_ML_Models")
-                if not model_file_path.exists():
-                    self.logger.error(f"File not found: {model_file_path}")
-                    raise FileNotFoundError(f"File not found: {model_file_path}")
+                if MLP is None:
+                    self.logger.error("No MLP object given")
+                    raise FileNotFoundError("No MLP object given")
+                elif model_file_path is not None:
+                    if not model_file_path.exists():
+                        self.logger.error(f"File not found: {model_file_path}")
+                        raise FileNotFoundError(f"File not found: {model_file_path}")
+                    MLP.set_model_file_path(model_file_path)
+                    
                 if premultiply:
                     pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
                     init_guess = np.dot(pseudo,signal)
                 else:
                     init_guess = signal
-                recovered_coef = NYFR_ML_Models.model_prediction(init_guess, model_file_path)
+                    
+                recovered_coef = MLP.model_prediction(init_guess, recovery_type)
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 

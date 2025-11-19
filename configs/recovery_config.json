@@ -10,7 +10,6 @@
         "method": "spgl1",
         "premultiply": false,
         "recovery_type": "complex",
-        "model_file_path": null,
         "sigma": 0.001,
         "dict_mag_adj": 1.0
     }
