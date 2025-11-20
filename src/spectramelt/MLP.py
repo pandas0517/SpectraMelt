@@ -1,5 +1,8 @@
 import numpy as np
-from .utils import load_config_from_json, get_logger
+from .utils import (
+    load_config_from_json,
+    get_logger
+)
 import tensorflow as tf
 import h5py
 import time
@@ -322,55 +325,17 @@ class MLP:
 
 
     def model_prediction(self, init_guess, mode):
-        coef_real = 0
-        coef_imag = 0
+        coef_predict = None
         mlp_model = self.load_model()
         if ( mode == "complex" ):
             self.logger.error("Complex values not supported by MLPs")
-            
-        if ( mode == 'complex' ):
-            x_pre_real = np.real(init_guess)
-            x_pre_imag = np.imag(init_guess)
-            x_pre_flattened = np.concatenate((x_pre_real, x_pre_imag))
-            coef_predict = mlp_model.predict(x_pre_flattened.reshape(1, x_pre_flattened.shape[0]))
-            coef_flattened = coef_predict.reshape(-1)
-            coef_split = np.split(coef_flattened, 2)
-            coef_real = coef_split[0]
-            coef_imag = coef_split[1]
+            raise ValueError("Complex values not supported by MLPs")
         else:
-            if ( mode == 'real_imag' ):
-                x_pre_real = np.real(init_guess)
-                x_pre_imag = np.imag(init_guess)
-                x_pre_real_reshape = x_pre_real.reshape((1,x_pre_real.shape[0]))
-                x_pre_imag_reshape = x_pre_imag.reshape((1,x_pre_imag.shape[0]))
-                coef_predict_real = mlp_model.predict(x_pre_real_reshape)
-                coef_real = coef_predict_real.reshape(-1)
-                if use_aux_model:
-                    coef_predict_imag = mlp_model_aux.predict(x_pre_imag_reshape)
-                    coef_imag = coef_predict_imag.reshape(-1)
-        
-            elif ( mode == 'mag_ang' ):
-                x_pre_mag = np.abs(init_guess)
-                x_pre_ang = np.angle(init_guess)
-                x_pre_mag_reshape = x_pre_mag.reshape((1,x_pre_mag.shape[0]))
-                x_pre_ang_reshape = x_pre_ang.reshape((1,x_pre_ang.shape[0]))
-                coef_predict_mag = mlp_model.predict(x_pre_mag_reshape)
-                coef_predict_ang = 0
-                if use_aux_model:
-                    coef_predict_ang = mlp_model_aux.predict(x_pre_ang_reshape)
-                    
-                coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
-                coef_imag = (coef_predict_mag*sin(coef_predict_ang)).reshape(-1)
-            elif ( mode == 'active_zones' ):
-                x_pre_mag = np.abs(init_guess)
-                x_pre_ang = np.angle(init_guess)
-                x_pre_mag_reshape = x_pre_mag.reshape((1,x_pre_mag.shape[0]))
-                x_pre_ang_reshape = x_pre_ang.reshape((1,x_pre_ang.shape[0]))
-                coef_predict_mag = mlp_model.predict(x_pre_mag_reshape)
-                coef_predict_ang = 0
-                coef_real = (coef_predict_mag*cos(coef_predict_ang)).reshape(-1)
-                coef_imag = (coef_predict_mag*sin(coef_predict_ang)).reshape(-1)
-        return coef_real, coef_imag
+            reshaped_guess = init_guess.reshape((1, init_guess.shape[0]))
+            reshaped_coef_predict = mlp_model.predict(reshaped_guess)
+            coef_predict = reshaped_coef_predict.reshape(-1)
+
+        return coef_predict
         
     # -------------------------------
     # New: large-dataset ingestion + training

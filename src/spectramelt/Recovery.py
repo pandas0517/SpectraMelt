@@ -14,7 +14,7 @@ VALID_SAVED_FREQ_MODES = {
 class Recovery:
     VALID_RECOVERY_METHODS = {
         "complex", "real", "imag",
-        "real_imag", "mag", "ang", "mag_ang"
+        "real_imag", "mag", "ang"
     }    
 
     def __init__(self,
