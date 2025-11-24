@@ -7,7 +7,7 @@
         "console": true
     },
     "recovery_params": {
-        "method": "spgl1",
+        "method": "mlp",
         "premultiply": false,
         "recovery_type": "complex",
         "sigma": 0.001,

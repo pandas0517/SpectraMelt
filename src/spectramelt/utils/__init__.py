@@ -27,8 +27,8 @@ from .file_utils import (
 # From signal_utils.py
 from .signal_utils import (
     sparse_fft,
-    normalize_and_flatten,
-    unflatten_and_denormalize
+    fft_encode_signals,
+    fft_decode_signals
 )
 
 # Optional: define __all__ for clean "from utils import *"
@@ -46,6 +46,6 @@ __all__ = [
     "build_flat_paths",
     "flatten_files",
     "sparse_fft",
-    "normalize_and_flatten",
-    "unflatten_and_denormalize"
+    "fft_encode_signals",
+    "fft_decode_signals"
 ]

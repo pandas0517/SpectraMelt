@@ -4,7 +4,9 @@ from .utils import (
     build_flat_paths,
     flatten_files,
     find_project_root,
-    save_to_json
+    save_to_json,
+    fft_encode_signals,
+    fft_decode_signals
 )
 import numpy as np
 import pickle
@@ -22,13 +24,14 @@ class DataSet:
     }
     # Map modes to flattened filename keys
     FREQ_FILE_KEYS = {
-        "complex":  "input.freq.signal",
-        "mag_ang":  "input.freq.mag_ang_sig",
-        "mag":      "input.freq.mag_sig",
-        "ang":      "input.freq.ang_sig",
-        "real_imag":"input.freq.real_imag_sig",
-        "real":     "input.freq.real_sig",
-        "imag":     "input.freq.imag_sig",
+        "complex":          "input.freq.signal",
+        "mag_ang":          "input.freq.mag_ang_sig",
+        "mag_ang_sincos":   "input.freq.mag_ang_sincos_sig",
+        "mag":              "input.freq.mag_sig",
+        "ang":              "input.freq.ang_sig",
+        "real_imag":        "input.freq.real_imag_sig",
+        "real":             "input.freq.real_sig",
+        "imag":             "input.freq.imag_sig",
     }
     def __init__(self,
                  input_config_name=None,
@@ -36,6 +39,7 @@ class DataSet:
                  recovery_config_name=None,
                  ML_config_name=None,
                  dataset_config_name="DataSet_Config_1",
+                 seed=None,
                  dataset_params=None,
                  inputset_params=None,
                  outputset_params=None,
@@ -60,6 +64,7 @@ class DataSet:
             dataset_params['config_name'] = dataset_config_name
             dataset_params['log_params'] = log_params
             dataset_params['dataframe_params'] = dataframe_params
+            dataframe_params['seed'] = seed
             
         dataset_params['input_config_name'] = input_config_name
         dataset_params['DUT_config_name'] = DUT_config_name
@@ -89,6 +94,7 @@ class DataSet:
         directory_params = dataset_params.get('directory_params', None)
         log_params = dataset_params.get('log_params', None)
         dataframe_params = dataset_params.get('dataframe_params', None)
+        self.input_rng = np.random.default_rng(dataset_params.get('seed', None))
         
         if (filenames is None and
             directory_params is None ):
@@ -137,14 +143,12 @@ class DataSet:
                 "num_recovery_sigs": 100,
                 "tones_per_sig": [1],
                 "wave_precision": None,
-                "saved_freq_modes": [],
-                "seed": None
+                "saved_freq_modes": []
             }
         saved_freq_modes = inputset_params.get('saved_freq_modes', [])
         if not self.is_valid_saved_freq_mode(saved_freq_modes):
             self.logger.error("Saved Frequency Mode List Contains invalid Mode")
-            raise ValueError("Saved Frequency Mode List Contains invalid Mode")            
-        self.input_rng = np.random.default_rng(inputset_params.get('seed', None))
+            raise ValueError("Saved Frequency Mode List Contains invalid Mode")
         self.inputset_params = inputset_params
         
 
@@ -152,13 +156,20 @@ class DataSet:
         if outputset_params is None:
             outputset_params = {
                 "DUT_type": "NYFR",
-                "scale_dict": 1.0
+                "saved_freq_modes": [],
+                "scale_dict": 1.0,
+                "decode_to_time": True
             }
         
         DUT_type = outputset_params.get('DUT_type', None)
         if not self.is_valid_dut_type(DUT_type):
             self.logger.error(f"DUT type {DUT_type} not currently valid")
             raise ValueError(f"DUT type {DUT_type} not currently valid")
+        
+        saved_freq_modes = outputset_params.get('saved_freq_modes', [])
+        if not self.is_valid_saved_freq_mode(saved_freq_modes):
+            self.logger.error("Saved Frequency Mode List Contains invalid Mode")
+            raise ValueError("Saved Frequency Mode List Contains invalid Mode")
                     
         self.outputset_params = outputset_params
 
@@ -270,6 +281,7 @@ class DataSet:
                     "freq": {
                         "signal": "freq_signals.npy",
                         "mag_ang_sig": "freq_mag_ang_signals.npy",
+                        "mag_ang_sincos_sig": "freq_mag_ang_sincos_signals.npy",
                         "mag_sig": "freq_mag_signals.npy",
                         "ang_sig": "freq_ang_signals.npy",
                         "real_imag_sig": "freq_real_imag_signals.npy",
@@ -415,9 +427,6 @@ class DataSet:
         wave_precision = self.inputset_params.get('wave_precision', None)
         
         input_signals_time = np.zeros((num_input_sigs, real_time.size))
-        
-        if saved_freq_modes:
-            input_signals_freq = np.zeros((num_input_sigs, real_time.size), dtype=np.complex128)
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
@@ -457,10 +466,6 @@ class DataSet:
                 input_signal.create_input_signal()
                 input_signal_time = input_signal.get_input_signal()
                 input_signals_time[input_sig] = input_signal_time
-                
-                if saved_freq_modes:
-                    input_signal_freq = fft(input_signal_time)
-                    input_signals_freq[input_sig] = input_signal_freq
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
@@ -474,7 +479,7 @@ class DataSet:
             inputset_time_path = input_dirs / f"{tones}_tone_{input_time_signal_filename}"
             
             np.save(inputset_time_path, input_signals_time)
-            input_signals_time[:] = 0
+            
             self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
 
             # --- After you've built input_signals_freq with FFT results ---
@@ -492,36 +497,13 @@ class DataSet:
                         continue
 
                     save_path = input_dirs / f"{tones}_tone_{filename}"
-
-                    # --- Generate correct representation ---
-                    if mode == "complex":
-                        arr = input_signals_freq
-                    else:
-                        if mode == "real":
-                            arr = input_signals_freq.real
-                        elif mode == "imag":
-                            arr = input_signals_freq.imag
-                        elif mode == "real_imag":
-                            arr = np.concatenate(
-                                (input_signals_freq.real, input_signals_freq.imag), axis=1
-                            )
-                        elif mode == "mag":
-                            arr = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
-                        elif mode == "ang":
-                            arr = np.angle(fftshift(input_signals_freq, axes=1))
-                        elif mode == "mag_ang":
-                            mag = np.abs(fftshift(input_signals_freq, axes=1)) / input_signals_freq.shape[1]
-                            ang = np.angle(fftshift(input_signals_freq, axes=1))
-                            arr = np.concatenate((mag, ang), axis=1)
-
-                        # Cast to float32 for all non-complex modes
-                        arr = arr.astype(np.float32)
-
+                    arr, _ = fft_encode_signals(input_signals_time, mode,
+                                                apply_fftshift=True, normalize=False)
                     # --- Save ---
                     np.save(save_path, arr)
                     self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
                     
-                input_signals_freq[:] = 0
+            input_signals_time[:] = 0
 
         input_recovery_signals_time = np.zeros((num_recovery_sigs, real_time.size))
         
@@ -601,30 +583,8 @@ class DataSet:
                         continue
 
                     save_path = input_dirs / f"{tones}_tone_recovery_{filename}"
-
-                    # --- Generate correct representation ---
-                    if mode == "complex":
-                        arr = input_recovery_signals_freq
-                    else:
-                        if mode == "real":
-                            arr = input_recovery_signals_freq.real
-                        elif mode == "imag":
-                            arr = input_recovery_signals_freq.imag
-                        elif mode == "real_imag":
-                            arr = np.concatenate(
-                                (input_recovery_signals_freq.real, input_recovery_signals_freq.imag), axis=1
-                            )
-                        elif mode == "mag":
-                            arr = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
-                        elif mode == "ang":
-                            arr = np.angle(fftshift(input_recovery_signals_freq, axes=1))
-                        elif mode == "mag_ang":
-                            mag = np.abs(fftshift(input_recovery_signals_freq, axes=1)) / input_recovery_signals_freq.shape[1]
-                            ang = np.angle(fftshift(input_recovery_signals_freq, axes=1))
-                            arr = np.concatenate((mag, ang), axis=1)
-
-                        # Cast to float32 for all non-complex modes
-                        arr = arr.astype(np.float32)
+                    arr, _ = fft_encode_signals(input_signals_time, mode,
+                                                apply_fftshift=True, normalize=False)
 
                     # --- Save ---
                     np.save(save_path, arr)
@@ -675,7 +635,7 @@ class DataSet:
         wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
         
         output_dirs.mkdir(parents=True, exist_ok=True)
-        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
+        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
         dictionary_file = output_dirs / dictionary_filename
         
         samp_time_file = output_dirs / samp_time_filename
@@ -708,10 +668,10 @@ class DataSet:
                 key_part = stem.split(input_time_signal_filename)[0]
                 output_signal_file = output_dirs / f"{key_part}{input_time_signal_filename}"
                 wbf_dut_signal_file = output_dirs / f"{key_part}wbf_{input_time_signal_filename}"
+                
                 dictionary = None
                 output_signal_list = []
                 wbf_signal_list = []
-                wbf_signal_freq_list = []
                 self.logger.info(f"Starting Output Set Creation for {file_path}")
                 start = time.time()
                 for idx, signal in enumerate(input_signals):
@@ -720,9 +680,6 @@ class DataSet:
                     output_signal = quantized_signals.get('quantized_values')
                     output_signal_list.append(output_signal)
                     wbf_signal_list.append(wbf_signal)
-                    if saved_freq_modes:
-                        wbf_signal_freq = fft(wbf_signal)
-                        wbf_signal_freq_list.append(wbf_signal_freq)
 
                     if idx == 0:
                         if not dictionary_file.exists():
@@ -755,12 +712,11 @@ class DataSet:
                 np.save(output_signal_file, np.array(output_signal_list))
                 self.logger.info(f"Output Set for Input Set {file_path} saved to file {output_signal_file}")
 
-                np.save(wbf_dut_signal_file, np.array(wbf_signal_list))
+                wbf_signals = np.array(wbf_signal_list)
+                np.save(wbf_dut_signal_file, wbf_signals)
                 self.logger.info(f"Wideband Filter Set for Input Set {file_path} saved to file {wbf_dut_signal_file}")
 
-                # --- After you've built wbf_signals_freq with FFT results ---
                 if saved_freq_modes:
-                    wbf_signal_freqs = np.array(wbf_signal_freq_list)
                     for mode in saved_freq_modes:
 
                         if mode not in VALID_SAVED_FREQ_MODES:
@@ -773,36 +729,15 @@ class DataSet:
                             self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
                             continue
 
-                        save_path = output_dirs / f"{key_part}wbf_{filename}"
-
-                        # --- Generate correct representation ---
-                        if mode == "complex":
-                            arr = wbf_signal_freqs
-                        else:
-
-                            if mode == "real":
-                                arr = wbf_signal_freqs.real
-                            elif mode == "imag":
-                                arr = wbf_signal_freqs.imag
-                            elif mode == "real_imag":
-                                arr = np.concatenate(
-                                    (wbf_signal_freqs.real, wbf_signal_freqs.imag), axis=1
-                                )
-                            elif mode == "mag":
-                                arr = np.abs(fftshift(wbf_signal_freqs, axes=1)) / wbf_signal_freqs.shape[1]
-                            elif mode == "ang":
-                                arr = np.angle(fftshift(wbf_signal_freqs, axes=1))
-                            elif mode == "mag_ang":
-                                mag = np.abs(fftshift(wbf_signal_freqs, axes=1)) / wbf_signal_freqs.shape[1]
-                                ang = np.angle(fftshift(wbf_signal_freqs, axes=1))
-                                arr = np.concatenate((mag, ang), axis=1)
-
-                            # Cast to float32 for all non-complex modes
-                            arr = arr.astype(np.float32)
+                        norm_save_path = output_dirs / f"{key_part}norm_wbf_{filename}"
+                        scale_save_path = output_dirs / f"{key_part}scale_wbf_{filename}"
+                        arr, scales = fft_encode_signals(wbf_signals, mode)
 
                         # --- Save ---
-                        np.save(save_path, arr)
-                        self.logger.info(f"{key_part}{mode.upper()} wideband filter freq set saved to {save_path}")
+                        np.save(norm_save_path, arr)
+                        self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency set saved to {norm_save_path}")
+                        np.save(scale_save_path, scales)
+                        self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency scales set saved to {scale_save_path}")
                 
         self.logger.info("Output Set Creation Complete\n")
 
@@ -886,7 +821,7 @@ class DataSet:
                                DUT_config_name=None):
         self.logger.info(f"Starting Premultiply Set Creation...")
         
-        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
+        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
         output_dir = self.directories.get('outputs', "Outputs")
         input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         
@@ -952,41 +887,16 @@ class DataSet:
                             self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
                             continue
 
-                        save_path = premultiply_dir / f"{key_part}{filename}"
-
-                        # --- Generate correct representation ---
-                        if mode == "complex":
-                            arr = premultiply_signals
-
-                        else:
-                            if mode == "real":
-                                arr = premultiply_signals.real
-
-                            elif mode == "imag":
-                                arr = premultiply_signals.imag
-
-                            elif mode == "real_imag":
-                                arr = np.concatenate(
-                                    (premultiply_signals.real, premultiply_signals.imag), axis=1
-                                )
-
-                            elif mode == "mag":
-                                arr = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
-
-                            elif mode == "ang":
-                                arr = np.angle(fftshift(premultiply_signals, axes=1))
-
-                            elif mode == "mag_ang":
-                                mag = np.abs(fftshift(premultiply_signals, axes=1)) / premultiply_signals.shape[1]
-                                ang = np.angle(fftshift(premultiply_signals, axes=1))
-                                arr = np.concatenate((mag, ang), axis=1)
-
-                            # Cast to float32 for all non-complex modes
-                            arr = arr.astype(np.float32)
+                        norm_save_path = premultiply_dir / f"{key_part}norm_{filename}"
+                        scale_save_path = premultiply_dir / f"{key_part}scale_{filename}"
+                        arr, scales = fft_encode_signals(premultiply_signals, mode, apply_fft=False)
 
                         # --- Save ---
-                        np.save(save_path, arr)
-                        self.logger.info(f"{key_part} {mode.upper()} premultiply set saved to {save_path}")
+                        np.save(norm_save_path, arr)
+                        self.logger.info(f"{key_part}{mode.upper()} normalized premultiply set saved to  {norm_save_path}")
+                        np.save(scale_save_path, scales)
+                        self.logger.info(f"{key_part}{mode.upper()} scales premultiply set saved to {scale_save_path}")
+
                 premultiply_signals[:] = 0        
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
                  
@@ -995,12 +905,14 @@ class DataSet:
 
     def create_recovery_set(self,
                             recovery,
+                            mlp=None,
                             dictionary_path=None,
                             input_config_name=None,
                             DUT_config_name=None):
         self.logger.info(f"Starting Recovery Set Creation...")
         
-        output_dir = self.directories.get('outputs', "Outputs")        
+        output_dir = self.directories.get('outputs', "Outputs")
+        premultiply_dir = self.directories.get('premultiply', "Premultiply")       
         input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
         
         if input_config_name is not None:
@@ -1030,51 +942,120 @@ class DataSet:
         # --- Config file ---     
         recovery_config_filename = self.filenames.get('recovery_config', "recovery_config.json")
         recovery_config_file = recovery_dirs.parent / recovery_config_filename         
-        recovery_params = recovery.get_all_params()
+        all_recovery_params = recovery.get_all_params()
         if not recovery_config_file.exists():
             recovery_config = {
                 "config_name": self.config_name,
-                "recovery": recovery_params
+                "recovery": all_recovery_params
             }
             save_to_json(recovery_config, recovery_config_file)
             self.logger.info(f"Saved recovery configuration file to {recovery_config_file}")
-            
-        recovery_method = recovery_params.get('method')
-        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
         
-        for mode in saved_freq_modes:
-            key = self.FREQ_FILE_KEYS[mode]
-            filename = self.flat_filenames.get(key)
-            
-            if not filename:
-                self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                continue
-            recovery.set_recovery_type(mode)
-             
+        recovery_params = recovery.get_recovery_params()
+        recovery_method = recovery_params.get('method').lower()
+        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
+        
+        if recovery_method != "mlp":
             for file_path in output_dir.iterdir():
-                if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
-                    output_signals = np.load(file_path)
-                    # Extract identifying portion (for example, everything up to "signals.npy")
-                    stem = file_path.name
-                    key_part = stem.split(input_time_signal_filename)[0]
-                    recovery_file = recovery_dirs / f"{key_part}{filename}"
+                if (file_path.is_file() and 
+                    file_path.name.endswith(input_time_signal_filename) and 
+                    "recovery" in file_path.name.lower()):
                     
-                    recovered_sig_list = []
+                    output_signals = np.load(file_path)
 
                     self.logger.info(f"Starting Recovery Set Creation for {file_path}")
                     start = time.time() 
                     
                     for signal in output_signals:
-                        recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
-                        
+                            recovered_sig_list.append(recovery.recover_signal(signal, dictionary))
                     stop = time.time()
                     self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
                             
                     np.save(recovery_file, np.array(recovered_sig_list))
                     self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
+        elif saved_freq_modes:
+            ml_models_dir = self.directories.get('ml_models', "ML_Models")
+            ml_model_filename = self.flat_filenames.get('ml_model', "ml_model.keras")
+            
+            for mode in saved_freq_modes:
+                key = self.FREQ_FILE_KEYS[mode]
+                filename = self.flat_filenames.get(key)
+                
+                if not filename:
+                    self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                    continue
+                recovery.set_recovery_type(mode)
+
+                if mlp is None:
+                    self.logger.error("No MLP object given")
+                    raise ValueError("No MLP object given")
+
+
+                ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
+                mlp.set_model_file_path(ml_model_file)
+                mlp_model = mlp.load_model()
+
+                for file_path in premultiply_dir.iterdir():
+                    if (file_path.is_file() and 
+                        file_path.name.endswith(filename) and 
+                        "recovery" in file_path.name.lower() and
+                        "norm" in file_path.name.lower()):
+
+                        output_signals = np.load(file_path)
+                        # Extract identifying portion (for example, everything up to "signals.npy")
+                        stem = file_path.name
+                        key_part = stem.split(filename)[0]
+                        recovery_file = recovery_dirs / f"{key_part}{filename}"
+                        
+                        recovered_sig_list = []
+
+                        self.logger.info(f"Starting Recovery Set Creation for {file_path}")
+                        start = time.time() 
+                        
+                        for signal in output_signals:
+                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp, mlp_model=mlp_model))
+
+                        stop = time.time()
+                        self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                                
+                        np.save(recovery_file, np.array(recovered_sig_list))
+                        self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
+        else:
+            self.logger.error(f"Recovery method is {recovery_method} but no save frequency list given")
+            raise ValueError(f"Recovery method is {recovery_method} but no save frequency list given")
         
         self.logger.info("Recovery Set Creation Complete\n")
+
+
+    def decode_recovery_set(self):
+        recovery_dir = self.directories.get('recovery', "Recovery")
+
+        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
         
+        for mode in saved_freq_modes:
+            key = self.FREQ_FILE_KEYS[mode]
+            filename = self.flat_filenames.get(key)
+            
+            for file_path in recovery_dir.iterdir():
+                if (file_path.is_file() and
+                    file_path.name.endswith(filename) and
+                    "norm" in file_path.name.lower()):
+
+                    # Extract identifying portion (for example, everything up to "signals.npy")
+                    stem = file_path.name
+                    key_part = stem.split(filename)[0]
+
+                    normed_freq_recovery_signals = np.load(file_path)
+
+                    # Build corresponding scale filename by replacing 'norm_' with 'scale_'
+                    scale_path = file_path.parent / file_path.name.replace("norm_", "scale_", 1)
+
+                    if not scale_path.is_file():
+                        self.logger.warning(f"WARNING: Scale file not found: {scale_path}")
+                        scales = None
+                    else:
+                        scales = np.load(scale_path)
+
         
     def create_recovery_dataframe(self):
         # --- Config file ---

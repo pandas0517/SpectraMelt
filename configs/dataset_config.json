@@ -1,5 +1,6 @@
 {
     "config_name": "Dataset_Config_1",
+    "seed": null,
     "inputset_params": {
         "num_sigs": 4000,
         "num_recovery_sigs": 100,
@@ -8,12 +9,13 @@
             2, 3, 4, 5, 6,
             7, 8, 9, 10, 11
         ],
-        "saved_freq_modes": ["mag", "mag_ang"],
-        "seed": null
+        "saved_freq_modes": ["mag", "ang"]
     },
     "outputset_params": {
         "DUT_type": "NYFR",
-        "scale_dict": 100.0
+        "saved_freq_modes": ["mag", "mag_ang_sincos"],
+        "scale_dict": 1.0,
+        "decode_to_time": true
     },
     "log_params": {
         "enabled": true,
@@ -59,6 +61,7 @@
             "freq": {
                 "signal": "freq_signals.npy",
                 "mag_ang_sig": "freq_mag_ang_signals.npy",
+                "mag_ang_sincos_sig": "freq_mag_ang_sincos_signals.npy",
                 "mag_sig": "freq_mag_signals.npy",
                 "ang_sig": "freq_ang_signals.npy",
                 "real_imag_sig": "freq_real_imag_signals.npy",

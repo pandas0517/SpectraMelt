@@ -1,4 +1,6 @@
 import numpy as np
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 from .utils import (
     load_config_from_json,
     get_logger
@@ -238,9 +240,11 @@ class MLP:
 
     
     def reset_tensorflow_session(self):
-        backend.clear_session()
-        tf.compat.v1.reset_default_graph()
-        tf.compat.v1.keras.backend.clear_session()
+        import gc
+
+        backend.clear_session()     # Proper Keras reset
+        tf.keras.backend.clear_session()
+        gc.collect()          # Force Python GC
 
 
     def create_model(self, input_signal_size, output_signal_size, model_file_path=None):
@@ -284,6 +288,14 @@ class MLP:
 
 
         # Load model normally; custom losses are already registered
+        # gpus = tf.config.list_physical_devices("GPU")
+        # if gpus:
+        #     try:
+        #         for gpu in gpus:
+        #             tf.config.experimental.set_memory_growth(gpu, True)
+        #     except Exception as e:
+        #         print("GPU setup error:", e)
+
         mlp_model = tf.keras.models.load_model(model_file_path)
 
         return mlp_model   
@@ -324,9 +336,10 @@ class MLP:
         mlp_model.save(model_file_path, overwrite=True)
 
 
-    def model_prediction(self, init_guess, mode):
+    def model_prediction(self, init_guess, mode, mlp_model=None):
         coef_predict = None
-        mlp_model = self.load_model()
+        if mlp_model is None:
+            mlp_model = self.load_model()
         if ( mode == "complex" ):
             self.logger.error("Complex values not supported by MLPs")
             raise ValueError("Complex values not supported by MLPs")

@@ -8,6 +8,7 @@ if __name__ == '__main__':
     from pathlib import Path
     from spectramelt.Recovery import Recovery
     from spectramelt.DataSet import DataSet
+    from spectramelt.MLP import MLP
     import atexit
     import numpy as np
     import matplotlib.pyplot as plt
@@ -16,8 +17,10 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_set = True
-    display_recovered_signals = True
+    create_set = False
+    use_mlp = True
+    decode_recovery_set = True
+    display_recovered_signals = False
     DUT_type = "NYFR"
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -30,7 +33,14 @@ if __name__ == '__main__':
                       config_file_path=Path(getenv('DATASET_CONF')))
     
     if create_set:
-        dataset.create_recovery_set(recovery)
+        if use_mlp:
+            mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
+            dataset.create_recovery_set(recovery, mlp=mlp)
+        else:
+            dataset.create_recovery_set(recovery)
+
+    if decode_recovery_set:
+        dataset.decode_recovery_set()
                         
     if display_recovered_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)

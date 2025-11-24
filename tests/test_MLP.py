@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_mlp_model = True
+    create_mlp_model = False
     prepare_large_dataset = False
     train_mlp_model = True
     
@@ -35,10 +35,10 @@ if __name__ == '__main__':
     ml_models_dir.mkdir(parents=True, exist_ok=True)
     output_dir = directories.get('outputs', "Outputs")
     
-    inputset_params = dataset.get_inputset_params()
-    saved_freq_modes = inputset_params.get('saved_freq_modes', [])
+    outputset_params = dataset.get_outputset_params()
+    saved_freq_modes = outputset_params.get('saved_freq_modes', [])
     # Currently: Get Magnitude Mode
-    selected_freq_modes = saved_freq_modes[0:1]
+    selected_freq_modes = saved_freq_modes[1:2]
     freq_file_keys = dataset.get_freq_file_keys()
     flat_filenames = dataset.get_flat_filenames()
     ml_model_filename = flat_filenames.get('ml_model', "ml_model.keras")
@@ -62,11 +62,13 @@ if __name__ == '__main__':
             for file_path in premultiply_dir.iterdir():
                 if (file_path.is_file() and
                     file_path.name.endswith(filename) and 
-                    "recovery" not in file_path.name.lower()):
+                    "recovery" not in file_path.name.lower() and
+                    "norm" in file_path.name.lower()):
                     premultiply_file_list.append(file_path)
                     if get_test_signal:
                         premultiply_signals = np.load(file_path)
                         premultiply_test_sig = premultiply_signals[0]
+                        del premultiply_signals
                         get_test_signal = False
                         
             output_file = output_dir / f"wbf_{filename}"
@@ -79,11 +81,13 @@ if __name__ == '__main__':
                 if (file_path.is_file() and
                     file_path.name.endswith(filename) and
                     "wbf" in file_path.name.lower() and 
-                    "recovery" not in file_path.name.lower()):
+                    "recovery" not in file_path.name.lower() and
+                    "norm" in file_path.name.lower()):
                     output_file_list.append(file_path)
                     if get_test_signal:
                         output_signals = np.load(file_path)
                         output_test_sig = output_signals[0]
+                        del output_signals
                         get_test_signal = False
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
@@ -101,6 +105,7 @@ if __name__ == '__main__':
                 
             if train_mlp_model:
                 mlp.train_on_hdf5(premultiply_h5_file, output_h5_file)
+                mlp.reset_tensorflow_session()
             pass
     
     atexit.register(logger.info, "Completed Test\n")

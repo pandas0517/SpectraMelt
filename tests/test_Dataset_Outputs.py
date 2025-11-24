@@ -17,9 +17,9 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = True
+    create_output_set = False
 
-    create_nyfr_wave_params = True
+    create_nyfr_wave_params = False
     display_nyfr_signals = False
     
     create_premultiply_set = True

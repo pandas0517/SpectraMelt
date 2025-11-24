@@ -8,13 +8,13 @@ import pickle
 
 VALID_SAVED_FREQ_MODES = {
     "complex", "real", "imag",
-    "real_imag", "mag", "ang", "mag_ang"
+    "real_imag", "mag", "ang",
+    "mag_ang", "mag_ang_sincos"
 }
 
 class Recovery:
     VALID_RECOVERY_METHODS = {
-        "complex", "real", "imag",
-        "real_imag", "mag", "ang"
+        "iht", "omp", "spgl1", "mlp"
     }    
 
     def __init__(self,
@@ -61,7 +61,8 @@ class Recovery:
         config_name = all_params.get('config_name', "Recovery_Config_1")
         if recovery_params is None:
             config_name = "Default_Recovery_Config"
-                    
+
+        self.set_log_params(log_params)           
         self.logger = None
         logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
@@ -70,7 +71,6 @@ class Recovery:
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
     
-        self.set_log_params(log_params)
         self.set_recovery_params(recovery_params)
         self.set_config_name(config_name)
 
@@ -119,7 +119,7 @@ class Recovery:
         if recovery_method is None:
             self.logger.error("Recovery method can not be None")
             raise ValueError("Recovery method can not be None")
-        if self.is_valid_recovery_type(recovery_method):
+        if self.is_valid_recovery_method(recovery_method):
             self.recovery_params["method"] = recovery_method
         else:
             self.logger.error(f"{recovery_method} Recovery method is not valid")
@@ -135,28 +135,41 @@ class Recovery:
         return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
 
 
-    def is_valid_recovery_type(self, name) -> bool:
+    def is_valid_recovery_method(self, name) -> bool:
         if isinstance(name, str):
             name = [name]
         return all(n.lower() in self.VALID_RECOVERY_METHODS for n in name)
 
 
-    def recover_signal(self, signal, dictionary,
-                       num_waves=1, MLP=None, model_file_path=None, recovery_type=None):
+    def recover_signal(self, signal, dictionary=None,
+                       num_waves=1, MLP=None, model_file_path=None,
+                       mlp_model=None, recovery_type=None, recovery_method=None):
         sigma = self.recovery_params.get('sigma', 0.001)
         dict_mag_adj = self.recovery_params.get('dict_mag_adj', 1.0)
-        recovery_method = self.recovery_params.get('method', "splg1").lower()
+
+        if recovery_method is None:
+            recovery_method = self.recovery_params.get('method', None).lower()
+
         if recovery_type is None:
             recovery_type = self.recovery_params.get('recovery_type', "complex").lower()
+
+        complex_recovery = {"complex", "imag", "ang", "mag_ang", "real_imag", "mag_ang_sincos"}
+        # Assumes signals used to recover using the MLP are already premultiplied by the dictionary
+        if recovery_method is None:
+            self.logger.error("No recovery method specified")
+            raise ValueError("No recovery method specified")
+        elif recovery_method != "mlp":
+            if dictionary is None:
+                self.logger.error("No dictionary given")
+                raise ValueError("No dictionary given")
+            elif recovery_type in complex_recovery:
+                if not np.iscomplexobj(dictionary):
+                    self.logger.error("Dictionary is not complex")
+                    raise ValueError("Dictionary is not complex")
+
         premultiply = self.recovery_params.get('premultiply', False)
 
         recovered_coef = None
-        complex_recovery = {"complex", "imag", "ang", "mag_ang", "real_imag"}
-        
-        if recovery_type in complex_recovery:
-            if not np.iscomplexobj(dictionary):
-                self.logger.error("Dictionary is not complex")
-                raise ValueError("Dictionary is not complex")
 
         match recovery_method:
             case 'iht':
@@ -170,7 +183,7 @@ class Recovery:
                 spgl1 = import_module("spgl1")
                 signal_norm = np.linalg.norm(signal)
                 recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, signal/signal_norm, sigma=sigma)
-            case 'mlp1':
+            case 'mlp':
                 if MLP is None:
                     self.logger.error("No MLP object given")
                     raise FileNotFoundError("No MLP object given")
@@ -186,7 +199,7 @@ class Recovery:
                 else:
                     init_guess = signal
                     
-                recovered_coef = MLP.model_prediction(init_guess, recovery_type)
+                recovered_coef = MLP.model_prediction(init_guess, recovery_type, mlp_model=mlp_model)
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 
@@ -547,7 +560,6 @@ class Recovery:
         all_params ={
             "config_name": self.config_name,
             "recovery_params": self.recovery_params,
-            "dataframe_params": self.dataframe_params,
             "log_params": self.log_params
         }
         return all_params
