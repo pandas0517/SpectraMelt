@@ -15,9 +15,10 @@
         ]
     },
     "training_params": {
-        "modes": [
-            "mag"
-        ],
+        "input_mean": 0.0,
+        "input_std": 0.0,
+        "output_mean": 0.0,
+        "output_std": 0.0,
         "total_num_sigs": 40000,
         "test_fraction": 0.3,
         "loss_type": "root_mean_squared_error",

@@ -133,9 +133,10 @@ class MLP:
     def set_training_params(self, training_params):
         if training_params is None:
             training_params = {
-                "modes": [
-                    "mag"
-                ],
+                "input_mean": 0.0,
+                "input_std": 0.0,
+                "output_mean": 0.0,
+                "output_std": 0.0,
                 "total_num_sigs": 40000,
                 "test_fraction": 0.3,
                 "loss_type": "root_mean_squared_error",
@@ -186,6 +187,17 @@ class MLP:
             raise ValueError("Model parameters not set")
         
         self.model_params["file_path"] = model_file_path
+        
+        
+    def set_dataset_stats(self,
+                          input_mean=0.0,
+                          input_std=0.0,
+                          output_mean=0.0,
+                          output_std=0.0):
+        self.training_params["input_mean"] = input_mean
+        self.training_params["input_std"] = input_std
+        self.training_params["output_mean"] = output_mean
+        self.training_params["output_std"] = output_std
 
     # -------------------------------
     # Core functional methods
@@ -511,7 +523,59 @@ class MLP:
             hf_out.move("y_shuffled", "y")
 
         self.logger.info("[DONE] Dataset creation and shuffle complete.")
+        
+        
+    def compute_hdf5_stats(h5_path,
+                        dataset_name="X",
+                        batch_size=4096):
+        """
+        Computes per-feature mean and std from an HDF5 dataset
+        where signals are already encoded for MLP input.
 
+        Assumes dataset shape:
+            (N, features) or (N, ..., features)
+        """
+
+        with h5py.File(h5_path, "r") as f:
+            data = f[dataset_name]
+            N = data.shape[0]
+
+            # Determine feature dimension
+            sample = data[0]
+            sample = sample.reshape(-1)
+            feat_dim = sample.size
+
+            mean = np.zeros(feat_dim, dtype=np.float64)
+            var = np.zeros(feat_dim, dtype=np.float64)
+            count = 0
+
+            for start in range(0, N, batch_size):
+                end = min(start + batch_size, N)
+                batch = data[start:end]
+
+                # Flatten to (batch_size, features)
+                batch = batch.reshape(batch.shape[0], -1).astype(np.float64)
+
+                batch_count = batch.shape[0]
+                batch_mean = np.mean(batch, axis=0)
+                batch_var = np.var(batch, axis=0)
+
+                # Welford update
+                delta = batch_mean - mean
+                new_count = count + batch_count
+
+                mean += delta * batch_count / new_count
+                var = (
+                    count * var +
+                    batch_count * batch_var +
+                    (delta ** 2) * count * batch_count / new_count
+                ) / new_count
+
+                count = new_count
+
+            std = np.sqrt(var) + 1e-8
+
+        return mean, std
 
     def make_hdf5_batch_loader(self, h5_input_path, h5_output_path):
         """
@@ -545,7 +609,7 @@ class MLP:
         return get_batch, N
     
 
-    def train_on_hdf5(self, h5_input_path, h5_output_path, model_file_path=None):
+    def train_on_hdf5(self, h5_input_path, h5_output_path, model_file_path=None, ):
         """
         Train the existing Keras model on large HDF5 datasets using efficient batched loading.
         Splits train/test deterministically before batching to avoid empty datasets.
@@ -635,6 +699,16 @@ class MLP:
     def get_config_name(self):
         return self.config_name
     
+    
+    def get_dataset_stats(self):
+        dataset_stats = {
+            "input_mean": self.training_params["input_mean"],
+            "input_std": self.training_params["input_std"],
+            "output_mean": self.training_params["output_mean"],
+            "output_std": self.training_params["output_std"]
+        }
+        return dataset_stats
+        
     
     def get_mlp_params(self):
         mlp_params ={

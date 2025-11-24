@@ -12,7 +12,7 @@ def fft_encode_signals(
     mode="mag_ang_sincos",
     apply_fftshift=False,
     apply_fft=True,
-    normalize=True
+    normalize=False
 ):
     """
     signals: complex np.array, shape (N, L)
