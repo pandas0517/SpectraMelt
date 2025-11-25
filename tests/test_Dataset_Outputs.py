@@ -18,11 +18,12 @@ if __name__ == '__main__':
     load_dotenv()
     
     create_output_set = False
+    create_wbf_wave_params = False
 
     create_nyfr_wave_params = False
     display_nyfr_signals = False
     
-    create_premultiply_set = True
+    create_premultiply_set = False
     display_premultiply_signals = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -34,6 +35,9 @@ if __name__ == '__main__':
 
     if create_output_set:
         dataset.create_output_set(nyfr)
+        
+    if create_wbf_wave_params:
+        dataset.create_wbf_wave_params()
 
     if create_nyfr_wave_params:
         dataset.create_nyfr_wave_params(nyfr)
