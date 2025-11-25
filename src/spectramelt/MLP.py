@@ -1,6 +1,7 @@
 import numpy as np
 # import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+from pathlib import Path
 from .utils import (
     load_config_from_json,
     get_logger
@@ -58,7 +59,9 @@ class MLP:
             mlp_params['log_params'] = log_params
 
         self.set_mlp_params(mlp_params)
-        
+        self.set_input_recovery_stats()
+        self.set_output_recovery_stats()
+
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
 
@@ -133,10 +136,6 @@ class MLP:
     def set_training_params(self, training_params):
         if training_params is None:
             training_params = {
-                "input_mean": 0.0,
-                "input_std": 0.0,
-                "output_mean": 0.0,
-                "output_std": 0.0,
                 "total_num_sigs": 40000,
                 "test_fraction": 0.3,
                 "loss_type": "root_mean_squared_error",
@@ -187,17 +186,40 @@ class MLP:
             raise ValueError("Model parameters not set")
         
         self.model_params["file_path"] = model_file_path
+
+
+    def set_recovery_stats_from_h5(self, norm_h5_path, dataset_name):
+        if (norm_h5_path is None):
+            self.logger.error("h5 file path can not be None")
+            raise ValueError("h5 file path can not be None")
+        elif (not norm_h5_path.is_file()):
+            self.logger.error(f"{norm_h5_path} is not a valid file")
+            raise ValueError(f"{norm_h5_path} is not a valid file")             
+        elif ("norm" not in norm_h5_path.name.lower()):
+            self.logger.error(f"{norm_h5_path} does not contain normed signals")
+            raise ValueError(f"{norm_h5_path} does not contain normed signals")
+        else:
+            mean, std, _ = self.load_normalization_stats(norm_h5_path, dataset_name)
+
+        if dataset_name == "X":
+            self.set_input_recovery_stats(mean, std)
+        elif dataset_name == "y":
+            self.set_output_recovery_stats(mean, std)
+        else:
+            self.logger.error(f"{dataset_name} not valid")
+            raise ValueError(f"{dataset_name} not valid")
+
         
-        
-    def set_dataset_stats(self,
-                          input_mean=0.0,
-                          input_std=0.0,
-                          output_mean=0.0,
-                          output_std=0.0):
-        self.training_params["input_mean"] = input_mean
-        self.training_params["input_std"] = input_std
-        self.training_params["output_mean"] = output_mean
-        self.training_params["output_std"] = output_std
+    def set_input_recovery_stats(self,
+                           mean=0.0, std=0.0):
+        self.input_mean = mean
+        self.input_std = std
+
+
+    def set_output_recovery_stats(self,
+                           mean=0.0, std=0.0):
+        self.output_mean = mean
+        self.output_std = std
 
     # -------------------------------
     # Core functional methods
@@ -348,7 +370,17 @@ class MLP:
         mlp_model.save(model_file_path, overwrite=True)
 
 
-    def model_prediction(self, init_guess, mode, mlp_model=None):
+    def model_prediction(self, init_guess, mode,
+                         norm_h5_input_path=None,
+                         norm_h5_output_path=None,
+                         mlp_model=None):
+        if (norm_h5_input_path.is_file() and 
+            "norm" in norm_h5_input_path.name.lower()):
+            self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+
+        input_mean = self.input_mean
+        input_std = self.input_std
+
         coef_predict = None
         if mlp_model is None:
             mlp_model = self.load_model()
@@ -356,10 +388,26 @@ class MLP:
             self.logger.error("Complex values not supported by MLPs")
             raise ValueError("Complex values not supported by MLPs")
         else:
+            # ---------------- Normalize input signal ----------------
+            init_guess = init_guess - input_mean
+            if (input_std != 0.0):
+                init_guess / input_std
+
             reshaped_guess = init_guess.reshape((1, init_guess.shape[0]))
             reshaped_coef_predict = mlp_model.predict(reshaped_guess)
             coef_predict = reshaped_coef_predict.reshape(-1)
 
+        if (norm_h5_output_path.is_file() and 
+            "norm" in norm_h5_output_path.name.lower()):
+            self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
+
+        output_mean = self.output_mean
+        output_std = self.output_std
+        # ---------------- Denormalize signal ----------------
+        if (input_std != 0.0):
+            coef_predict = coef_predict * output_std
+        coef_predict = coef_predict + output_mean
+        
         return coef_predict
         
     # -------------------------------
@@ -525,9 +573,10 @@ class MLP:
         self.logger.info("[DONE] Dataset creation and shuffle complete.")
         
         
-    def compute_hdf5_stats(h5_path,
-                        dataset_name="X",
-                        batch_size=4096):
+    def compute_hdf5_stats(self,
+                           h5_path,
+                           dataset_name="X",
+                           batch_size=4096):
         """
         Computes per-feature mean and std from an HDF5 dataset
         where signals are already encoded for MLP input.
@@ -576,6 +625,149 @@ class MLP:
             std = np.sqrt(var) + 1e-8
 
         return mean, std
+    
+
+    def normalize_hdf5_dataset(
+        self,
+        input_h5_path,
+        dataset_name,
+        batch_size=4096,
+        stats_batch_size=None,
+        output_dataset_name=None,
+        dtype=np.float32,
+    ):
+        """
+        Normalize an HDF5 dataset by computing mean/std internally.
+
+        Creates a new HDF5 file with a normalized version of the dataset.
+        The output file name is automatically generated as:
+
+            original_name_norm.h5
+
+        Also stores normalization stats directly in the output HDF5 file
+        as dataset attributes.
+
+        Parameters
+        ----------
+        input_h5_path : str or Path
+            Path to source HDF5 file.
+        dataset_name : str
+            Name of dataset to normalize.
+        batch_size : int
+            Chunk size for writing normalized dataset.
+        stats_batch_size : int or None
+            Batch size used when computing mean/std (defaults to batch_size).
+        output_dataset_name : str or None
+            Name for output dataset (defaults to dataset_name).
+        dtype : numpy dtype
+            Output dtype for normalized data.
+        """
+
+        input_h5_path = Path(input_h5_path)
+
+        if stats_batch_size is None:
+            stats_batch_size = batch_size
+
+        # ------------------------------------------------------------
+        # 1. Compute statistics from the dataset
+        # ------------------------------------------------------------
+        self.logger.info("Computing dataset mean and std...")
+
+        mean, std = self.compute_hdf5_stats(
+            input_h5_path,
+            dataset_name=dataset_name,
+            batch_size=stats_batch_size
+        )
+
+        mean = mean.astype(np.float64)
+        std = std.astype(np.float64)
+
+        # Prevent division by zero
+        epsilon = 1e-8
+        std = std + epsilon
+
+        self.logger.info("Mean/std computation complete.")
+
+        mean_reshape = mean.reshape(1, -1)
+        std_reshape = std.reshape(1, -1)
+
+        # ------------------------------------------------------------
+        # 2. Generate output file path
+        # ------------------------------------------------------------
+        output_h5_path = input_h5_path.with_name(
+            input_h5_path.stem + "_norm" + input_h5_path.suffix
+        )
+
+        if output_dataset_name is None:
+            output_dataset_name = dataset_name
+
+        # ------------------------------------------------------------
+        # 3. Normalize dataset + write to new file
+        # ------------------------------------------------------------
+        with h5py.File(input_h5_path, "r") as f_in, \
+            h5py.File(output_h5_path, "w") as f_out:
+
+            data = f_in[dataset_name]
+            N = data.shape[0]
+            original_shape = data.shape[1:]
+
+            self.logger.info(f"Normalizing {N} samples...")
+
+            out_dset = f_out.create_dataset(
+                output_dataset_name,
+                shape=data.shape,
+                dtype=dtype,
+                chunks=True,
+                compression="gzip"
+            )
+
+            # ---------------- Store normalization metadata ----------------
+            out_dset.attrs["mean"] = mean
+            out_dset.attrs["std"] = std
+            out_dset.attrs["epsilon"] = epsilon
+            out_dset.attrs["original_dataset"] = dataset_name
+            out_dset.attrs["normalized"] = True
+            out_dset.attrs["normalization_method"] = "z-score"
+            out_dset.attrs["num_features"] = mean.shape[0]
+
+            # Optional provenance metadata
+            f_out.attrs["source_file"] = input_h5_path.name
+            f_out.attrs["source_dataset"] = dataset_name
+
+            # ------------------------------------------------------------
+            # 4. Stream normalization
+            # ------------------------------------------------------------
+            for start in range(0, N, batch_size):
+                end = min(start + batch_size, N)
+
+                batch = data[start:end]
+                flat = batch.reshape(batch.shape[0], -1).astype(np.float64)
+
+                # Normalize
+                flat = (flat - mean_reshape) / std_reshape
+
+                # Restore original shape
+                flat = flat.reshape((flat.shape[0],) + original_shape)
+
+                out_dset[start:end] = flat.astype(dtype)
+
+                if start % (10 * batch_size) == 0:
+                    self.logger.info(f"Normalized {start}/{N} samples")
+
+        self.logger.info(f"Normalization complete! Saved to: {output_h5_path}")
+
+        return output_h5_path
+    
+
+    def load_normalization_stats(self, h5_path, dataset_name):
+        with h5py.File(h5_path, "r") as f:
+            dset = f[dataset_name]
+            mean = np.array(dset.attrs["mean"])
+            std = np.array(dset.attrs["std"])
+            epsilon = float(dset.attrs["epsilon"])
+
+        return mean, std, epsilon
+
 
     def make_hdf5_batch_loader(self, h5_input_path, h5_output_path):
         """
@@ -616,6 +808,17 @@ class MLP:
         """
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
+            if not model_file_path.is_file():
+                self.logger.error(f"{model_file_path} does not exist")
+                raise ValueError(f"{model_file_path} does not exist")
+
+        if not h5_input_path.is_file():
+            self.logger.error(f"{h5_input_path} does not exist")
+            raise ValueError(f"{h5_input_path} does not exist")
+
+        if not h5_output_path.is_file():
+            self.logger.error(f"{h5_output_path} does not exist")
+            raise ValueError(f"{h5_output_path} does not exist")
 
         mlp_model = self.load_model(model_file_path)
 
@@ -634,8 +837,18 @@ class MLP:
             restore_best_weights=early_stopping_params.get('restore_best_weights', True),
         )
 
+        norm_h5_input_path = h5_input_path
+        if ("norm" not in norm_h5_input_path.name.lower()):
+            norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path, dataset_name="X")
+            self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+
+        norm_h5_output_path = h5_output_path
+        if ("norm" not in norm_h5_output_path.name.lower()):
+            norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path, dataset_name="y")
+            self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
+
         # Build HDF5 loader
-        get_batch, total_num_sigs = self.make_hdf5_batch_loader(h5_input_path, h5_output_path)
+        get_batch, total_num_sigs = self.make_hdf5_batch_loader(norm_h5_input_path, norm_h5_output_path)
 
         # Generate train/test split BEFORE batching
         all_indices = np.arange(total_num_sigs)
@@ -695,19 +908,19 @@ class MLP:
     def get_model_params(self):
         return self.model_params
     
+
+    def get_recovery_stats(self):
+        recovery_stats = {
+            "input_mean": self.input_mean,
+            "input_std": self.input_std,
+            "output_mean": self.output_mean,
+            "output_std": self.output_std
+        }
+        return recovery_stats
+
     
     def get_config_name(self):
         return self.config_name
-    
-    
-    def get_dataset_stats(self):
-        dataset_stats = {
-            "input_mean": self.training_params["input_mean"],
-            "input_std": self.training_params["input_std"],
-            "output_mean": self.training_params["output_mean"],
-            "output_std": self.training_params["output_std"]
-        }
-        return dataset_stats
         
     
     def get_mlp_params(self):

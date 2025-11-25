@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_mlp_model = False
+    create_mlp_model = True
     prepare_large_dataset = False
     train_mlp_model = True
     
@@ -38,7 +38,8 @@ if __name__ == '__main__':
     outputset_params = dataset.get_outputset_params()
     saved_freq_modes = outputset_params.get('saved_freq_modes', [])
     # Currently: Get Magnitude Mode
-    selected_freq_modes = saved_freq_modes[1:2]
+    # selected_freq_modes = saved_freq_modes[1:2]
+    selected_freq_modes = saved_freq_modes
     freq_file_keys = dataset.get_freq_file_keys()
     flat_filenames = dataset.get_flat_filenames()
     ml_model_filename = flat_filenames.get('ml_model', "ml_model.keras")
@@ -106,6 +107,5 @@ if __name__ == '__main__':
             if train_mlp_model:
                 mlp.train_on_hdf5(premultiply_h5_file, output_h5_file)
                 mlp.reset_tensorflow_session()
-            pass
     
     atexit.register(logger.info, "Completed Test\n")
