@@ -357,7 +357,7 @@ class DataSet:
         return all(d.lower() in {t.lower() for t in self.VALID_DUT_TYPES} for d in dut_type)
     
         
-    def create_input_set(self, input_signal):
+    def create_input_set(self, input_signal, normalize=False):
         """
         Generate and save multiple randomized input signals.
 
@@ -494,13 +494,22 @@ class DataSet:
                     if not filename:
                         self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
                         continue
+                    
+                    arr, scales = fft_encode_signals(input_signals_time, mode,
+                                                apply_fftshift=True, normalize=normalize)
 
-                    save_path = input_dirs / f"{tones}_tone_{filename}"
-                    arr, _ = fft_encode_signals(input_signals_time, mode,
-                                                apply_fftshift=True)
-                    # --- Save ---
-                    np.save(save_path, arr)
-                    self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
+                    # --- Save ---                       
+                    if normalize:
+                        norm_save_path = input_dirs / f"{tones}_tone_norm_{filename}"
+                        scale_save_path = input_dirs / f"{tones}_tone_scale_{filename}"
+                        np.save(norm_save_path, arr)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency set saved to {norm_save_path}")
+                        np.save(scale_save_path, scales)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency scales set saved to {scale_save_path}")
+                    else:
+                        save_path = input_dirs / f"{tones}_tone_{filename}"
+                        np.save(save_path, arr)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
                     
             input_signals_time[:] = 0
 
@@ -580,14 +589,22 @@ class DataSet:
                     if not filename:
                         self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
                         continue
-
-                    save_path = input_dirs / f"{tones}_tone_recovery_{filename}"
-                    arr, _ = fft_encode_signals(input_signals_time, mode,
-                                                apply_fftshift=True)
-
-                    # --- Save ---
-                    np.save(save_path, arr)
-                    self.logger.info(f"{tones}-Tone {mode.upper()} freq recovery set saved to {save_path}")
+                    
+                    arr, scales = fft_encode_signals(input_signals_time, mode,
+                                                apply_fftshift=True, normalize=normalize)
+                    
+                    # --- Save ---                       
+                    if normalize:
+                        norm_save_path = input_dirs / f"{tones}_tone_recovery_norm_{filename}"
+                        scale_save_path = input_dirs / f"{tones}_tone_recovery_scale_{filename}"
+                        np.save(norm_save_path, arr)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency set saved to {norm_save_path}")
+                        np.save(scale_save_path, scales)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency scales set saved to {scale_save_path}")
+                    else:
+                        save_path = input_dirs / f"{tones}_tone_recovery_{filename}"
+                        np.save(save_path, arr)
+                        self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
                     
                 input_recovery_signals_freq[:] = 0
                 
@@ -730,11 +747,7 @@ class DataSet:
 
                         arr, scales = fft_encode_signals(wbf_signals, mode, normalize=normalize)
 
-                        # --- Save ---
-                        save_path = output_dirs / f"{key_part}wbf_{filename}"
-                        np.save(save_path, arr)
-                        self.logger.info(f"{key_part}{mode.upper()} wideband filter frequency set saved to {save_path}")
-                        
+                        # --- Save ---                       
                         if normalize:
                             norm_save_path = output_dirs / f"{key_part}norm_wbf_{filename}"
                             scale_save_path = output_dirs / f"{key_part}scale_wbf_{filename}"
@@ -742,6 +755,10 @@ class DataSet:
                             self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency set saved to {norm_save_path}")
                             np.save(scale_save_path, scales)
                             self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency scales set saved to {scale_save_path}")
+                        else:
+                            save_path = output_dirs / f"{key_part}wbf_{filename}"
+                            np.save(save_path, arr)
+                            self.logger.info(f"{key_part}{mode.upper()} wideband filter frequency set saved to {save_path}")
                 
         self.logger.info("Output Set Creation Complete\n")
 
@@ -954,9 +971,6 @@ class DataSet:
                                                          apply_fft=False, normalize=normalize)
 
                         # --- Save ---
-                        save_path = premultiply_dir / f"{key_part}{filename}"
-                        np.save(save_path, arr)
-                        self.logger.info(f"{key_part}{mode.upper()} premultiply set saved to  {save_path}")
                         if normalize:
                             norm_save_path = premultiply_dir / f"{key_part}norm_{filename}"
                             scale_save_path = premultiply_dir / f"{key_part}scale_{filename}"
@@ -964,7 +978,11 @@ class DataSet:
                             self.logger.info(f"{key_part}{mode.upper()} normalized premultiply set saved to  {norm_save_path}")
                             np.save(scale_save_path, scales)
                             self.logger.info(f"{key_part}{mode.upper()} scales premultiply set saved to {scale_save_path}")
-
+                        else:
+                            save_path = premultiply_dir / f"{key_part}{filename}"
+                            np.save(save_path, arr)
+                            self.logger.info(f"{key_part}{mode.upper()} premultiply set saved to  {save_path}")
+                            
                 premultiply_signals[:] = 0        
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
                  
