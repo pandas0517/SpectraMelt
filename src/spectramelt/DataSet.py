@@ -6,7 +6,6 @@ from .utils import (
     find_project_root,
     save_to_json,
     fft_encode_signals,
-    fft_decode_signals
 )
 import numpy as np
 import pickle
@@ -595,7 +594,7 @@ class DataSet:
         self.logger.info("All Input Sets Created and Saved\n")
 
 
-    def create_output_set(self, DUT, input_signal=None):
+    def create_output_set(self, DUT, input_signal=None, normalize=False):
         self.logger.info(f"Starting Output Set Creation...")
         
         # --- Setup and pre-saves ---
@@ -729,19 +728,20 @@ class DataSet:
                             self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
                             continue
 
-                        save_path = output_dirs / f"{key_part}wbf_{filename}"
-                        # norm_save_path = output_dirs / f"{key_part}norm_wbf_{filename}"
-                        # scale_save_path = output_dirs / f"{key_part}scale_wbf_{filename}"
-                        # arr, scales = fft_encode_signals(wbf_signals, mode)
-                        arr, _ = fft_encode_signals(wbf_signals, mode)
+                        arr, scales = fft_encode_signals(wbf_signals, mode, normalize=normalize)
 
                         # --- Save ---
+                        save_path = output_dirs / f"{key_part}wbf_{filename}"
                         np.save(save_path, arr)
                         self.logger.info(f"{key_part}{mode.upper()} wideband filter frequency set saved to {save_path}")
-                        # np.save(norm_save_path, arr)
-                        # self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency set saved to {norm_save_path}")
-                        # np.save(scale_save_path, scales)
-                        # self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency scales set saved to {scale_save_path}")
+                        
+                        if normalize:
+                            norm_save_path = output_dirs / f"{key_part}norm_wbf_{filename}"
+                            scale_save_path = output_dirs / f"{key_part}scale_wbf_{filename}"
+                            np.save(norm_save_path, arr)
+                            self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency set saved to {norm_save_path}")
+                            np.save(scale_save_path, scales)
+                            self.logger.info(f"{key_part}{mode.upper()} wideband filter normalized frequency scales set saved to {scale_save_path}")
                 
         self.logger.info("Output Set Creation Complete\n")
 
@@ -818,11 +818,70 @@ class DataSet:
         
         self.logger.info("NYFR folded wave parameter creation complete\n")
         
+        
+    def create_wbf_wave_params(self):
+        self.logger.info(f"Starting Wideband Filter wave parameter Creation...")
+
+        input_dir = self.directories.get('inputs', "Inputs")
+        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
+        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
+        output_dir = self.directories.get('outputs', "Outputs")
+        wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
+        wbf_freq_file = output_dir / wbf_freq_filename
+        
+        if not wbf_freq_file.exists():
+            self.logger.error(f"{wbf_freq_file} does not exist")
+            raise ValueError(f"{wbf_freq_file} does not exist")
+        wbf_freq = np.load(wbf_freq_file)
+
+        for file_path in input_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_wave_params_filename):
+                stem = file_path.name
+                key_part = stem.split(input_wave_params_filename)[0]
+                
+                wbf_dut_signal_file = output_dir / f"{key_part}wbf_{input_time_signal_filename}"
+                if not wbf_dut_signal_file.exists():
+                    self.logger.error(f"{wbf_dut_signal_file} does not exist")
+                    raise ValueError(f"{wbf_dut_signal_file} does not exist")
+                                    
+                wbf_dut_wave_file = output_dir / f"{key_part}{input_wave_params_filename}"
+
+                with open(file_path, "rb") as f:
+                    input_wave_params = pickle.load(f)
+                
+                wbf_time_signals = np.load(wbf_dut_signal_file)
+                wbf_freq_signals = fft(wbf_time_signals, axis=1)
+                wbf_dut_wave_params = []
+                
+                for idx, input_wave_param in enumerate(input_wave_params):                   
+                    wbf_freq_signal = wbf_freq_signals[idx]
+                    wbf_freq_signal_mag = fftshift(np.abs(wbf_freq_signal)) / len(wbf_freq_signal)
+                    wbf_freq_signal_phase = fftshift(np.angle(wbf_freq_signal))                    
+                    wbf_waves = []
+                    
+                    for input_wave in input_wave_param:
+                        wbf_wave = input_wave
+                        input_freq = input_wave.get('freq')
+                        freq_idx = np.abs(wbf_freq - input_freq).argmin()
+                        wbf_wave['amp'] = 2 * wbf_freq_signal_mag[freq_idx]
+                        wbf_wave['freq'] = wbf_freq[freq_idx]
+                        wbf_wave['phase'] = wbf_freq_signal_phase[freq_idx]
+                        wbf_waves.append(wbf_wave)
+                    
+                    wbf_dut_wave_params.append(wbf_waves)
+                
+                with open(wbf_dut_wave_file, 'wb') as file:
+                    pickle.dump(wbf_dut_wave_params, file)
+                self.logger.info(f"Wideband filtered DUT wave parameter file saved to {wbf_dut_wave_file}")
+        
+        self.logger.info("Wideband filtered DUT wave parameter creation complete\n")
+        
     
     def create_premultiply_set(self,
                                dictionary_path=None,
                                input_config_name=None,
-                               DUT_config_name=None):
+                               DUT_config_name=None,
+                               normalize=False):
         self.logger.info(f"Starting Premultiply Set Creation...")
         
         saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
@@ -889,20 +948,22 @@ class DataSet:
                         filename = self.flat_filenames.get(key)
                         if not filename:
                             self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                            continue
+                            continue                       
 
-                        save_path = premultiply_dir / f"{key_part}{filename}"
-                        # norm_save_path = premultiply_dir / f"{key_part}norm_{filename}"
-                        # scale_save_path = premultiply_dir / f"{key_part}scale_{filename}"
-                        arr, _ = fft_encode_signals(premultiply_signals, mode, apply_fft=False)
+                        arr, scales = fft_encode_signals(premultiply_signals, mode,
+                                                         apply_fft=False, normalize=normalize)
 
                         # --- Save ---
+                        save_path = premultiply_dir / f"{key_part}{filename}"
                         np.save(save_path, arr)
                         self.logger.info(f"{key_part}{mode.upper()} premultiply set saved to  {save_path}")
-                        # np.save(norm_save_path, arr)
-                        # self.logger.info(f"{key_part}{mode.upper()} normalized premultiply set saved to  {norm_save_path}")
-                        # np.save(scale_save_path, scales)
-                        # self.logger.info(f"{key_part}{mode.upper()} scales premultiply set saved to {scale_save_path}")
+                        if normalize:
+                            norm_save_path = premultiply_dir / f"{key_part}norm_{filename}"
+                            scale_save_path = premultiply_dir / f"{key_part}scale_{filename}"
+                            np.save(norm_save_path, arr)
+                            self.logger.info(f"{key_part}{mode.upper()} normalized premultiply set saved to  {norm_save_path}")
+                            np.save(scale_save_path, scales)
+                            self.logger.info(f"{key_part}{mode.upper()} scales premultiply set saved to {scale_save_path}")
 
                 premultiply_signals[:] = 0        
                 self.logger.info(f"Premultiply Set Creation Complete for Output Set {file_path}")
@@ -997,16 +1058,28 @@ class DataSet:
                     self.logger.error("No MLP object given")
                     raise ValueError("No MLP object given")
 
-
+                norm_premultiply_h5_file = premultiply_dir / f"{filename.stem}_norm.h5"
+                if not norm_premultiply_h5_file.exists():
+                    self.logger.error(f"{norm_premultiply_h5_file} file does not exist")
+                    raise ValueError(f"{norm_premultiply_h5_file} file does not exist")
+                mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                    
+                norm_output_h5_file = output_dir / f"wbf_{filename.stem}_norm.h5"
+                if not norm_output_h5_file.exists():
+                    self.logger.error(f"{norm_output_h5_file} file does not exist")
+                    raise ValueError(f"{norm_output_h5_file} file does not exist")
+                mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
+                
                 ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
+                if not ml_model_file.exists():
+                    self.logger.error(f"{ml_model_file} file does not exist")
+                    raise ValueError(f"{ml_model_file} file does not exist")
                 mlp.set_model_file_path(ml_model_file)
-                mlp_model = mlp.load_model()
 
                 for file_path in premultiply_dir.iterdir():
                     if (file_path.is_file() and 
                         file_path.name.endswith(filename) and 
-                        "recovery" in file_path.name.lower() and
-                        "norm" in file_path.name.lower()):
+                        "recovery" in file_path.name.lower()):
 
                         output_signals = np.load(file_path)
                         # Extract identifying portion (for example, everything up to "signals.npy")
@@ -1020,7 +1093,7 @@ class DataSet:
                         start = time.time() 
                         
                         for signal in output_signals:
-                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp, mlp_model=mlp_model))
+                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp))
 
                         stop = time.time()
                         self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
@@ -1032,36 +1105,6 @@ class DataSet:
             raise ValueError(f"Recovery method is {recovery_method} but no save frequency list given")
         
         self.logger.info("Recovery Set Creation Complete\n")
-
-
-    def decode_recovery_set(self):
-        recovery_dir = self.directories.get('recovery', "Recovery")
-
-        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
-        
-        for mode in saved_freq_modes:
-            key = self.FREQ_FILE_KEYS[mode]
-            filename = self.flat_filenames.get(key)
-            
-            for file_path in recovery_dir.iterdir():
-                if (file_path.is_file() and
-                    file_path.name.endswith(filename) and
-                    "norm" in file_path.name.lower()):
-
-                    # Extract identifying portion (for example, everything up to "signals.npy")
-                    stem = file_path.name
-                    key_part = stem.split(filename)[0]
-
-                    normed_freq_recovery_signals = np.load(file_path)
-
-                    # Build corresponding scale filename by replacing 'norm_' with 'scale_'
-                    scale_path = file_path.parent / file_path.name.replace("norm_", "scale_", 1)
-
-                    if not scale_path.is_file():
-                        self.logger.warning(f"WARNING: Scale file not found: {scale_path}")
-                        scales = None
-                    else:
-                        scales = np.load(scale_path)
 
         
     def create_recovery_dataframe(self):
@@ -1113,12 +1156,12 @@ class DataSet:
         input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
         inputset_config_file = input_dir.parent / inputset_config_filename
         
-        output_dirs = self.directories.get('outputs', "Outputs")
+        output_dir = self.directories.get('outputs', "Outputs")
         wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
-        wbf_freq_file = output_dirs / wbf_freq_filename
+        wbf_freq_file = output_dir / wbf_freq_filename
 
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
-        DUT_config_file = output_dirs.parent / DUT_config_filename
+        DUT_config_file = output_dir.parent / DUT_config_filename
         
         recovery_dir = self.directories.get('recovery', "Recovery")
         recovery_df_filename = self.dataframe_params.get('file_path', "recovery_df.pkl")
@@ -1171,11 +1214,11 @@ class DataSet:
                         if p.is_file() and p.name.endswith(filename)
                         and "recovery" in p.name.lower()}
             
-            input_wave_dict = {p.name: p for p in input_dir.iterdir()
+            wbf_wave_dict = {p.name: p for p in output_dir.iterdir()
                         if p.is_file() and p.name.endswith(input_wave_params_filename)
                         and "recovery" in p.name.lower()}
             
-            wbf_freq_sig_dict = {p.name: p for p in input_dir.iterdir()
+            wbf_freq_sig_dict = {p.name: p for p in output_dir.iterdir()
                         if p.is_file() and p.name.endswith(filename)
                         and "recovery" in p.name.lower()}
             
