@@ -6,6 +6,7 @@ from .utils import (
     find_project_root,
     save_to_json,
     fft_encode_signals,
+    fft_decode_signals
 )
 import numpy as np
 import pickle
@@ -1076,13 +1077,13 @@ class DataSet:
                     self.logger.error("No MLP object given")
                     raise ValueError("No MLP object given")
 
-                norm_premultiply_h5_file = premultiply_dir / f"{filename.stem}_norm.h5"
+                norm_premultiply_h5_file = premultiply_dir / f"{Path(filename).stem}_norm.h5"
                 if not norm_premultiply_h5_file.exists():
                     self.logger.error(f"{norm_premultiply_h5_file} file does not exist")
                     raise ValueError(f"{norm_premultiply_h5_file} file does not exist")
                 mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
                     
-                norm_output_h5_file = output_dir / f"wbf_{filename.stem}_norm.h5"
+                norm_output_h5_file = output_dir / f"wbf_{Path(filename).stem}_norm.h5"
                 if not norm_output_h5_file.exists():
                     self.logger.error(f"{norm_output_h5_file} file does not exist")
                     raise ValueError(f"{norm_output_h5_file} file does not exist")
@@ -1093,6 +1094,7 @@ class DataSet:
                     self.logger.error(f"{ml_model_file} file does not exist")
                     raise ValueError(f"{ml_model_file} file does not exist")
                 mlp.set_model_file_path(ml_model_file)
+                mlp_model = mlp.load_model()
 
                 for file_path in premultiply_dir.iterdir():
                     if (file_path.is_file() and 
@@ -1111,7 +1113,7 @@ class DataSet:
                         start = time.time() 
                         
                         for signal in output_signals:
-                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp))
+                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp, mlp_model=mlp_model))
 
                         stop = time.time()
                         self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
@@ -1124,8 +1126,34 @@ class DataSet:
         
         self.logger.info("Recovery Set Creation Complete\n")
 
+
+    def decode_complex_sets(self, dir):
+        if dir is None:
+            self.logger.error("Directory can not be None")
+            raise ValueError("Directory can not be None")
+        if not dir.is_dir():
+            self.logger.error(f"{dir} does not exist")
+            raise ValueError(f"{dir} does not exist")
+
+        self.logger.info(f"Decoding complex signals from {dir} into separate magnitude and phase arrays")
+        for file in dir.iterdir():
+            if ("sincos" in file.name.lower() and
+                not file.suffix.lower() == ".h5"):
+                complex_npz_filename = file.with_suffix(".npz")
+                mag_ang_sincos = np.load(file)
+                complex_recovery = fft_decode_signals(mag_ang_sincos)
+                complex_mag_recovery = np.abs(complex_recovery)
+                complex_phase_recovery = np.angle(complex_recovery)
+                np.savez(complex_npz_filename,
+                         complex_mag=complex_mag_recovery,
+                         complex_phase=complex_phase_recovery,
+                         source=str(file),
+                         encoding="mag_ang_sincos")
+                self.logger.info(f"Converted {file} to {complex_npz_filename}")
+
         
     def create_recovery_dataframe(self):
+        self.logger.info("Creating Dataframe for recovery signals")
         # --- Config file ---
         input_dirs = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
@@ -1146,7 +1174,8 @@ class DataSet:
                         
         meta_column_names = self.dataframe_params.get('meta_column_names')
         signal_column_names = self.dataframe_params.get('signal_column_names')
-        num_recovery_sigs = inputset_config.get('num_recovery_sigs')
+        input_config = inputset_config.get('inputset')
+        num_recovery_sigs = input_config.get('num_recovery_sigs')
         
         # Build the master column dictionary
         full_column_dict = dict(meta_column_names)   # start with static columns
@@ -1161,11 +1190,13 @@ class DataSet:
         })
 
         recovery_df.to_pickle(recovery_df_file_path)
+        self.logger.info(f"Saved Dataframe to {recovery_df}")
         
         save_as_csv = self.dataframe_params.get('save_as_csv', True)
         if save_as_csv:
-            recovery_df_file_path_csv = Path(recovery_df_file_path).with_suffix(".csv")
+            recovery_df_file_path_csv = recovery_df_file_path.with_suffix(".csv")
             recovery_df.to_csv(recovery_df_file_path_csv, index=False)
+            self.logger.info(f"Saved CSV Dataframe to {recovery_df_file_path_csv}")
             
             
     def set_recovery_dataframe(self):

@@ -141,8 +141,8 @@ class Recovery:
         return all(n.lower() in self.VALID_RECOVERY_METHODS for n in name)
 
 
-    def recover_signal(self, signal, dictionary=None,
-                       num_waves=1, MLP=None, model_file_path=None,
+    def recover_signal(self, signal, dictionary=None, num_waves=1,
+                       MLP=None, mlp_model=None, model_file_path=None,
                        recovery_type=None, recovery_method=None):
         sigma = self.recovery_params.get('sigma', 0.001)
         dict_mag_adj = self.recovery_params.get('dict_mag_adj', 1.0)
@@ -199,7 +199,7 @@ class Recovery:
                 else:
                     init_guess = signal
                     
-                recovered_coef = MLP.model_prediction(init_guess, recovery_type)
+                recovered_coef = MLP.model_prediction(init_guess, recovery_type, mlp_model=mlp_model)
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 

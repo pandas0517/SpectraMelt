@@ -17,13 +17,13 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = False
-    create_wbf_wave_params = False
+    create_output_set = True
+    create_wbf_wave_params = True
 
-    create_nyfr_wave_params = False
+    create_nyfr_wave_params = True
     display_nyfr_signals = False
     
-    create_premultiply_set = False
+    create_premultiply_set = True
     display_premultiply_signals = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))

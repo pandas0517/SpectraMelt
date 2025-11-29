@@ -17,8 +17,9 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_mlp_model = True
+    create_mlp_model = False
     prepare_large_dataset = False
+    use_normed_h5_file = True
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -54,8 +55,6 @@ if __name__ == '__main__':
             key = freq_file_keys[mode]
             
             filename = flat_filenames.get(key)
-            premultiply_file = premultiply_dir / filename
-            premultiply_h5_file = Path(premultiply_file).with_suffix(".h5")
             
             get_test_signal = True
             premultiply_file_list = []
@@ -63,17 +62,13 @@ if __name__ == '__main__':
             for file_path in premultiply_dir.iterdir():
                 if (file_path.is_file() and
                     file_path.name.endswith(filename) and 
-                    "recovery" not in file_path.name.lower() and
-                    "norm" in file_path.name.lower()):
+                    "recovery" not in file_path.name.lower()):
                     premultiply_file_list.append(file_path)
                     if get_test_signal:
                         premultiply_signals = np.load(file_path)
                         premultiply_test_sig = premultiply_signals[0]
                         del premultiply_signals
                         get_test_signal = False
-                        
-            output_file = output_dir / f"wbf_{filename}"
-            output_h5_file = Path(output_file).with_suffix(".h5")
             
             get_test_signal = True
             output_file_list = []
@@ -82,14 +77,20 @@ if __name__ == '__main__':
                 if (file_path.is_file() and
                     file_path.name.endswith(filename) and
                     "wbf" in file_path.name.lower() and 
-                    "recovery" not in file_path.name.lower() and
-                    "norm" in file_path.name.lower()):
+                    "recovery" not in file_path.name.lower()):
                     output_file_list.append(file_path)
                     if get_test_signal:
                         output_signals = np.load(file_path)
                         output_test_sig = output_signals[0]
                         del output_signals
                         get_test_signal = False
+
+            if use_normed_h5_file:
+                premultiply_h5_file = premultiply_dir / f"{Path(filename).stem}_norm.h5"
+                output_h5_file = output_dir / f"wbf_{Path(filename).stem}_norm.h5"
+            else:
+                premultiply_h5_file= premultiply_dir / f"{Path(filename).stem}.h5"
+                output_h5_file = output_dir / f"wbf_{Path(filename).stem}.h5"               
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
             mlp.set_model_file_path(ml_model_file)

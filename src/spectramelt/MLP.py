@@ -23,9 +23,17 @@ from keras.activations import get as get_activation
 from keras.utils import get_custom_objects
 from sklearn.model_selection import train_test_split
 
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+
+
 @keras.saving.register_keras_serializable(package="CustomLosses")
 def root_mean_squared_error(y_true, y_pred):
     return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
+
 
 class MLP:
     """
@@ -279,6 +287,13 @@ class MLP:
         backend.clear_session()     # Proper Keras reset
         tf.keras.backend.clear_session()
         gc.collect()          # Force Python GC
+        # Force GPU memory release
+        try:
+            from numba import cuda
+            cuda.select_device(0)
+            cuda.close()
+        except:
+            pass
 
 
     def create_model(self, input_signal_size, output_signal_size, model_file_path=None):
@@ -364,7 +379,8 @@ class MLP:
                          norm_h5_input_path=None,
                          norm_h5_output_path=None,
                          mlp_model=None):
-        if (norm_h5_input_path.is_file() and 
+        if (norm_h5_input_path is not None and
+            norm_h5_input_path.is_file() and 
             "norm" in norm_h5_input_path.name.lower()):
             self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
@@ -385,7 +401,8 @@ class MLP:
             reshaped_coef_predict = mlp_model.predict(reshaped_guess)
             coef_predict = reshaped_coef_predict.reshape(-1)
 
-        if (norm_h5_output_path.is_file() and 
+        if (norm_h5_output_path is not None and
+            norm_h5_output_path.is_file() and 
             "norm" in norm_h5_output_path.name.lower()):
             self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
