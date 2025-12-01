@@ -89,7 +89,7 @@ def fft_encode_signals(
 
     # ===== MAGNITUDE =====
     elif mode == "mag":
-        mag = np.abs(freq_signals) / freq_signals.shape[1]
+        mag = np.abs(freq_signals)
 
         if normalize:
             scales = np.max(mag, axis=1)
@@ -107,7 +107,7 @@ def fft_encode_signals(
 
     # ===== MAG + ANG =====
     elif mode == "mag_ang":
-        mag = np.abs(freq_signals) / freq_signals.shape[1]
+        mag = np.abs(freq_signals)
         phase = np.angle(freq_signals)
 
         if normalize:

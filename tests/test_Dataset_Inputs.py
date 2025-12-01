@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     create_set = True
     test_max_min = True
-    display_signals = False
+    display_signals = True
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))

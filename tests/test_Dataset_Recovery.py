@@ -13,6 +13,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from scipy.fft import fft, ifft, fftshift, ifftshift
     import logging
+    import pickle
     from spectramelt.Recovery import VALID_SAVED_FREQ_MODES
 
     load_dotenv()
@@ -22,7 +23,10 @@ if __name__ == '__main__':
 
     decode_recovery_set = False
     decode_wbf_set = False
+
     create_recovery_dataframe = False
+    set_recovery_dataframe = False
+
     display_recovered_signals = True
     DUT_type = "NYFR"
     
@@ -37,6 +41,9 @@ if __name__ == '__main__':
     directories = dataset.get_directories()
     output_dir = directories.get('outputs', "Outputs")
     recovery_dir = directories.get('recovery', "Recovery")
+    saved_output_freq_modes = dataset.get_outputset_params().get("saved_freq_modes")
+    # selected_freq_modes = saved_output_freq_modes
+    selected_freq_modes = saved_output_freq_modes[1:2]
 
     if create_set:
         if use_mlp:
@@ -54,104 +61,213 @@ if __name__ == '__main__':
 
     if create_recovery_dataframe:
         dataset.create_recovery_dataframe()
-                        
+
+    if set_recovery_dataframe:
+        dataset.set_recovery_dataframe(selected_freq_modes)
+
     if display_recovered_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
 
         flat_filenames = dataset.get_flat_filenames()
-        saved_output_freq_modes = dataset.get_outputset_params().get("saved_freq_modes")
-        # selected_freq_modes = saved_output_freq_modes
-        selected_freq_modes = saved_output_freq_modes[1:2]
-        # input_time_signal_filename = flat_filenames.get('input.time_signal', "time_signals.npy")
-        # input_freq_signal_filename = flat_filenames.get('input.freq.mag_sig', "freq_mag_signals.npy")
-        # recovered_signal_filename = flat_filenames.get("recovered", "recovered.npy")
         FREQ_FILE_KEYS = DataSet.FREQ_FILE_KEYS
 
-        wbf_time_filename = flat_filenames.get('wbf_time', "wbf_time.npy")
-        wbf_freq_filename = flat_filenames.get('wbf_freq', "wbf_freq.npy")    
-        wbf_time_file = output_dir / wbf_time_filename
-        wbf_freq_file = output_dir / wbf_freq_filename
-        wbf_time = np.load(wbf_time_file)
-        wbf_freq = np.load(wbf_freq_file)
-        
+        # Load shared WBF metadata
+        wbf_time = np.load(output_dir / flat_filenames.get('wbf_time', "wbf_time.npy"))
+        wbf_freq = np.load(output_dir / flat_filenames.get('wbf_freq', "wbf_freq.npy"))
+
+        input_wave_params_filename = flat_filenames.get('input.wave_params', "wave_params.pkl")
+
         signals_per_file = 3
-        for mode in selected_freq_modes: 
+
+        def shift_norm(arr):
+            """FFT-shift and normalize."""
+            return fftshift(arr) / len(wbf_freq)
+
+        def plot_two_panel(title_left, data_left, title_right, data_right):
+            fig, axes = plt.subplots(1, 2, figsize=(8,4))
+            axes[0].plot(wbf_freq, data_left)
+            axes[0].set_title(title_left)
+            axes[1].plot(wbf_freq, data_right)
+            axes[1].set_title(title_right)
+            fig.suptitle("Actual vs Recovered Signals")
+            fig.tight_layout()
+            plt.show()
+
+        def plot_four_panel(titles, datasets, wave_param=None):
+            fig, axes = plt.subplots(2, 2, figsize=(8,4))
+            axes_flat = axes.flat  # flatten for easy indexing
+
+            for i, (ax, title, data) in enumerate(zip(axes_flat, titles, datasets)):
+                ax.plot(wbf_freq, data)
+                ax.set_title(title)
+
+                if wave_param and i == 0:  # scatter only on first subplot
+                    amps = np.array([w["amp"] / 2 for w in wave_param])
+                    freqs = np.array([w["freq"] for w in wave_param])
+                    logger.info(freqs)
+                    neg_freqs = -freqs
+
+                    pos_indices = [np.argmin(np.abs(wbf_freq - f)) for f in freqs]
+                    neg_indices = [np.argmin(np.abs(wbf_freq - f)) for f in neg_freqs]
+
+                    ax.scatter(wbf_freq[pos_indices], amps, marker='x', color='red', s=100)
+                    ax.scatter(wbf_freq[neg_indices], amps, marker='x', color='red', s=100)
+
+            fig.suptitle("Actual vs Recovered Signals")
+            fig.tight_layout()
+            plt.show()
+
+        for mode in selected_freq_modes:
+            if mode not in VALID_SAVED_FREQ_MODES:
+                logger.warning(f"Skipping invalid freq mode: {mode}")
+                continue
+
+            key = FREQ_FILE_KEYS[mode]
+            filename = flat_filenames.get(key)
+            if not filename:
+                logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
+                continue
+
+            # npz modes must use .npz naming
+            if mode in ("mag_ang_sincos", "mag_ang" ,"real_imag"):
+                filename = str(Path(filename).with_suffix(".npz"))
+
             for file_path in recovery_dir.iterdir():
 
-                if mode not in VALID_SAVED_FREQ_MODES:
-                    logger.warning(f"Skipping invalid freq mode: {mode}")
+                # Find matching recovery files
+                if not (file_path.is_file() and file_path.name.endswith(filename)):
                     continue
 
-                key = FREQ_FILE_KEYS[mode]
-                filename = flat_filenames.get(key)
-                if not filename:
-                    logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                    continue
+                stem = file_path.name
+                key_part = stem.split(filename)[0]
+                wbf_file = output_dir / f"{key_part}wbf_{filename}"
+                wbf_wave_file = output_dir / f"{key_part}{input_wave_params_filename}"
 
-                if mode == "mag_ang_sincos":
-                    filename = str(Path(filename).with_suffix(".npz"))
+                if not wbf_file.exists():
+                    msg = f"{file_path} does not have a matching wbf file {wbf_file}"
+                    logger.error(msg)
+                    raise ValueError(msg)
+                
+                if not wbf_wave_file.exists():
+                    msg = f"{wbf_wave_file} does not exist"
+                    logger.error(msg)
+                    raise ValueError(msg)
+                
+                with open(wbf_wave_file, "rb") as f:
+                    wave_params = pickle.load(f)
 
-                if file_path.is_file() and file_path.name.endswith(filename):
-                    # 1. Extract identifying portion (for example, everything up to "signals.npy")
-                    stem = file_path.name
-                    key_part = stem.split(filename)[0]
-                    wbf_file = output_dir / f"{key_part}wbf_{filename}"
+                # Load recovery + WBF signals
+                recovery_signals = np.load(file_path)
+                wbf_signals = np.load(wbf_file)
 
-                    if not wbf_file.exists():
-                        logger.error(f"{file_path} does not have a matching wbf file {wbf_file}")
-                        raise ValueError(f"{file_path} does not have a matching wbf file {wbf_file}")
-                    
-                    # input_time_signals = None
-                    # input_freq_signals = None
-                    # 2. Search for other files containing that portion
-                    # for input_file in input_dir.iterdir():
-                    #     if key_part in input_file.name and input_file.name.endswith(input_time_signal_filename):
-                    #         input_time_signals = np.load(input_file)
-                    #     if key_part in input_file.name and input_file.name.endswith(input_freq_signal_filename):
-                    #         input_freq_signals = np.load(input_file)
-                    # if input_time_signals is None:
-                    #     logger.error("No matching input set file")
-                    #     raise ValueError("No matching input set file") 
-                        
-                    recovery_signals = np.load(file_path)
-                    recovery_mag_signals = recovery_signals["complex_mag"]
-                    recovery_phase_signals = recovery_signals["complex_phase"]
-                    
-                    wbf_signals = np.load(wbf_file)
-                    wbf_mag_signals = wbf_signals["complex_mag"]
-                    wbf_phase_signals = wbf_signals["complex_phase"]
+                # -------------------------------
+                # MODE: MAG + PHASE
+                # -------------------------------
+                if mode in ("mag_ang", "mag_ang_sincos"):
+                    rec_mag = recovery_signals["complex_mag"]
+                    rec_phase = recovery_signals["complex_phase"]
+                    wbf_mag = wbf_signals["complex_mag"]
+                    wbf_phase = wbf_signals["complex_phase"]
 
-                    for idx, recovery_mag_signal in enumerate(recovery_mag_signals[:signals_per_file]):
-                        # if input_freq_signals is None:
-                        #     freq_signal = fftshift(np.abs(fft(time_signal))) / len(real_freq)
-                        # else:
-                        #     freq_signal = input_freq_signals[idx]
-                        recovery_mag_signal = fftshift(recovery_mag_signal) / len(wbf_freq)
-                        recovery_phase_signal = fftshift(recovery_phase_signals[idx])
-                        wbf_mag_signal = fftshift(wbf_mag_signals[idx]) / len(wbf_freq)
-                        wbf_phase_signal = fftshift(wbf_phase_signals[idx])
-                            
-                        # recovered_freq = recovery_signals[idx] / len(wbf_freq)
-                        # recovered_time = ifft(ifftshift(recovered_freq))
-                        
-                        fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-                        axes[0,0].plot(wbf_freq, wbf_mag_signal)
-                        axes[0,0].set_title("WBF Frequency (Magnitude)")
-                        # axes[0,0].set_xlim(-0.0002, 0.0002)
-                        axes[0,1].plot(wbf_freq, wbf_phase_signal)
-                        axes[0,1].set_title("WBF Frequency (Phase)")
-                        axes[0,1].set_ylim(0, 0.25)
-                        # axes[1].set_xlim(-400000, 400000)
-                        axes[1,0].plot(wbf_freq, recovery_mag_signal)
-                        axes[1,0].set_title("Recovered Frequency (Magnitude)")
-                        # axes[1,0].set_xlim(-0.0002, 0.0002)
-                        axes[1,1].plot(wbf_freq, recovery_phase_signal)
-                        axes[1,1].set_title("Recovered Frequency (Phase)")
-                        axes[1,1].set_ylim(0, 0.25)
-                        # axes[1].set_xlim(-400000, 400000)
-                        fig.suptitle(f"Actual vs Recovered Signals")
-                        fig.tight_layout()
-                        plt.show()
-            
+                    for idx in range(signals_per_file):
+                        wave_param = wave_params[idx]
+                        plot_four_panel(
+                            ["WBF Magnitude", "Recovered Magnitude",
+                            "WBF Phase",     "Recovered Phase"],
+                            [
+                                shift_norm(wbf_mag[idx]),
+                                shift_norm(rec_mag[idx]) / 10,   # your original scaling
+                                fftshift(wbf_phase[idx]),
+                                fftshift(rec_phase[idx]),
+                            ],
+                            wave_param=wave_param
+                        )
+
+                # -------------------------------
+                # MODE: MAG ONLY
+                # -------------------------------
+                elif mode == "mag":
+                    for idx in range(signals_per_file):
+                        plot_two_panel(
+                            "WBF Magnitude",
+                            shift_norm(wbf_signals[idx]),
+                            "Recovered Magnitude",
+                            shift_norm(recovery_signals[idx]),
+                        )
+
+                # -------------------------------
+                # MODE: ANG ONLY
+                # -------------------------------
+                elif mode == "ang":
+                    for idx in range(signals_per_file):
+                        plot_two_panel(
+                            "WBF Phase",
+                            fftshift(wbf_signals[idx]),
+                            "Recovered Phase",
+                            fftshift(recovery_signals[idx]),
+                        )
+
+                # -------------------------------
+                # MODE: REAL + IMAG
+                # -------------------------------
+                elif mode == "real_imag":
+                    rec_real, rec_imag = recovery_signals["real"], recovery_signals["imag"]
+                    wbf_real, wbf_imag = wbf_signals["real"], wbf_signals["imag"]
+
+                    for idx in range(signals_per_file):
+                        plot_four_panel(
+                            ["WBF Real", "Recovered Real",
+                            "WBF Imag", "Recovered Imag"],
+                            [
+                                shift_norm(wbf_real[idx]),
+                                shift_norm(rec_real[idx]),
+                                shift_norm(wbf_imag[idx]),
+                                shift_norm(rec_imag[idx]),
+                            ]
+                        )
+
+                # -------------------------------
+                # MODE: REAL
+                # -------------------------------
+                elif mode == "real":
+                    for idx in range(signals_per_file):
+                        plot_two_panel(
+                            "WBF Real",
+                            shift_norm(wbf_signals[idx]),
+                            "Recovered Real",
+                            shift_norm(recovery_signals[idx]),
+                        )
+
+                # -------------------------------
+                # MODE: IMAG
+                # -------------------------------
+                elif mode == "imag":
+                    for idx in range(signals_per_file):
+                        plot_two_panel(
+                            "WBF Imag",
+                            shift_norm(wbf_signals[idx]),
+                            "Recovered Imag",
+                            shift_norm(recovery_signals[idx]),
+                        )
+
+                # -------------------------------
+                # MODE: COMPLEX
+                # -------------------------------
+                elif mode == "complex":
+                    rec_c = recovery_signals["complex"]
+                    wbf_c = wbf_signals["complex"]
+
+                    for idx in range(signals_per_file):
+                        plot_four_panel(
+                            ["WBF Magnitude", "Recovered Magnitude",
+                            "WBF Phase",     "Recovered Phase"],
+                            [
+                                shift_norm(np.abs(wbf_c[idx])),
+                                shift_norm(np.abs(rec_c[idx])),
+                                fftshift(np.angle(wbf_c[idx])),
+                                fftshift(np.angle(rec_c[idx])),
+                            ]
+                        )
+                     
     atexit.register(logger.info, "Completed Test\n")

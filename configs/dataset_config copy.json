@@ -33,11 +33,11 @@
             "ml_models"
         ],
         "base": {
-            "inputs": "F:/",
-            "outputs": "F:/",
-            "premultiply": "F:/",
-            "recovery": "F:/",
-            "ml_models": "F:/"
+            "inputs": "/mnt/fdata",
+            "outputs": "/mnt/fdata",
+            "premultiply": "/mnt/fdata",
+            "recovery": "/mnt/fdata",
+            "ml_models": "/mnt/fdata"
         },
         "tail": {
             "inputs": "Inputs",
@@ -81,12 +81,10 @@
         "save_as_csv": true,
         "recovery_mag_thresh": 0.5,
         "meta_column_names": {
-            "input_time_file_name": "str",
-            "wideband_filtered_file_name": "str",
+            "input_file_name": "str",
             "recovery_file_name": "str",
             "input_config_name": "str",
             "DUT_config_name": "str",
-            "recovery_config_name": "str",
             "Frequency_mode": "str"
         },
         "signal_column_names": {

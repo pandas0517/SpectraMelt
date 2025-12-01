@@ -267,6 +267,7 @@ class NYFR:
 
         return R, S, PSI
     
+    
     def create_output_signal(self, input_signal, real_time):
         wbf = LowPassFilter(input_signal, real_time, lpf_params=self.wbf_params)
         if self.wbf_params is None:
