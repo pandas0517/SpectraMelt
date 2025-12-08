@@ -29,7 +29,7 @@
     },
     "wave_params":{
         "num_waves": 5,
-        "freq_range": [10000, 200000],
+        "freq_range": [1, 200000],
         "amp_range": [0.7, 1.0],
         "phase_range": [0.25,0.75],
         "waves": [

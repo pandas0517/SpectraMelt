@@ -12,134 +12,106 @@ def fft_encode_signals(
     mode="mag_ang_sincos",
     apply_fftshift=False,
     apply_fft=True,
-    normalize=False
+    normalize=True
 ):
     """
-    signals: complex np.array, shape (N, L)
-    mode:
-        "complex"
-        "real"              <-- default
-        "imag"
-        "real_imag"
-        "mag"
-        "ang"
-        "mag_ang"
-        "mag_ang_sincos"
-    apply_fftshift: if True, shifts before processing
-    normalize: if True, normalize by per-signal scale
-    returns:
-        arr: network input
-        scales: (N,) scale factors or None
-    """
-    if apply_fft:
-        freq_signals = fft(signals, axis=1)
-    else:
-        freq_signals = signals
+    Encode signals for network input with mode-specific constraints.
+    
+    Parameters
+    ----------
+    signals : np.ndarray
+        Complex array, shape (L,) or (N, L)
+    mode : str
+        "complex", "real", "imag", "real_imag",
+        "mag", "ang", "mag_ang", "mag_ang_sincos"
+    apply_fftshift : bool
+        If True, apply fftshift before processing (restricted by mode)
+    apply_fft : bool
+        If True, apply FFT along last axis
+    normalize : bool
+        If True, divide each signal by its length (restricted by mode)
 
+    Returns
+    -------
+    arr : np.ndarray
+        Encoded array
+    """
+    # Enforce mode-specific restrictions
+    if apply_fftshift:
+        if mode in ["real_imag",
+                    "mag_ang",
+                    "mag_ang_sincos"]:
+            apply_fftshift = False
+    if normalize:
+        if mode in ["real_imag",
+                    "real",
+                    "imag",
+                    "mag_ang",
+                    "mag_ang_sincos",
+                    "ang"]:
+            normalize = False
+
+    # Ensure signals are at least 2D (N, L)
+    signals = np.atleast_2d(signals)
+    N, L = signals.shape
+
+    # FFT
+    freq_signals = fft(signals, axis=1) if apply_fft else signals
+
+    # FFT shift
     if apply_fftshift:
         freq_signals = fftshift(freq_signals, axes=1)
 
+    # Optional normalization by signal length
+    if normalize:
+        freq_signals = freq_signals / L
+
     # ===== COMPLEX MODE =====
     if mode == "complex":
-        if normalize:
-            scales = np.max(np.abs(freq_signals), axis=1)
-            scales[scales == 0] = 1.0
-            freq_signals = freq_signals / scales[:, None]
-        else:
-            scales = None
-
-        return freq_signals.astype(np.complex64), scales
+        arr = freq_signals.astype(np.complex64)
 
     # ===== REAL MODE =====
     elif mode == "real":
-        data = freq_signals.real
-        if normalize:
-            scales = np.max(np.abs(data), axis=1)
-            scales[scales == 0] = 1.0
-            data = data / scales[:, None]
-        else:
-            scales = None
-
-        return data.astype(np.float32), scales
+        arr = freq_signals.real.astype(np.float32)
 
     # ===== IMAG MODE =====
     elif mode == "imag":
-        data = freq_signals.imag
-        if normalize:
-            scales = np.max(np.abs(data), axis=1)
-            scales[scales == 0] = 1.0
-            data = data / scales[:, None]
-        else:
-            scales = None
-
-        return data.astype(np.float32), scales
+        arr = freq_signals.imag.astype(np.float32)
 
     # ===== REAL + IMAG =====
     elif mode == "real_imag":
-        if normalize:
-            scales = np.max(np.abs(freq_signals), axis=1)
-            scales[scales == 0] = 1.0
-            sig_norm = freq_signals / scales[:, None]
-        else:
-            scales = None
-            sig_norm = freq_signals
-
-        arr = np.concatenate([sig_norm.real, sig_norm.imag], axis=1)
-        return arr.astype(np.float32), scales
+        arr = np.concatenate([freq_signals.real, freq_signals.imag], axis=1).astype(np.float32)
 
     # ===== MAGNITUDE =====
     elif mode == "mag":
-        mag = np.abs(freq_signals)
-
-        if normalize:
-            scales = np.max(mag, axis=1)
-            scales[scales == 0] = 1.0
-            mag = mag / scales[:, None]
-        else:
-            scales = None
-
-        return mag.astype(np.float32), scales
+        arr = np.abs(freq_signals).astype(np.float32)
 
     # ===== PHASE =====
     elif mode == "ang":
-        phase = np.angle(freq_signals)
-        return phase.astype(np.float32), None
+        arr = np.angle(freq_signals).astype(np.float32)
 
-    # ===== MAG + ANG =====
+    # ===== MAG + PHASE =====
     elif mode == "mag_ang":
         mag = np.abs(freq_signals)
         phase = np.angle(freq_signals)
-
-        if normalize:
-            scales = np.max(mag, axis=1)
-            scales[scales == 0] = 1.0
-            mag = mag / scales[:, None]
-        else:
-            scales = None
-
-        arr = np.concatenate([mag, phase], axis=1)
-        return arr.astype(np.float32), scales
+        arr = np.concatenate([mag, phase], axis=1).astype(np.float32)
 
     # ===== MAG + COS(PHASE) + SIN(PHASE) =====
     elif mode == "mag_ang_sincos":
         mag = np.abs(freq_signals)
         phase = np.angle(freq_signals)
-
-        if normalize:
-            scales = np.max(mag, axis=1)
-            scales[scales == 0] = 1.0
-            mag = mag / scales[:, None]
-        else:
-            scales = None
-
         cos_phase = np.cos(phase)
         sin_phase = np.sin(phase)
-
-        arr = np.concatenate([mag, cos_phase, sin_phase], axis=1)
-        return arr.astype(np.float32), scales
+        arr = np.concatenate([mag, cos_phase, sin_phase], axis=1).astype(np.float32)
 
     else:
         raise ValueError(f"Unsupported mode: {mode}")
+
+    # If input was 1D, return a 1D array
+    if signals.shape[0] == 1:
+        arr = arr[0]
+
+    return arr
 
 
 def fft_decode_signals(

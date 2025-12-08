@@ -1,6 +1,22 @@
 {
     "config_name": "Dataset_Config_1",
     "seed": null,
+    "freq_modes": {
+        "input": ["mag",
+                  "ang",
+                  "real",
+                  "imag"],
+        "wideband": ["mag",
+                     "ang",
+                     "real",
+                     "imag",
+                     "real_imag",
+                     "mag_ang_sincos"],
+        "mlp": ["mag",
+                "real_imag"],
+        "recovery": ["mag",
+                     "real_imag"] 
+    },
     "inputset_params": {
         "num_sigs": 4000,
         "num_recovery_sigs": 100,
@@ -9,13 +25,17 @@
             2, 3, 4, 5, 6,
             7, 8, 9, 10, 11
         ],
-        "saved_freq_modes": ["mag", "ang"]
+        "normalize": true,
+        "fft_shift": true,
+        "overwrite": true
     },
     "outputset_params": {
         "DUT_type": "NYFR",
-        "saved_freq_modes": ["mag", "mag_ang_sincos"],
         "scale_dict": 1.0,
-        "decode_to_time": true
+        "decode_to_time": true,
+        "normalize": true,
+        "fft_shift": true,
+        "overwrite": true
     },
     "log_params": {
         "enabled": true,
@@ -29,6 +49,7 @@
             "inputs",
             "outputs",
             "premultiply",
+            "wideband",
             "recovery",
             "ml_models"
         ],
@@ -36,6 +57,7 @@
             "inputs": "F:/",
             "outputs": "F:/",
             "premultiply": "F:/",
+            "wideband": "F:/",
             "recovery": "F:/",
             "ml_models": "F:/"
         },
@@ -43,38 +65,25 @@
             "inputs": "Inputs",
             "outputs": "Outputs",
             "premultiply": "Premultiply",
+            "wideband": "Wideband",
             "recovery": "Recovery",
             "ml_models": "ML_Models"            
         }
     },
     "filenames": {
-        "real_time": "real_time.npy",
-        "real_freq": "real_freq.npy",
-        "wbf_time": "wbf_time.npy",
-        "wbf_freq": "wbf_freq.npy",
-        "samp_time": "sampled_time.npy",
-        "samp_freq": "sampled_freq.npy",
-        "input": {
-            "config": "inputset_config.json",
-            "time_signal": "time_signals.npy",
-            "wave_params": "wave_params.pkl",
-            "freq": {
-                "signal": "freq_signals.npy",
-                "mag_ang_sig": "freq_mag_ang_signals.npy",
-                "mag_ang_sincos_sig": "freq_mag_ang_sincos_signals.npy",
-                "mag_sig": "freq_mag_signals.npy",
-                "ang_sig": "freq_ang_signals.npy",
-                "real_imag_sig": "freq_real_imag_signals.npy",
-                "real_sig": "freq_real_signals.npy",
-                "imag_sig": "freq_imag_signals.npy"
-            }              
-        },
+        "real_time_freq": "real_time_freq.npz",
+        "wbf_time_freq": "wbf_time_freq.npz",
+        "samp_time_freq": "sampled_time_freq.npz",
+        "time_signals": "time_signals.npy",
+        "wave_params": "wave_params.pkl",
+        "freq_signals": "freq_signals.npz",
+        "input_config": "inputset_config.json",
+        "recovery_config": "recovery_config.json",
+        "ml_config": "ml_config.json",
+        "ml_model": "ml_model.keras",
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
-        "recovery_df": "recovery_df.pkl",
-        "recovery_config": "recovery_config.json",
-        "ml_model": "ml_model.keras",
-        "ml_config": "ml_config.json"
+        "recovery_df": "recovery_df.pkl"
     },
     "dataframe_params": {
         "file_path": "recovery_df.pkl",

@@ -16,22 +16,14 @@ from importlib import import_module
 from scipy.fft import fft, fftshift
 import pandas as pd
 from pathlib import Path
+import tempfile
+import os
+from zipfile import ZipFile, ZIP_DEFLATED
 from .Recovery import VALID_SAVED_FREQ_MODES
 
 class DataSet:
     VALID_DUT_TYPES = {
         "nyfr"
-    }
-    # Map modes to flattened filename keys
-    FREQ_FILE_KEYS = {
-        "complex":          "input.freq.signal",
-        "mag_ang":          "input.freq.mag_ang_sig",
-        "mag_ang_sincos":   "input.freq.mag_ang_sincos_sig",
-        "mag":              "input.freq.mag_sig",
-        "ang":              "input.freq.ang_sig",
-        "real_imag":        "input.freq.real_imag_sig",
-        "real":             "input.freq.real_sig",
-        "imag":             "input.freq.imag_sig",
     }
     def __init__(self,
                  input_config_name=None,
@@ -40,6 +32,7 @@ class DataSet:
                  ML_config_name=None,
                  dataset_config_name="DataSet_Config_1",
                  seed=None,
+                 freq_modes=None,
                  dataset_params=None,
                  inputset_params=None,
                  outputset_params=None,
@@ -65,6 +58,7 @@ class DataSet:
             dataset_params['log_params'] = log_params
             dataset_params['dataframe_params'] = dataframe_params
             dataframe_params['seed'] = seed
+            dataframe_params['freq_modes'] = freq_modes
             
         dataset_params['input_config_name'] = input_config_name
         dataset_params['DUT_config_name'] = DUT_config_name
@@ -95,6 +89,7 @@ class DataSet:
         log_params = dataset_params.get('log_params', None)
         dataframe_params = dataset_params.get('dataframe_params', None)
         self.input_rng = np.random.default_rng(dataset_params.get('seed', None))
+        freq_modes = dataset_params.get('freq_modes', None)
         
         if (filenames is None and
             directory_params is None ):
@@ -119,6 +114,7 @@ class DataSet:
         self.set_recovery_config_name(recovery_config_name)
         self.set_ML_config_name(ML_config_name)
         self.set_dataframe_params(dataframe_params)
+        self.set_freq_modes(freq_modes)
 
         
     def set_log_params(self, log_params=None):
@@ -139,16 +135,15 @@ class DataSet:
     def set_inputset_params(self, inputset_params):
         if inputset_params is None:
             inputset_params = {
-                "num_sigs": 5000,
+                "num_sigs": 1000,
                 "num_recovery_sigs": 100,
                 "tones_per_sig": [1],
                 "wave_precision": None,
-                "saved_freq_modes": []
+                "normalize": True,
+                "fft_shift": True,
+                "overwrite": True
             }
-        saved_freq_modes = inputset_params.get('saved_freq_modes', [])
-        if not self.is_valid_saved_freq_mode(saved_freq_modes):
-            self.logger.error("Saved Frequency Mode List Contains invalid Mode")
-            raise ValueError("Saved Frequency Mode List Contains invalid Mode")
+
         self.inputset_params = inputset_params
         
 
@@ -156,23 +151,44 @@ class DataSet:
         if outputset_params is None:
             outputset_params = {
                 "DUT_type": "NYFR",
-                "saved_freq_modes": [],
                 "scale_dict": 1.0,
-                "decode_to_time": True
+                "decode_to_time": True,
+                "normalize": True,
+                "fft_shift": True,
+                "overwrite": True
             }
         
         DUT_type = outputset_params.get('DUT_type', None)
         if not self.is_valid_dut_type(DUT_type):
             self.logger.error(f"DUT type {DUT_type} not currently valid")
             raise ValueError(f"DUT type {DUT_type} not currently valid")
-        
-        saved_freq_modes = outputset_params.get('saved_freq_modes', [])
-        if not self.is_valid_saved_freq_mode(saved_freq_modes):
-            self.logger.error("Saved Frequency Mode List Contains invalid Mode")
-            raise ValueError("Saved Frequency Mode List Contains invalid Mode")
                     
         self.outputset_params = outputset_params
 
+
+    def set_freq_modes(self, freq_modes):
+        if freq_modes is None:
+            freq_modes = {
+                "input": ["mag",
+                        "ang",
+                        "real",
+                        "imag"],
+                "wideband": ["mag",
+                            "ang",
+                            "real",
+                            "imag"],
+                "mlp": ["mag"],
+                "recovery": ["mag"] 
+            }
+        
+        for freq_mode, freq_mode_list in freq_modes.items():
+            valid_modes, removed_modes = self.filter_valid_names(freq_mode_list)
+            freq_modes[freq_mode] = valid_modes
+            if removed_modes:
+                self.logger.warning(f"Invalid modes removed from {freq_mode} frequency mode list: {removed_modes}")
+
+        self.freq_modes = freq_modes
+        
 
     def set_input_config_name(self, input_config_name):
         if input_config_name is None:
@@ -191,9 +207,13 @@ class DataSet:
             DUT_config_name = "DUT_Config_1"
 
         self.internal_directory_params['tail']['premultiply'] = [self.input_config_name,
-                                    DUT_config_name,
-                                    self.directory_params['tail']['outputs'],
-                                    self.directory_params['tail']['premultiply']]
+                                                                 DUT_config_name,
+                                                                 self.directory_params['tail']['outputs'],
+                                                                 self.directory_params['tail']['premultiply']]
+        self.internal_directory_params['tail']['wideband'] = [self.input_config_name,
+                                                              DUT_config_name,
+                                                              self.directory_params['tail']['outputs'],
+                                                              self.directory_params['tail']['wideband']]
         self.internal_directory_params['tail']['outputs'] = [self.input_config_name,
                                     DUT_config_name,
                                     self.directory_params['tail']['outputs']]
@@ -208,9 +228,9 @@ class DataSet:
             recovery_config_name = "Recovery_Config_1"
 
         self.internal_directory_params['tail']['recovery'] = [self.input_config_name,
-                                    self.DUT_config_name,
-                                    recovery_config_name,
-                                    self.directory_params['tail']['recovery']]
+                                                              self.DUT_config_name,
+                                                              recovery_config_name,
+                                                              self.directory_params['tail']['recovery']]
         
         self.directories = build_flat_paths(self.internal_directory_params)
 
@@ -239,6 +259,7 @@ class DataSet:
                 "inputs",
                 "outputs",
                 "premultiply",
+                "wideband",
                 "recovery",
                 "ml_models"
             ]
@@ -246,6 +267,7 @@ class DataSet:
                 "inputs": None,
                 "outputs": None,
                 "premultiply": None,
+                "wideband": None,
                 "recovery": None,
                 "ml_models": None
             }
@@ -253,6 +275,7 @@ class DataSet:
                 "inputs": "Inputs",
                 "outputs": "Outputs",
                 "premultiply": "Premultiply",
+                "wideband": "Wideband",
                 "recovery": "Recovery",
                 "ml_models": "ML_Models"
             }
@@ -268,33 +291,20 @@ class DataSet:
     def set_filenames(self, filenames=None):
         if filenames is None:
             filenames = {
-                "real_time": "real_time.npy",
-                "real_freq": "real_freq.npy",
-                "wbf_time": "wbf_time.npy",
-                "wbf_freq": "wbf_freq.npy",
-                "samp_time": "sampled_time.npy",
-                "samp_freq": "sampled_freq.npy",
-                "input": {
-                    "config": "inputset_config.json",
-                    "time_signal": "time_signals.npy",
-                    "wave_params": "wave_params.pkl",
-                    "freq": {
-                        "signal": "freq_signals.npy",
-                        "mag_ang_sig": "freq_mag_ang_signals.npy",
-                        "mag_ang_sincos_sig": "freq_mag_ang_sincos_signals.npy",
-                        "mag_sig": "freq_mag_signals.npy",
-                        "ang_sig": "freq_ang_signals.npy",
-                        "real_imag_sig": "freq_real_imag_signals.npy",
-                        "real_sig": "freq_real_signals.npy",
-                        "imag_sig": "freq_imag_signals.npy"
-                    }              
-                },
+                "real_time_freq": "real_time_freq.npz",
+                "wbf_time_freq": "wbf_time_freq.npz",
+                "samp_time_freq": "sampled_time_freq.npz",
+                "time_signals": "time_signals.npy",
+                "wave_params": "wave_params.pkl",
+                "all_freq_signals": "freq_signals.npz",
+                "freq_signals": "freq_signals.npy",
+                "input_config": "inputset_config.json",
+                "recovery_config": "recovery_config.json",
+                "ml_config": "ml_config.json",
+                "ml_model": "ml_model.keras",
                 "DUT_config": "DUT_config.json",
                 "dictionary": "dictionary.npy",
-                "recovery_df": "recovery_df.pkl",
-                "recovery_config": "recovery_config.json",
-                "ml_model": "ml_model.keras",
-                "ml_config": "ml_config.json"
+                "recovery_df": "recovery_df.pkl"
             }
         self.flat_filenames = flatten_files(filenames)
         self.filenames = filenames
@@ -332,11 +342,25 @@ class DataSet:
     # Core functional methods
     # -------------------------------
     
-    def is_valid_saved_freq_mode(self, name) -> bool:
-        if isinstance(name, str):
-            name = [name]
-        return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
-    
+    def filter_valid_names(self, names, valid_set=None):
+        if valid_set is None:
+            valid_set = VALID_SAVED_FREQ_MODES
+
+        # Allow a single string or a list
+        if isinstance(names, str):
+            names = [names]
+
+        valid = []
+        removed = []
+
+        for n in names:
+            if n.lower() in valid_set:
+                valid.append(n)
+            else:
+                removed.append(n)
+
+        return valid, removed
+
 
     def is_valid_dut_type(self, dut_type) -> bool:
         """
@@ -358,7 +382,7 @@ class DataSet:
         return all(d.lower() in {t.lower() for t in self.VALID_DUT_TYPES} for d in dut_type)
     
         
-    def create_input_set(self, input_signal, normalize=False):
+    def create_input_set(self, input_signal, normalize=None, fft_shift=None, overwrite=None):
         """
         Generate and save multiple randomized input signals.
 
@@ -374,27 +398,34 @@ class DataSet:
             raise ValueError("Input Signal Object Not Set")
         else:
             self.set_input_config_name(input_signal.get_config_name())
+
+        if normalize is None:
+            normalize = self.inputset_params.get('normalize', False)
+
+        if overwrite is None:
+            overwrite = self.inputset_params.get('overwrite', False)
+
+        if fft_shift is None:
+            fft_shift = self.inputset_params.get('fft_shift', False)   
             
         input_dirs = self.directories.get('inputs', "Inputs")
-        real_time_filename = self.filenames.get('real_time', "real_time.npy")
-        real_freq_filename = self.filenames.get('real_freq', "real_freq.npy")
-        inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
-        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
-        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
-        saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
+        real_time_freq_filename = self.filenames.get("real_time_freq", "real_time_freq.npz")
+        inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
+        input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
+        input_time_signals_filename = self.filenames.get('time_signals', "time_signals.npy")
+        input_freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
+        input_freq_modes = self.freq_modes.get('input', [])
 
         input_dirs.mkdir(parents=True, exist_ok=True)
-        real_time_file = input_dirs / real_time_filename
-        real_freq_file = input_dirs / real_freq_filename
+        real_time_freq_file = input_dirs / real_time_freq_filename
         
         real_time = input_signal.get_analog_time()
         real_freq = input_signal.get_analog_frequency()
-        if not real_time_file.exists():
-            np.save(real_time_file, real_time)
-            self.logger.info(f"Real Time Input Signal saved to file {real_time_file}")
-        if not real_freq_file.exists():
-            np.save(real_freq_file, real_freq)
-            self.logger.info(f"Real Frequency Input Signal saved to file {real_freq_file}")
+        if not real_time_freq_file.exists() or overwrite:
+            np.savez(real_time_freq_file,
+                     real_time=real_time,
+                     real_freq=real_freq)
+            self.logger.info(f"Real Time and Frequency Signal saved to file {real_time_freq_file}")
         
         # --- Config file ---
         inputset_config_file = input_dirs.parent / inputset_config_filename
@@ -404,7 +435,7 @@ class DataSet:
             self.logger.error("Input Signal Wave Parameters not set")
             raise ValueError("Input Signal Wave Parameters Not Set")
         
-        if not inputset_config_file.exists():
+        if not inputset_config_file.exists() or overwrite:
             inputset_config = {
                 "config_name": self.config_name,
                 "inputset": self.inputset_params,
@@ -421,18 +452,32 @@ class DataSet:
         amp_range = input_signal_wave_params.get('amp_range', (0.1, 1.0))
         phase_range = input_signal_wave_params.get('phase_range', (0, 1))
 
-        num_input_sigs = self.inputset_params.get('num_sigs', 5000)
+        num_input_sigs = self.inputset_params.get('num_sigs', 1000)
         num_recovery_sigs = self.inputset_params.get('num_recovery_sigs', 100)
         tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
         wave_precision = self.inputset_params.get('wave_precision', None)
-        
-        input_signals_time = np.zeros((num_input_sigs, real_time.size))
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
-            wave_param_list = [] # reset for this tone set
+            all_inputset_signals = {
+                "dataset": {
+                    "time_path": input_dirs / f"{tones}_tone_{input_time_signals_filename}",
+                    "freq_path": input_dirs / f"{tones}_tone_{input_freq_signals_filename}",
+                    "time_set": np.zeros((num_input_sigs, real_time.size)),
+                    "wave_path": input_dirs / f"{tones}_tone_{input_wave_params_filename}",
+                    "wave_set": []
+                },
+                "recovery": {
+                    "time_path": input_dirs / f"{tones}_tone_recovery_{input_time_signals_filename}",
+                    "freq_path": input_dirs / f"{tones}_tone_recovery_{input_freq_signals_filename}",
+                    "time_set": np.zeros((num_recovery_sigs, real_time.size)),
+                    "wave_path": input_dirs / f"{tones}_tone_recovery_{input_wave_params_filename}",
+                    "wave_set": []
+                }
+            }
+
             start = time.time()
-            for input_sig in range(num_input_sigs):
+            for input_sig in range(num_input_sigs + num_recovery_sigs):
                 amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
                 if wave_precision is not None:
                     amps = np.round(amps, wave_precision)
@@ -455,160 +500,67 @@ class DataSet:
                     phases = np.zeros(tones)
                 # Save generated wave dictionaries into waves
                 wave = [
-                    {"amp": float(amps[i]), "freq": float(freqs[i]), "phase": float(phases[i])}
+                    {
+                        "amp": float(amps[i]),
+                        "freq": float(freqs[i]),
+                        "phase": float(phases[i]),
+                        "real": float(amps[i] * np.cos(phases[i])),
+                        "imag": float(amps[i] * np.sin(phases[i]))
+                    }
                     for i in range(tones)
                 ]
-                wave_param_list.append(wave)
 
                 params = input_signal_wave_params
                 params["waves"] = wave
                 input_signal.set_wave_params(params)
                 input_signal.create_input_signal()
                 input_signal_time = input_signal.get_input_signal()
-                input_signals_time[input_sig] = input_signal_time
+                
+                if input_sig < num_input_sigs:
+                    all_inputset_signals["dataset"]["wave_set"].append(wave)
+                    all_inputset_signals["dataset"]["time_set"][input_sig] = input_signal_time
+                else:
+                    all_inputset_signals["recovery"]["wave_set"].append(wave)
+                    all_inputset_signals["recovery"]["time_set"][input_sig - num_input_sigs] = input_signal_time
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
 
             # --- Save outputs ---
-            inputset_wave_params_path = input_dirs / f"{tones}_tone_{input_wave_params_filename}" 
-            with open(inputset_wave_params_path, 'wb') as file:
-                pickle.dump(wave_param_list, file)
-            self.logger.info(f"{tones}-Tone Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
+            for set_info in all_inputset_signals.values():
+                inputset_wave_params_path = set_info.get('wave_path')
+                wave_param_list = set_info.get('wave_set')
+                if not inputset_wave_params_path.exists() or overwrite:
+                    with open(inputset_wave_params_path, 'wb') as file:
+                        pickle.dump(wave_param_list, file)
+                    self.logger.info(f"{tones}-Tone Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
 
-            inputset_time_path = input_dirs / f"{tones}_tone_{input_time_signal_filename}"
-            
-            np.save(inputset_time_path, input_signals_time)
-            
-            self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
+                inputset_time_path = set_info.get('time_path')
+                input_signals_time = set_info.get('time_set')
+                if not inputset_time_path.exists() or overwrite:
+                    np.save(inputset_time_path, input_signals_time)
+                    self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
 
-            # --- After you've built input_signals_freq with FFT results ---
-            if saved_freq_modes:
-                for mode in saved_freq_modes:
+                temp_arr = {}
+                if input_freq_modes:
+                    for mode in input_freq_modes:
+                        arr = fft_encode_signals(input_signals_time, mode,
+                                                    apply_fftshift=fft_shift, normalize=normalize)
+                        fd, path_arr = tempfile.mkstemp(suffix=".npy")
+                        os.close(fd)
+                        np.save(path_arr, arr)
+                        temp_arr[mode] = path_arr                    
 
-                    if mode not in VALID_SAVED_FREQ_MODES:
-                        self.logger.warning(f"Skipping invalid freq mode: {mode}")
-                        continue
+                    save_path = set_info.get('freq_path')
 
-                    key = self.FREQ_FILE_KEYS[mode]
-                    filename = self.flat_filenames.get(key)
-                    if not filename:
-                        self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                        continue
-                    
-                    arr, scales = fft_encode_signals(input_signals_time, mode,
-                                                apply_fftshift=True, normalize=normalize)
+                    with ZipFile(save_path, 'w', ZIP_DEFLATED) as zf:
+                        for name, path in temp_arr.items():
+                            zf.write(path, arcname=f"{name}.npy")
+                    self.logger.info(f"{tones}-Tone frequency set saved to {save_path}")
 
-                    # --- Save ---                       
-                    if normalize:
-                        norm_save_path = input_dirs / f"{tones}_tone_norm_{filename}"
-                        scale_save_path = input_dirs / f"{tones}_tone_scale_{filename}"
-                        np.save(norm_save_path, arr)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency set saved to {norm_save_path}")
-                        np.save(scale_save_path, scales)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency scales set saved to {scale_save_path}")
-                    else:
-                        save_path = input_dirs / f"{tones}_tone_{filename}"
-                        np.save(save_path, arr)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
-                    
-            input_signals_time[:] = 0
-
-        input_recovery_signals_time = np.zeros((num_recovery_sigs, real_time.size))
-        
-        if saved_freq_modes:
-            input_recovery_signals_freq = np.zeros((num_recovery_sigs, real_time.size), dtype=np.complex128)
-       
-        # --- Generate all recovery tone sets ---
-        for tones in tones_per_sig:
-            wave_param_list = [] # reset for this tone set
-            start = time.time()
-            for input_sig in range(num_recovery_sigs):
-                amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
-                if wave_precision is not None:
-                    amps = np.round(amps, wave_precision)
-
-                # Randomly choose unique bins, then scale back to Hz
-                freqs = self.input_rng.choice(freq_bins, size=tones, replace=False)
-
-                # Remove chosen bins from freq_bins (in place)
-                freq_bins = freq_bins[~np.isin(freq_bins, freqs)]
-                if tones > len(freq_bins):
-                    self.logger.debug("Ran out of unique frequency bins for input signals. Resetting...")
-                    freq_bins = np.copy(freq_subset)
-
-                if phase_range:
-                    t_shift = self.input_rng.uniform(phase_range[0], phase_range[1], tones) / freqs  # seconds
-                    phases = 2 * np.pi * freqs * t_shift
-                    if wave_precision is not None:
-                        phases = np.round(phases, wave_precision)
-                else:
-                    phases = np.zeros(tones)
-                # Save generated wave dictionaries into waves
-                wave = [
-                    {"amp": float(amps[i]), "freq": float(freqs[i]), "phase": float(phases[i])}
-                    for i in range(tones)
-                ]
-                wave_param_list.append(wave)
-
-                params = input_signal_wave_params
-                params["waves"] = wave
-                input_signal.set_wave_params(params)
-                input_signal.create_input_signal()
-                input_signal_time = input_signal.get_input_signal()
-                input_recovery_signals_time[input_sig] = input_signal_time
-                
-                if saved_freq_modes:
-                    input_signal_freq = fft(input_signal_time)
-                    input_recovery_signals_freq[input_sig] = input_signal_freq
-
-            stop = time.time()
-            self.logger.info(f"{num_recovery_sigs} {tones}-Tone Recovery Signal Input Set Creation Time: {stop - start:.6f} seconds")
-
-            # --- Save outputs ---
-            inputset_wave_params_path = input_dirs / f"{tones}_tone_recovery_{input_wave_params_filename}" 
-            with open(inputset_wave_params_path, 'wb') as file:
-                pickle.dump(wave_param_list, file)
-            self.logger.info(f"{tones}-Tone Recovery Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
-
-            inputset_time_path = input_dirs / f"{tones}_tone_recovery_{input_time_signal_filename}"
-            
-            np.save(inputset_time_path, input_recovery_signals_time)
-            input_recovery_signals_time[:] = 0
-            self.logger.info(f"{tones}-Tone Recovery Time Input Set saved to file {inputset_time_path}")
-
-            # --- After you've built input_signals_freq with FFT results ---
-            if saved_freq_modes:
-                for mode in saved_freq_modes:
-
-                    if mode not in VALID_SAVED_FREQ_MODES:
-                        self.logger.warning(f"Skipping invalid freq mode: {mode}")
-                        continue
-
-                    key = self.FREQ_FILE_KEYS[mode]
-                    filename = self.flat_filenames.get(key)
-                    if not filename:
-                        self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                        continue
-                    
-                    arr, scales = fft_encode_signals(input_signals_time, mode,
-                                                apply_fftshift=True, normalize=normalize)
-                    
-                    # --- Save ---                       
-                    if normalize:
-                        norm_save_path = input_dirs / f"{tones}_tone_recovery_norm_{filename}"
-                        scale_save_path = input_dirs / f"{tones}_tone_recovery_scale_{filename}"
-                        np.save(norm_save_path, arr)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency set saved to {norm_save_path}")
-                        np.save(scale_save_path, scales)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} normalized frequency scales set saved to {scale_save_path}")
-                    else:
-                        save_path = input_dirs / f"{tones}_tone_recovery_{filename}"
-                        np.save(save_path, arr)
-                        self.logger.info(f"{tones}-Tone {mode.upper()} freq set saved to {save_path}")
-                    
-                input_recovery_signals_freq[:] = 0
-                
+                    for path in temp_arr.values():
+                        os.remove(path)                   
+                              
         self.logger.info("All Input Sets Created and Saved\n")
 
 
