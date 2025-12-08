@@ -37,6 +37,12 @@
         "fft_shift": true,
         "overwrite": true
     },
+    "premultiply_params": {
+        "normalize": true,
+        "apply_fft": false,
+        "fft_shift": true,
+        "overwrite": true
+    },
     "log_params": {
         "enabled": true,
         "log_file": null,
