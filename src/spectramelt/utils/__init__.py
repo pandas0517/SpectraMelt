@@ -31,6 +31,11 @@ from .signal_utils import (
     fft_decode_signals
 )
 
+# From plotting_utils.py
+from .plotting_utils import (
+    plot_dynamic_frequency_modes
+)
+
 # Optional: define __all__ for clean "from utils import *"
 __all__ = [
     "get_logger",
@@ -47,5 +52,6 @@ __all__ = [
     "flatten_files",
     "sparse_fft",
     "fft_encode_signals",
-    "fft_decode_signals"
+    "fft_decode_signals",
+    "plot_dynamic_frequency_modes"
 ]

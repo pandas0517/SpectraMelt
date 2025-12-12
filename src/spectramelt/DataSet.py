@@ -159,6 +159,8 @@ class DataSet:
                 "decode_to_time": True,
                 "normalize": True,
                 "fft_shift": True,
+                "normalize_wbf": True,
+                "fft_shift_wbf": False,
                 "overwrite": True
             }
         
@@ -186,6 +188,10 @@ class DataSet:
         if freq_modes is None:
             freq_modes = {
                 "input": ["mag",
+                        "ang",
+                        "real",
+                        "imag"],
+                "output": ["mag",
                         "ang",
                         "real",
                         "imag"],
@@ -398,7 +404,11 @@ class DataSet:
         return all(d.lower() in {t.lower() for t in self.VALID_DUT_TYPES} for d in dut_type)
     
         
-    def create_input_set(self, input_signal, normalize=None, fft_shift=None, overwrite=None):
+    def create_input_set(self,
+                         input_signal,
+                         normalize=None,
+                         fft_shift=None,
+                         overwrite=None):
         """
         Generate and save multiple randomized input signals.
 
@@ -574,7 +584,13 @@ class DataSet:
         self.logger.info("All Input Sets Created and Saved\n")
 
 
-    def create_output_set(self, DUT, input_signal=None, normalize=False, fft_shift=None, overwrite=None):
+    def create_output_set(self, DUT,
+                          input_signal=None,
+                          normalize=None,
+                          fft_shift=None,
+                          normalize_wbf=None,
+                          fft_shift_wbf=None,
+                          overwrite=None):
         self.logger.info(f"Starting Output Set Creation...")
         
         # --- Setup and pre-saves ---
@@ -584,11 +600,17 @@ class DataSet:
         if normalize is None:
             normalize = self.outputset_params.get('normalize', False)
 
+        if fft_shift is None:
+            fft_shift = self.outputset_params.get('fft_shift', False)
+            
+        if normalize_wbf is None:
+            normalize = self.outputset_params.get('normalize_wbf', False)
+
+        if fft_shift_wbf is None:
+            fft_shift = self.outputset_params.get('fft_shift_wbf', False)
+            
         if overwrite is None:
             overwrite = self.outputset_params.get('overwrite', False)
-
-        if fft_shift is None:
-            fft_shift = self.outputset_params.get('fft_shift', False) 
         
         outputset_params = self.outputset_params
         if DUT is None:
@@ -601,7 +623,7 @@ class DataSet:
         
         input_dir = self.directories.get('inputs', "Inputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
-        wideband_freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
+        freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
         real_time_freq_filename = self.filenames.get('real_time_freq', "real_time_freq.npz")
         real_time_freq_file = input_dir / real_time_freq_filename
@@ -633,7 +655,7 @@ class DataSet:
         DUT_params = DUT.get_all_params()
         DUT_type = outputset_params.get('DUT_type', "nyfr")
 
-        if not DUT_config_file.exists():
+        if not DUT_config_file.exists() or overwrite:
             DUT_config = {
                 "config_name": self.config_name,
                 "output": DUT_params,
@@ -642,6 +664,7 @@ class DataSet:
             save_to_json(DUT_config, DUT_config_file)
             self.logger.info(f"Saved DUT {DUT_type} configuration to file {DUT_config_file}")
 
+        output_freq_modes = self.freq_modes.get('output', [])
         wideband_freq_modes = self.freq_modes.get('wideband', [])
         
         for file_path in input_dir.iterdir():
@@ -652,8 +675,9 @@ class DataSet:
                 stem = file_path.name
                 key_part = stem.split(input_time_signal_filename)[0]
                 output_signal_file = output_dirs / f"{key_part}{input_time_signal_filename}"
+                output_freq_signals_file = output_dirs / f"{key_part}{freq_signals_filename}"
                 wbf_dut_signal_file = wideband_dir / f"{key_part}{input_time_signal_filename}"
-                wbf_freq_signals_file = wideband_dir / f"{key_part}{wideband_freq_signals_filename}"
+                wbf_freq_signals_file = wideband_dir / f"{key_part}{freq_signals_filename}"
                 
                 dictionary = None
                 output_signal_list = []
@@ -690,9 +714,29 @@ class DataSet:
                         
                 stop = time.time()
                 self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
-                    
-                np.save(output_signal_file, np.array(output_signal_list))
+                
+                output_signals = np.array(output_signal_list)   
+                np.save(output_signal_file, output_signals)
                 self.logger.info(f"Output Set for Input Set {file_path} saved to file {output_signal_file}")
+                
+                temp_arr = {}
+                if output_freq_modes:
+                    for mode in output_freq_modes:
+                        arr = fft_encode_signals(output_signals, mode,
+                                                 apply_fftshift=fft_shift,
+                                                 normalize=normalize)
+                        fd, path_arr = tempfile.mkstemp(suffix=".npy")
+                        os.close(fd)
+                        np.save(path_arr, arr)
+                        temp_arr[mode] = path_arr                    
+
+                    with ZipFile(output_freq_signals_file, 'w', ZIP_DEFLATED) as zf:
+                        for name, path in temp_arr.items():
+                            zf.write(path, arcname=f"{name}.npy")
+                    self.logger.info(f"{key_part[:-1]} output frequency set saved to {output_freq_signals_file}")
+
+                    for path in temp_arr.values():
+                        os.remove(path) 
 
                 wbf_signals = np.array(wbf_signal_list)
                 np.save(wbf_dut_signal_file, wbf_signals)
@@ -702,8 +746,8 @@ class DataSet:
                 if wideband_freq_modes:
                     for mode in wideband_freq_modes:
                         arr = fft_encode_signals(wbf_signals, mode,
-                                                 apply_fftshift=fft_shift,
-                                                 normalize=normalize)
+                                                 apply_fftshift=fft_shift_wbf,
+                                                 normalize=normalize_wbf)
                         fd, path_arr = tempfile.mkstemp(suffix=".npy")
                         os.close(fd)
                         np.save(path_arr, arr)
@@ -1555,6 +1599,10 @@ class DataSet:
     
     def get_ML_config_name(self):
         return self.ML_config_name
+    
+    
+    def get_freq_modes(self):
+        return self.freq_modes
 
     
     def get_directories(self):
