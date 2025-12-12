@@ -617,6 +617,7 @@ class DataSet:
         output_dirs = self.directories.get('outputs', "Outputs")
         output_dirs.mkdir(parents=True, exist_ok=True)
         wideband_dir = self.directories.get('wideband', "Wideband")
+        wideband_dir.mkdir(parents=True, exist_ok=True)
         
         dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
         dictionary_file = output_dirs / dictionary_filename
