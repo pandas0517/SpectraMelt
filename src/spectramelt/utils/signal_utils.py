@@ -44,8 +44,6 @@ def fft_encode_signals(
             apply_fftshift = False
     if normalize:
         if mode in ["real_imag",
-                    "real",
-                    "imag",
                     "mag_ang",
                     "mag_ang_sincos",
                     "ang"]:

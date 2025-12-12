@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     create_set = False
     test_max_min = False
+    update_input_waves = False
     display_signals = True
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -44,6 +45,9 @@ if __name__ == '__main__':
                         logger.info(f"Value found out of range {v_ref_range[0]} - {v_ref_range[1]} for input set {file_path.stem}")
                         break
 
+    if update_input_waves:
+        dataset.update_input_wave_params()
+
     if display_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
@@ -53,27 +57,31 @@ if __name__ == '__main__':
         input_wave_params_filename = filenames.get('input.wave_params', "wave_params.pkl")
         real_time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
         real_time_freq = np.load(input_dir / real_time_freq_filename)
-        real_time = real_time_freq["real_time"]
-        real_freq = real_time_freq["real_freq"]
+        real_time = real_time_freq["time"]
+        real_freq = real_time_freq["freq"]
 
         signals_per_file = 3
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
-                # 1. Extract identifying portion (for example, everything up to "signals.npy")
-                stem = file_path.name
+                stem = str(file_path)
                 key_part = stem.split(input_time_signal_filename)[0]
-                
-                # 2. Search for other files containing that portion
-                for other_file in input_dir.iterdir():
-                    if key_part in other_file.name and other_file.name.endswith(input_wave_params_filename):
-                        with open(other_file, "rb") as f:
-                            wave_params = pickle.load(f)
-                    elif key_part in other_file.name and other_file.name.endswith(input_freq_signal_filename):
-                        freq_signals = np.load(other_file)
-                        freq_mag_signals = freq_signals["mag"]
-                        freq_phase_signals = freq_signals["ang"]
-                        freq_real_signals = freq_signals["real"]
-                        freq_imag_signals = freq_signals["imag"]
+                wave_params_file = Path(f"{key_part}{input_wave_params_filename}")
+                freq_signal_file = Path(f"{key_part}{input_freq_signal_filename}")
+
+                if not wave_params_file.exists():
+                    logger.error(f"Wave parameter file {wave_params_file} does not exist")
+                    raise ValueError(f"Wave parameter file {wave_params_file} does not exist")
+                with open(wave_params_file, "rb") as f:
+                    wave_params = pickle.load(f)
+
+                if not freq_signal_file.exists():
+                    logger.error(f"Input frequency file {freq_signal_file} does not exist")
+                    raise ValueError(f"Input frequency file {freq_signal_file} does not exist")
+                freq_signals = np.load(freq_signal_file)
+                freq_mag_signals = freq_signals["mag"]
+                freq_phase_signals = freq_signals["ang"]
+                freq_real_signals = freq_signals["real"]
+                freq_imag_signals = freq_signals["imag"]
                                       
                 time_signals = np.load(file_path)
                     
@@ -81,23 +89,18 @@ if __name__ == '__main__':
                     wave_param = wave_params[idx]
                     num_tones = len(wave_param)
                     # Extract amps and freqs
-                    amps = [w["amp"] / 2 for w in wave_param]
+                    amps = [w["amp"] for w in wave_param]
                     freqs = [w["freq"] for w in wave_param]
-                    phases = [
-                        ((w["phase"] - 1.5*np.pi + np.pi) % (2*np.pi)) - np.pi
-                        for w in wave_param
-                    ]
-                    test_phases = [((w["phase"] + 1.5*np.pi - np.pi) % (2*np.pi)) + np.pi for w in wave_param]
+                    phases = [w["phase"] for w in wave_param]
+
+                    test_phases = [w["phase"] for w in wave_param]
                     neg_freqs = [-f for f in freqs]
                     neg_phases = [-p for p in phases]
-                    # compute real/imag for positive frequencies
-                    real_pos = [a * np.cos(p) for a, p in zip(amps, test_phases)]
-                    imag_pos = [a * np.sin(p) for a, p in zip(amps, test_phases)]
+                    real_pos = [w["real"] for w in wave_param]
+                    imag_pos = [w["imag"] for w in wave_param]
 
-                    # compute real/imag for negative frequencies (conjugate)
-                    real_neg = [a * np.cos(p) for a, p in zip(amps, neg_phases)]
-                    imag_neg = [a * np.sin(p) for a, p in zip(amps, neg_phases)]
-
+                    real_neg = [r for r in real_pos]
+                    imag_neg = [-i for i in imag_pos]
                     freq_mag_signal = freq_mag_signals[idx]
                     freq_phase_signal = freq_phase_signals[idx]
                     freq_real_signal = freq_real_signals[idx]
@@ -128,7 +131,7 @@ if __name__ == '__main__':
                     axes[1,2].scatter(neg_freqs, imag_neg, marker='x', color='red', s=100)  # s is marker size
                     axes[1,2].set_title("Frequency (Imagingary)")
                     axes[1,2].set_xlim(-freq_range[1], freq_range[1])
-                    fig.suptitle(f"Simulated Analog\n{num_tones}-Tone Signals")
+                    fig.suptitle(f"Simulated Analog\n{num_tones}-Tone Signals {freq_signal_file}")
                     fig.tight_layout()
                     plt.show()
             

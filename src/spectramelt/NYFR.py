@@ -390,40 +390,40 @@ class NYFR:
         return self.wbf_params
     
     def get_wbf_signal(self):
-        return self.wbf_signal
+        return self.wbf_signal.copy()
     
     def get_lo_signal(self):
-        return self.lo_signal
+        return self.lo_signal.copy()
     
     def get_pulse_signal(self):
-        return self.pulse_signal
+        return self.pulse_signal.copy()
     
     def get_mixed_signal(self):
-        return self.mixed_signal
+        return self.mixed_signal.copy()
     
     def get_lpf_signal(self):
-        return self.lpf_signal
+        return self.lpf_signal.copy()
     
     def get_conditioned_signals(self):
-        return self.conditioned_signals
+        return self.conditioned_signals.copy()
     
     def get_sh_signals(self):
-        return self.sh_signals
+        return self.sh_signals.copy()
     
     def get_lo_phase_mod_mid(self):
-        return self.lo_phase_mod_mid
+        return self.lo_phase_mod_mid.copy()
     
     def get_wbf_signal_sub(self):
-        return self.wbf_signal_sub
+        return self.wbf_signal_sub.copy()
     
     def get_wbf_time(self):
-        return self.wbf_time
+        return self.wbf_time.copy()
     
     def get_wbf_freq(self):
-        return self.wbf_freq
+        return self.wbf_freq.copy()
     
     def get_nyfr_dict(self):
-        return self.nyfr_dict
+        return self.nyfr_dict.copy()
     
     def get_nyfr_zones(self):
         return self.Zones
@@ -432,7 +432,7 @@ class NYFR:
         return self.K_band
     
     def get_output_signals(self):
-        return self.output_signals
+        return self.output_signals.copy()
     
     def get_dict_type(self):
         return self.dict_type

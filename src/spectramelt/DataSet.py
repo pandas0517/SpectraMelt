@@ -479,19 +479,19 @@ class DataSet:
                 "dataset": {
                     "time_path": input_dirs / f"{tones}_tone_{input_time_signals_filename}",
                     "freq_path": input_dirs / f"{tones}_tone_{input_freq_signals_filename}",
-                    "time_set": np.zeros((num_input_sigs, real_time.size)),
+                    "time_set": [],
                     "wave_path": input_dirs / f"{tones}_tone_{input_wave_params_filename}",
                     "wave_set": []
                 },
                 "recovery": {
                     "time_path": input_dirs / f"{tones}_tone_recovery_{input_time_signals_filename}",
                     "freq_path": input_dirs / f"{tones}_tone_recovery_{input_freq_signals_filename}",
-                    "time_set": np.zeros((num_recovery_sigs, real_time.size)),
+                    "time_set": [],
                     "wave_path": input_dirs / f"{tones}_tone_recovery_{input_wave_params_filename}",
                     "wave_set": []
                 }
             }
-
+            inputset_type = "dataset"
             start = time.time()
             for input_sig in range(num_input_sigs + num_recovery_sigs):
                 amps = self.input_rng.uniform(amp_range[0], amp_range[1], tones)
@@ -520,47 +520,42 @@ class DataSet:
                         "amp": float(amps[i]),
                         "freq": float(freqs[i]),
                         "phase": float(phases[i]),
-                        "real": float(amps[i] * np.cos(phases[i])),
-                        "imag": float(amps[i] * np.sin(phases[i]))
+                        "real": None,
+                        "imag": None
                     }
                     for i in range(tones)
                 ]
 
-                params = input_signal_wave_params
-                params["waves"] = wave
-                input_signal.set_wave_params(params)
+                input_signal_wave_params["waves"] = wave
+                input_signal.set_wave_params(input_signal_wave_params)
                 input_signal.create_input_signal()
-                input_signal_time = input_signal.get_input_signal()
+
                 
-                if input_sig < num_input_sigs:
-                    all_inputset_signals["dataset"]["wave_set"].append(wave)
-                    all_inputset_signals["dataset"]["time_set"][input_sig] = input_signal_time
-                else:
-                    all_inputset_signals["recovery"]["wave_set"].append(wave)
-                    all_inputset_signals["recovery"]["time_set"][input_sig - num_input_sigs] = input_signal_time
+                if input_sig == num_input_sigs:
+                    inputset_type = "recovery"
+                
+                all_inputset_signals[inputset_type]["wave_set"].append(wave)
+                all_inputset_signals[inputset_type]["time_set"].append(input_signal.get_input_signal())
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
 
             # --- Save outputs ---
             for set_info in all_inputset_signals.values():
-                inputset_wave_params_path = set_info.get('wave_path')
-                wave_param_list = set_info.get('wave_set')
-                if not inputset_wave_params_path.exists() or overwrite:
-                    with open(inputset_wave_params_path, 'wb') as file:
-                        pickle.dump(wave_param_list, file)
-                    self.logger.info(f"{tones}-Tone Time Input Set Wave Parameters saved to file {inputset_wave_params_path}")
+                if not set_info.get('wave_path').exists() or overwrite:
+                    with open(set_info.get('wave_path'), 'wb') as file:
+                        pickle.dump(set_info.get('wave_set'), file)
+                    self.logger.info(f"{tones}-Tone Time Input Set Wave Parameters saved to file {set_info.get('wave_path')}")
 
-                inputset_time_path = set_info.get('time_path')
-                input_signals_time = set_info.get('time_set')
-                if not inputset_time_path.exists() or overwrite:
-                    np.save(inputset_time_path, input_signals_time)
-                    self.logger.info(f"{tones}-Tone Time Input Set saved to file {inputset_time_path}")
+                time_set = np.array(set_info.get('time_set'))
+                if not set_info.get('time_path').exists() or overwrite:
+                    np.save(set_info.get('time_path'), time_set)
+                    self.logger.info(f"{tones}-Tone Time Input Set saved to file {set_info.get('time_path')}")
 
                 temp_arr = {}
                 if input_freq_modes:
                     for mode in input_freq_modes:
-                        arr = fft_encode_signals(input_signals_time, mode,
+                        arr = fft_encode_signals(time_set, mode,
                                                  apply_fftshift=fft_shift,
                                                  normalize=normalize)
                         fd, path_arr = tempfile.mkstemp(suffix=".npy")
@@ -568,12 +563,10 @@ class DataSet:
                         np.save(path_arr, arr)
                         temp_arr[mode] = path_arr                    
 
-                    save_path = set_info.get('freq_path')
-
-                    with ZipFile(save_path, 'w', ZIP_DEFLATED) as zf:
+                    with ZipFile(set_info.get('freq_path'), 'w', ZIP_DEFLATED) as zf:
                         for name, path in temp_arr.items():
                             zf.write(path, arcname=f"{name}.npy")
-                    self.logger.info(f"{tones}-Tone frequency set saved to {save_path}")
+                    self.logger.info(f"{tones}-Tone frequency set saved to {set_info.get('freq_path')}")
 
                     for path in temp_arr.values():
                         os.remove(path)                   
@@ -725,6 +718,68 @@ class DataSet:
                 
         self.logger.info("Output Set Creation Complete\n")
 
+
+    def update_input_wave_params(self):
+        self.logger.info(f"Updating input wave parameters...")
+        input_dir = self.directories.get('inputs', "Inputs")
+        input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
+        input_freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
+        
+        real_time_freq_filename = self.filenames.get('real_time_freq', "real_time_freq.npz")
+        real_time_freq_file = input_dir / real_time_freq_filename
+        
+        if real_time_freq_file.exists():
+            real_time_freq = np.load(real_time_freq_file)
+            real_freq = real_time_freq["freq"]
+        else:
+            self.logger.error("No time_frequency file found")
+            raise ValueError("No time_frequency file found")
+        
+        for file_path in input_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_freq_signals_filename):
+                stem = str(file_path)
+                key_part = stem.split(input_freq_signals_filename)[0]
+                wave_params_filename = Path(f"{key_part}{input_wave_params_filename}")
+
+                if wave_params_filename.exists():
+                    with open(wave_params_filename, "rb") as f:
+                        input_wave_params = pickle.load(f)
+                else:
+                    self.logger.error("No matching wave parameter file found")
+                    raise ValueError("No matching wave parameter file found")                    
+
+                input_signals = np.load(file_path)
+                modes = ["real", "imag"]
+                update_mag_ang = True
+                # Precompute constants once
+                PHASE_SHIFT = -1.5*np.pi + np.pi
+                # Build a dict for O(1) lookup instead of np.where every time
+                freq_to_index = {f: i for i, f in enumerate(real_freq)}
+
+                for mode in modes:
+                    for idx, signal in enumerate(input_signals[mode]):
+                        wave_param = input_wave_params[idx]
+
+                        for wave in wave_param:
+                            if update_mag_ang:
+                                wave["amp"] *= 0.5  # amp = amp / 2
+
+                                # Vectorized phase adjustment (but applied per item)
+                                wave["phase"] = ((wave["phase"] + PHASE_SHIFT) % (2*np.pi)) - np.pi
+
+                            index = freq_to_index[wave["freq"]]  # O(1) lookup
+                            wave[mode] = signal[index]
+
+                        input_wave_params[idx] = wave_param
+                        
+                    update_mag_ang = False
+                
+                with open(wave_params_filename, 'wb') as file:
+                    pickle.dump(input_wave_params, file)
+                self.logger.info(f"Updated input wave parameter file saved to {wave_params_filename}")
+
+        self.logger.info(f"Completed updating input wave parameters...")
+            
 
     def create_nyfr_wave_params(self, nyfr):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")

@@ -1,4 +1,5 @@
 from .utils import load_config_from_json, get_logger
+import copy
 import numpy as np
 
 class InputSignal:
@@ -304,7 +305,7 @@ class InputSignal:
     # -------------------------------
 
     def get_input_signal(self):
-        return self.input_signal
+        return self.input_signal.copy()
     
     def get_config_name(self):
         return self.config_name
