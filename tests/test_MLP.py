@@ -17,8 +17,8 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_mlp_model = False
-    prepare_large_dataset = False
+    create_mlp_model = True
+    prepare_large_dataset = True
     use_normed_h5_file = True
     train_mlp_model = True
     

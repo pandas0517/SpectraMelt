@@ -429,51 +429,62 @@ class MLP:
             max_signals_per_file: int | None = None
     ):
         """
-        Convert multiple .npy signal files into two large HDF5 datasets (X and y),
+        Convert multiple .npz frequency mode files into two large HDF5 datasets (X and y),
         written sequentially for speed and then globally shuffled in-place.
+
+        Parameters
+        ----------
+        input_file_list : list[str]
+            List of input .npz files containing frequency modes.
+        output_file_list : list[str]
+            List of output .npz files containing frequency modes.
+        h5_out_input : str
+            Path to HDF5 input dataset.
+        h5_out_output : str
+            Path to HDF5 output dataset.
+        mode : str
+            Frequency mode to extract from each file ("mag", "ang", "real", "imag").
+        sample_signal : np.ndarray
+            Example signal for shape/dtype inference.
+        max_signals_per_file : int | None
+            Optional maximum number of signals per file to include.
         """
 
-        # ------------------------------------------------------------
-        # 1. Determine chunk sizes if sample_signal is provided
-        # ------------------------------------------------------------
-        if sample_signal is not None:
-            sample_signal = np.asarray(sample_signal)
+        # -------------------------------
+        # 1. Determine chunk sizes
+        # -------------------------------
+        sample_signal = np.asarray(sample_signal)
+        item_bytes = sample_signal.nbytes
+        target_chunk_bytes = 1 * 1024 * 1024  # 1 MB
+        batch = max(1, target_chunk_bytes // item_bytes)
 
-            item_bytes = sample_signal.nbytes
-            target_chunk_bytes = 1 * 1024 * 1024  # 1 MB
-            batch = max(1, target_chunk_bytes // item_bytes)
-
-            chunk_shape_in = (batch, *sample_signal.shape)
-
-            # Output is real-valued, same length as input signal (your assumption)
-            if sample_signal.ndim == 1:
-                out_shape = (sample_signal.shape[0],)
-                chunk_shape_out = (batch, sample_signal.shape[0])
-            else:
-                out_shape = sample_signal.shape[:-1]
-                chunk_shape_out = (batch, *out_shape)
-
-            input_dtype = sample_signal.dtype
+        chunk_shape_in = (batch, *sample_signal.shape)
+        if sample_signal.ndim == 1:
+            out_shape = sample_signal.shape
+            chunk_shape_out = (batch, sample_signal.shape[0])
         else:
-            # Fallback if no sample provided
-            self.logger.error("sample_signal must be provided for shape inference.")
-            raise ValueError("sample_signal must be provided for shape inference.")
+            out_shape = sample_signal.shape[:-1]
+            chunk_shape_out = (batch, *out_shape)
+        input_dtype = sample_signal.dtype
 
-        # ------------------------------------------------------------
-        # 2. First pass: count number of total samples
-        # ------------------------------------------------------------
+        # -------------------------------
+        # 2. Count total samples
+        # -------------------------------
         total_samples = 0
         for in_file in input_file_list:
-            n = np.load(in_file, mmap_mode='r').shape[0]
+            X_block_npz = np.load(in_file, mmap_mode='r')
+            if mode not in X_block_npz.files:
+                raise ValueError(f"Mode '{mode}' not found in {in_file}")
+            n = X_block_npz[mode].shape[0]
             if max_signals_per_file:
                 n = min(n, max_signals_per_file)
             total_samples += n
 
         self.logger.info(f"Total samples across all files: {total_samples}")
 
-        # ------------------------------------------------------------
-        # 3. Create HDF5 files and datasets
-        # ------------------------------------------------------------
+        # -------------------------------
+        # 3. Create HDF5 datasets
+        # -------------------------------
         with h5py.File(h5_out_input, "w") as hf_in, \
             h5py.File(h5_out_output, "w") as hf_out:
 
@@ -493,14 +504,22 @@ class MLP:
                 chunks=chunk_shape_out,
             )
 
-            # --------------------------------------------------------
-            # 4. Sequential write — NO FANCY INDEXING
-            # --------------------------------------------------------
+            # -------------------------------
+            # 4. Sequential write
+            # -------------------------------
             write_pos = 0
             for in_file, out_file in zip(input_file_list, output_file_list):
 
-                X_block = np.load(in_file, mmap_mode="r")
-                y_block = np.load(out_file, mmap_mode="r")
+                X_block_npz = np.load(in_file, mmap_mode='r')
+                y_block_npz = np.load(out_file, mmap_mode='r')
+
+                if mode not in X_block_npz.files:
+                    raise ValueError(f"Mode '{mode}' not found in {in_file}")
+                if mode not in y_block_npz.files:
+                    raise ValueError(f"Mode '{mode}' not found in {out_file}")
+
+                X_block = X_block_npz[mode]
+                y_block = y_block_npz[mode]
 
                 n_block = X_block.shape[0]
                 if max_signals_per_file:
@@ -508,7 +527,6 @@ class MLP:
 
                 self.logger.debug(f"[WRITE] {in_file}  → indices [{write_pos}:{write_pos+n_block}]")
 
-                # Write sequentially — ALWAYS SAFE, ALWAYS FAST
                 dset_in[write_pos:write_pos + n_block] = X_block[:n_block]
                 dset_out[write_pos:write_pos + n_block] = y_block[:n_block]
 
@@ -517,12 +535,10 @@ class MLP:
             hf_in.flush()
             hf_out.flush()
 
-        # ------------------------------------------------------------
-        # 5. Global shuffle (deterministic)
-        # ------------------------------------------------------------
+        # -------------------------------
+        # 5. Deterministic global shuffle
+        # -------------------------------
         self.logger.info("Applying deterministic global shuffle…")
-
-        # Generate permutation
         perm = self.rng.permutation(total_samples)
 
         with h5py.File(h5_out_input, "r+") as hf_in, \
@@ -531,51 +547,29 @@ class MLP:
             X = hf_in["X"]
             y = hf_out["y"]
 
-            # Create temporary datasets
-            Xtmp = hf_in.create_dataset(
-                "X_shuffled",
-                shape=X.shape,
-                dtype=X.dtype,
-                chunks=X.chunks
-            )
-            ytmp = hf_out.create_dataset(
-                "y_shuffled",
-                shape=y.shape,
-                dtype=y.dtype,
-                chunks=y.chunks
-            )
+            Xtmp = hf_in.create_dataset("X_shuffled", shape=X.shape, dtype=X.dtype, chunks=X.chunks)
+            ytmp = hf_out.create_dataset("y_shuffled", shape=y.shape, dtype=y.dtype, chunks=y.chunks)
 
-            # Shuffle in manageable batches
             batch = 8192
             for start in range(0, total_samples, batch):
                 end = min(start + batch, total_samples)
-                
-                idx = perm[start:end]        # unsorted permutation
-                sorted_idx = np.sort(idx)    # h5py requires increasing order
-
-                # Read block using sorted indices
+                idx = perm[start:end]
+                sorted_idx = np.sort(idx)
                 X_block_sorted = X[sorted_idx]
                 y_block_sorted = y[sorted_idx]
-
-                # Map sorted block back into true perm order
-                # inverse map of argsort
                 inv_order = np.argsort(np.argsort(idx))
-
-                # Reorder to match the permutation
                 X_block = X_block_sorted[inv_order]
                 y_block = y_block_sorted[inv_order]
-
-                # Write back into [start:end]
                 Xtmp[start:end] = X_block
                 ytmp[start:end] = y_block
 
-            # Replace original datasets
             del hf_in["X"]
             del hf_out["y"]
             hf_in.move("X_shuffled", "X")
             hf_out.move("y_shuffled", "y")
 
         self.logger.info("[DONE] Dataset creation and shuffle complete.")
+
         
         
     def compute_hdf5_stats(self,
