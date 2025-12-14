@@ -424,6 +424,7 @@ class MLP:
             output_file_list,
             h5_out_input: str,
             h5_out_output: str,
+            mode: str,
             sample_signal: np.ndarray,
             max_signals_per_file: int | None = None
     ):
