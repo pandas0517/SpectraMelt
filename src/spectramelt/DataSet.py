@@ -13,7 +13,7 @@ import pickle
 import time
 import copy
 from importlib import import_module
-from scipy.fft import fft, fftshift
+from scipy.fft import fft, fftshift, ifftshift
 import pandas as pd
 from pathlib import Path
 import tempfile
@@ -604,10 +604,10 @@ class DataSet:
             fft_shift = self.outputset_params.get('fft_shift', False)
             
         if normalize_wbf is None:
-            normalize = self.outputset_params.get('normalize_wbf', False)
+            normalize_wbf = self.outputset_params.get('normalize_wbf', False)
 
         if fft_shift_wbf is None:
-            fft_shift = self.outputset_params.get('fft_shift_wbf', False)
+            fft_shift_wbf = self.outputset_params.get('fft_shift_wbf', False)
             
         if overwrite is None:
             overwrite = self.outputset_params.get('overwrite', False)
@@ -715,7 +715,8 @@ class DataSet:
                 stop = time.time()
                 self.logger.info(f"{len(input_signals)} Signal Output Set Creation Time: {stop - start:.6f} seconds")
                 
-                output_signals = np.array(output_signal_list)   
+                output_signals = np.array(output_signal_list)
+
                 np.save(output_signal_file, output_signals)
                 self.logger.info(f"Output Set for Input Set {file_path} saved to file {output_signal_file}")
                 
@@ -739,6 +740,7 @@ class DataSet:
                         os.remove(path) 
 
                 wbf_signals = np.array(wbf_signal_list)
+
                 np.save(wbf_dut_signal_file, wbf_signals)
                 self.logger.info(f"Wideband Filter Set for Input Set {file_path} saved to file {wbf_dut_signal_file}")
                 
@@ -852,6 +854,7 @@ class DataSet:
         samp_time_freq_filename = self.filenames.get('samp_time_freq', "sampled_time_freq.npz")
         samp_time_freq = np.load(output_dir / samp_time_freq_filename)
         samp_freq = samp_time_freq["freq"]
+        N = len(samp_freq)
         
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_wave_params_filename):
@@ -866,17 +869,20 @@ class DataSet:
                         input_wave_params = pickle.load(f)
                     
                     nyfr_signals = np.load(output_signal_file)
-                    nyfr_centered_signals = np.zeros_like(nyfr_signals)
+                    nyfr_centered_signals = nyfr_signals - np.mean(nyfr_signals, axis=1, keepdims=True)
+                    nyfr_freq_signals = fft(nyfr_centered_signals, axis=1)
+                    nyfr_signals_mag = fftshift(np.abs(nyfr_freq_signals), axes=1) / N
+                    nyfr_signals_phase = fftshift(np.angle(nyfr_freq_signals), axes=1)
+                    nyfr_signals_real = fftshift(np.real(nyfr_freq_signals), axes=1) / N
+                    nyfr_signals_imag = fftshift(np.imag(nyfr_freq_signals), axes=1) / N
+
                     nyfr_wave_params = []
                     
-                    for idx, nyfr_signal in enumerate(nyfr_signals):
-                        nyfr_centered_signal = nyfr_signal - np.mean(nyfr_signal)
-                        nyfr_centered_signals[idx] = nyfr_centered_signal
-                        nyfr_signal_amp = fftshift(np.abs(fft(nyfr_centered_signal))) / len(samp_freq)
-                        nyfr_signal_phase = fftshift(np.angle(fft(nyfr_centered_signal)))
-                        nyfr_signal_real = fftshift(np.real(nyfr_centered_signal)) / len(samp_freq)
-                        nyfr_signal_imag = fftshift(np.imag(nyfr_centered_signal)) / len(samp_freq)
-                        input_wave_param = input_wave_params[idx]
+                    for idx, input_wave_param in enumerate(input_wave_params):
+                        nyfr_signal_mag = nyfr_signals_mag[idx]
+                        nyfr_signal_phase = nyfr_signals_phase[idx]
+                        nyfr_signal_real = nyfr_signals_real[idx]
+                        nyfr_signal_imag = nyfr_signals_imag[idx]                    
                         nyfr_waves = []
                         
                         for input_wave in input_wave_param:
@@ -884,7 +890,7 @@ class DataSet:
                             input_freq = input_wave.get('freq')
                             folded_freq = np.abs(input_freq - LO_freq * round(input_freq/LO_freq))
                             freq_idx = np.abs(samp_freq - folded_freq).argmin()
-                            nyfr_wave['amp'] = 2 * nyfr_signal_amp[freq_idx]
+                            nyfr_wave['amp'] = nyfr_signal_mag[freq_idx]
                             nyfr_wave['freq'] = samp_freq[freq_idx]
                             nyfr_wave['phase'] = nyfr_signal_phase[freq_idx]
                             nyfr_wave['real'] = nyfr_signal_real[freq_idx]
@@ -922,6 +928,7 @@ class DataSet:
             raise ValueError(f"{wbf_time_freq_file} does not exist")
         wbf_time_freq = np.load(wbf_time_freq_file)
         wbf_freq = wbf_time_freq["freq"]
+        N = len(wbf_freq)
 
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_wave_params_filename):
@@ -929,43 +936,46 @@ class DataSet:
                 key_part = stem.split(input_wave_params_filename)[0]
                 
                 wbf_dut_signal_file = wideband_dir / f"{key_part}{input_time_signal_filename}"
-                if not wbf_dut_signal_file.exists():
-                    self.logger.error(f"{wbf_dut_signal_file} does not exist")
-                    raise ValueError(f"{wbf_dut_signal_file} does not exist")
-                                    
-                wbf_dut_wave_file = wideband_dir / f"{key_part}{input_wave_params_filename}"
+                if wbf_dut_signal_file.exists():
+                    wbf_dut_wave_file = wideband_dir / f"{key_part}{input_wave_params_filename}"
 
-                with open(file_path, "rb") as f:
-                    input_wave_params = pickle.load(f)
-                
-                wbf_time_signals = np.load(wbf_dut_signal_file)
-                wbf_freq_signals = fft(wbf_time_signals, axis=1)
-                wbf_dut_wave_params = []
-                
-                for idx, input_wave_param in enumerate(input_wave_params):                   
-                    wbf_freq_signal = wbf_freq_signals[idx]
-                    wbf_freq_signal_mag = fftshift(np.abs(wbf_freq_signal)) / len(wbf_freq_signal)
-                    wbf_freq_signal_phase = fftshift(np.angle(wbf_freq_signal))
-                    wbf_freq_signal_real = fftshift(np.real(wbf_freq_signal)) / len(wbf_freq_signal)
-                    wbf_freq_signal_imag = fftshift(np.imag(wbf_freq_signal)) / len(wbf_freq_signal)                 
-                    wbf_waves = []
+                    with open(file_path, "rb") as f:
+                        input_wave_params = pickle.load(f)
                     
-                    for input_wave in input_wave_param:
-                        wbf_wave = input_wave
-                        input_freq = input_wave.get('freq')
-                        freq_idx = np.abs(wbf_freq - input_freq).argmin()
-                        wbf_wave['amp'] = 2 * wbf_freq_signal_mag[freq_idx]
-                        wbf_wave['freq'] = wbf_freq[freq_idx]
-                        wbf_wave['phase'] = wbf_freq_signal_phase[freq_idx]
-                        wbf_wave['real'] = wbf_freq_signal_real[freq_idx]
-                        wbf_wave['imag'] = wbf_freq_signal_imag[freq_idx]
-                        wbf_waves.append(wbf_wave)
+                    wbf_time_signals = np.load(wbf_dut_signal_file)
+                    wbf_freq_signals = fft(wbf_time_signals, axis=1)
+                    wbf_freq_signals_mag = fftshift(np.abs(wbf_freq_signals), axes=1) / N
+                    wbf_freq_signals_phase = fftshift(np.angle(wbf_freq_signals), axes=1)
+                    wbf_freq_signals_real = fftshift(np.real(wbf_freq_signals), axes=1) / N
+                    wbf_freq_signals_imag = fftshift(np.imag(wbf_freq_signals), axes=1) / N
+                    wbf_dut_wave_params = []
                     
-                    wbf_dut_wave_params.append(wbf_waves)
-                
-                with open(wbf_dut_wave_file, 'wb') as file:
-                    pickle.dump(wbf_dut_wave_params, file)
-                self.logger.info(f"Wideband filtered DUT wave parameter file saved to {wbf_dut_wave_file}")
+                    for idx, input_wave_param in enumerate(input_wave_params):                   
+                        wbf_freq_signal_mag = wbf_freq_signals_mag[idx]
+                        wbf_freq_signal_phase = wbf_freq_signals_phase[idx]
+                        wbf_freq_signal_real = wbf_freq_signals_real[idx]
+                        wbf_freq_signal_imag = wbf_freq_signals_imag[idx]
+
+                        wbf_waves = []
+                        
+                        for input_wave in input_wave_param:
+                            wbf_wave = input_wave
+                            input_freq = input_wave.get('freq')
+                            freq_idx = np.abs(wbf_freq - input_freq).argmin()
+                            wbf_wave['amp'] = wbf_freq_signal_mag[freq_idx]
+                            wbf_wave['freq'] = wbf_freq[freq_idx]
+                            wbf_wave['phase'] = wbf_freq_signal_phase[freq_idx]
+                            wbf_wave['real'] = wbf_freq_signal_real[freq_idx]
+                            wbf_wave['imag'] = wbf_freq_signal_imag[freq_idx]
+                            wbf_waves.append(wbf_wave)
+                        
+                        wbf_dut_wave_params.append(wbf_waves)
+                    
+                    with open(wbf_dut_wave_file, 'wb') as file:
+                        pickle.dump(wbf_dut_wave_params, file)
+                    self.logger.info(f"Wideband filtered DUT wave parameter file saved to {wbf_dut_wave_file}")
+                else:
+                    self.logger.error(f"{wbf_dut_signal_file} does not exist")
         
         self.logger.info("Wideband filtered DUT wave parameter creation complete\n")
         
@@ -1048,6 +1058,8 @@ class DataSet:
                                                  apply_fft=apply_fft,
                                                  apply_fftshift=fft_shift,
                                                  normalize=normalize)
+                        #unsure why this step is necessary
+                        arr = arr * 2
                         fd, path_arr = tempfile.mkstemp(suffix=".npy")
                         os.close(fd)
                         np.save(path_arr, arr)
@@ -1639,10 +1651,6 @@ class DataSet:
     
     def get_valid_dut_types(cls):
         return cls.VALID_DUT_TYPES
-    
-    
-    def get_freq_file_keys(cls):
-        return cls.FREQ_FILE_KEYS
     
     
     def get_all_params(self):

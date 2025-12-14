@@ -89,7 +89,6 @@ if __name__ == '__main__':
                 base_title = f"Simulated Analog\n"
 
                 plot_dynamic_frequency_modes(
-                    wave_params,
                     freq_signals,
                     time_signals,
                     real_time,
@@ -97,6 +96,7 @@ if __name__ == '__main__':
                     input_freq_modes,
                     freq_range,
                     signals_per_file,
+                    wave_params,
                     base_title,
                     file_path
                 )

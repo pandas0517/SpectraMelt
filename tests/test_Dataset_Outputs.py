@@ -20,15 +20,15 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = True
-    create_premultiply_set = True
+    create_output_set = False
+    create_premultiply_set = False
 
-    create_wbf_wave_params = True
-    create_nyfr_wave_params = True    
+    create_wbf_wave_params = False
+    create_nyfr_wave_params = False
 
     display_output_signals = False
     display_wbf_signals = False
-    display_premultiply_signals = False
+    display_premultiply_signals = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -64,8 +64,9 @@ if __name__ == '__main__':
     output_freq_modes = freq_modes.get('output', [])
     wideband_freq_modes = freq_modes.get('wideband', [])
     
-    freq_range = input_config.get('freq_range')
-    amp_range = input_config.get('amp_range')
+    input_wave_params = input_config.get('wave_params')
+    freq_range = input_wave_params.get('freq_range')
+    amp_range = input_wave_params.get('amp_range')
 
     logging.getLogger('matplotlib').setLevel(logging.INFO)
     logging.getLogger("PIL").setLevel(logging.INFO)
@@ -73,18 +74,25 @@ if __name__ == '__main__':
     if display_output_signals:
         DUT_type = type(nyfr).__name__
         samp_time_freq_filename = filenames.get('samp_time_freq', "sampled_time_freq.npz")
+        
         time_freq = np.load(output_dir / samp_time_freq_filename)
         time = time_freq["time"]
         freq = time_freq["freq"]
         
+        output_freq_range = [freq[0], -freq[0]]
         signals_per_file = 3
+        
         for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
+            if (file_path.is_file() and
+                file_path.name.endswith(input_time_signal_filename) and
+                "centered" in file_path.name):
                 stem = str(file_path)
+                stem = stem.replace("_centered", "")
                 key_part = stem.split(input_time_signal_filename)[0]
                 wave_file = Path(f"{key_part}{input_wave_params_filename}")
                 freq_signal_file = Path(f"{key_part}{input_freq_signal_filename}")
-                
+                test_freq_signal_file = Path(f"{key_part}nyfr_test_freq_signals.npz")
+
                 if not wave_file.exists():
                     logger.error(f"Wave parameter file {wave_file} does not exist")
                     raise ValueError(f"Wave parameter file {wave_file} does not exist")
@@ -100,14 +108,14 @@ if __name__ == '__main__':
                 base_title = f"Output for DUT Type {DUT_type}\n"
                 
                 plot_dynamic_frequency_modes(
-                    wave_params,
                     freq_signals,
                     time_signals,
                     time,
                     freq,
                     output_freq_modes,
-                    freq_range,
+                    output_freq_range,
                     signals_per_file,
+                    wave_params,
                     base_title,
                     file_path
                 )
@@ -115,10 +123,12 @@ if __name__ == '__main__':
     if display_wbf_signals:
         wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
         time_freq = np.load(wideband_dir / wbf_time_freq_filename)
+        
         time = time_freq["time"]
         freq = time_freq["freq"]
         
         signals_per_file = 3
+        
         for file_path in wideband_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 stem = str(file_path)
@@ -141,7 +151,39 @@ if __name__ == '__main__':
                 base_title = f"Output for Wideband Frequency\n"
                 
                 plot_dynamic_frequency_modes(
+                    freq_signals,
+                    time_signals,
+                    time,
+                    freq,
+                    wideband_freq_modes,
+                    freq_range,
+                    signals_per_file,
                     wave_params,
+                    base_title,
+                    file_path,
+                    fft_shift=True
+                )
+                        
+    if display_premultiply_signals:
+        premultiply_dir = directories.get('premultiply', "Premultiply")
+        wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
+        
+        time_freq = np.load(wideband_dir / wbf_time_freq_filename)
+        time = time_freq["time"]
+        freq = time_freq["freq"]
+        
+        N = len(freq)
+        signals_per_file = 3
+        
+        for file_path in premultiply_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_freq_signal_filename):         
+                freq_signals = np.load(file_path)
+
+                time_signals = None
+                base_title = f"Output for Premultiplication Signals\n"
+                wave_params = None
+
+                plot_dynamic_frequency_modes(
                     freq_signals,
                     time_signals,
                     time,
@@ -149,35 +191,10 @@ if __name__ == '__main__':
                     output_freq_modes,
                     freq_range,
                     signals_per_file,
+                    wave_params,
                     base_title,
-                    file_path
+                    file_path,
+                    fft_shift=True
                 )
-                        
-    if display_premultiply_signals:
-        premultiply_dir = directories.get('premultiply', "Premultiply")
-        wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
-        time_freq = np.load(wideband_dir / wbf_time_freq_filename)
-        time = time_freq["time"]
-        freq = time_freq["freq"]
-
-        signals_per_file = 3
-        for file_path in premultiply_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):                  
-                signals = np.load(file_path)
-                for idx, signal in enumerate(signals[:signals_per_file]):
-                    signal_time = ifft(ifftshift(signal))
-                    signal_freq = signal / len(freq)
-                    
-                    fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 1 rows, 2 columns
-                    axes[0].plot(time, signal_time)
-                    axes[0].set_title("Time (File)")
-                    axes[0].set_xlim(-0.0002, 0.0002)
-                    axes[1].plot(freq, signal_freq)
-                    axes[1].set_title("Frequency (File)")
-                    axes[1].set_ylim(0, 0.25)
-                    # axes[1].set_xlim(-400000, 400000)
-                    fig.suptitle(f"Initial Recovery Guess Using Dictionary")
-                    fig.tight_layout()
-                    plt.show()
             
     atexit.register(logger.info, "Completed Test\n")

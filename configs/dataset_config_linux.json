@@ -46,7 +46,7 @@
     "premultiply_params": {
         "normalize": true,
         "apply_fft": false,
-        "fft_shift": true,
+        "fft_shift": false,
         "overwrite": true
     },
     "log_params": {
@@ -66,12 +66,12 @@
             "ml_models"
         ],
         "base": {
-            "inputs": "F:/",
-            "outputs": "F:/",
-            "premultiply": "F:/",
-            "wideband": "F:/",
-            "recovery": "F:/",
-            "ml_models": "F:/"
+            "inputs": "/mnt/fdata",
+            "outputs": "/mnt/fdata",
+            "premultiply": "/mnt/fdata",
+            "wideband": "/mnt/fdata",
+            "recovery": "/mnt/fdata",
+            "ml_models": "/mnt/fdata"
         },
         "tail": {
             "inputs": "Inputs",

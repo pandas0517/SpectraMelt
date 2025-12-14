@@ -5,17 +5,20 @@ from scipy.fft import (
     ifft,
     ifftshift
 )
-
+from scipy.interpolate import interp1d
 
 def fft_encode_signals(
     signals,
     mode="mag_ang_sincos",
     apply_fftshift=False,
     apply_fft=True,
-    normalize=True
+    normalize=True,
+    zero_pad=None,
+    freq_axis=None
 ):
     """
-    Encode signals for network input with mode-specific constraints.
+    Encode signals for network input with mode-specific constraints,
+    optionally zero-padded and resampled to a given frequency axis.
     
     Parameters
     ----------
@@ -25,87 +28,99 @@ def fft_encode_signals(
         "complex", "real", "imag", "real_imag",
         "mag", "ang", "mag_ang", "mag_ang_sincos"
     apply_fftshift : bool
-        If True, apply fftshift before processing (restricted by mode)
+        If True, apply fftshift to frequency domain
     apply_fft : bool
-        If True, apply FFT along last axis
+        If True, compute FFT along last axis
     normalize : bool
-        If True, divide each signal by its length (restricted by mode)
-
+        If True, divide by original signal length
+    zero_pad : int or None
+        If provided, FFT length (>= signal length)
+    freq_axis : np.ndarray or None
+        If provided, resample FFT to match this frequency array
+    
     Returns
     -------
     arr : np.ndarray
-        Encoded array
+        Encoded array, resampled to freq_axis if given
     """
-    # Enforce mode-specific restrictions
-    if apply_fftshift:
-        if mode in ["real_imag",
-                    "mag_ang",
-                    "mag_ang_sincos"]:
-            apply_fftshift = False
-    if normalize:
-        if mode in ["real_imag",
-                    "mag_ang",
-                    "mag_ang_sincos",
-                    "ang"]:
-            normalize = False
 
-    # Ensure signals are at least 2D (N, L)
+    # -------------------------------
+    # Mode-specific restrictions
+    # -------------------------------
+    if apply_fftshift and mode in {"real_imag", "mag_ang", "mag_ang_sincos"}:
+        apply_fftshift = False
+    if normalize and mode in {"real_imag", "mag_ang", "mag_ang_sincos", "ang"}:
+        normalize = False
+
+    # Ensure 2D: (N, L)
     signals = np.atleast_2d(signals)
-    N, L = signals.shape
+    N_signals, L = signals.shape
+
+    # Validate zero padding
+    fft_len = L
+    if zero_pad is not None:
+        if not apply_fft:
+            raise ValueError("zero_pad requires apply_fft=True")
+        if zero_pad < L:
+            raise ValueError("zero_pad must be >= signal length")
+        fft_len = zero_pad
 
     # FFT
-    freq_signals = fft(signals, axis=1) if apply_fft else signals
+    freq_signals = fft(signals, n=fft_len, axis=1) if apply_fft else signals
 
-    # FFT shift
+    # Frequency axis corresponding to FFT
+    df = 1.0 / fft_len
+    fft_freqs = np.fft.fftfreq(fft_len, d=1.0)
     if apply_fftshift:
         freq_signals = fftshift(freq_signals, axes=1)
+        fft_freqs = fftshift(fft_freqs)
 
-    # Optional normalization by signal length
+    # Normalize
     if normalize:
         freq_signals = freq_signals / L
 
-    # ===== COMPLEX MODE =====
+    # Resample to freq_axis if provided
+    if freq_axis is not None:
+        # Automatically match shift state
+        if apply_fftshift:
+            freq_axis_interp = freq_axis.copy()  # assume freq_axis is shifted
+        else:
+            freq_axis_interp = ifftshift(freq_axis)  # make unshifted to match unshifted FFT
+        # Interpolate each signal
+        arr_resampled = np.empty((N_signals, len(freq_axis)), dtype=freq_signals.dtype)
+        for i in range(N_signals):
+            interp_func = interp1d(fft_freqs, freq_signals[i], kind='linear', 
+                                   bounds_error=False, fill_value=0.0)
+            arr_resampled[i] = interp_func(freq_axis_interp)
+        freq_signals = arr_resampled
+
+    # -------------------------------
+    # Encoding modes
+    # -------------------------------
     if mode == "complex":
         arr = freq_signals.astype(np.complex64)
-
-    # ===== REAL MODE =====
     elif mode == "real":
         arr = freq_signals.real.astype(np.float32)
-
-    # ===== IMAG MODE =====
     elif mode == "imag":
         arr = freq_signals.imag.astype(np.float32)
-
-    # ===== REAL + IMAG =====
     elif mode == "real_imag":
         arr = np.concatenate([freq_signals.real, freq_signals.imag], axis=1).astype(np.float32)
-
-    # ===== MAGNITUDE =====
     elif mode == "mag":
         arr = np.abs(freq_signals).astype(np.float32)
-
-    # ===== PHASE =====
     elif mode == "ang":
         arr = np.angle(freq_signals).astype(np.float32)
-
-    # ===== MAG + PHASE =====
     elif mode == "mag_ang":
         mag = np.abs(freq_signals)
         phase = np.angle(freq_signals)
         arr = np.concatenate([mag, phase], axis=1).astype(np.float32)
-
-    # ===== MAG + COS(PHASE) + SIN(PHASE) =====
     elif mode == "mag_ang_sincos":
         mag = np.abs(freq_signals)
         phase = np.angle(freq_signals)
-        cos_phase = np.cos(phase)
-        sin_phase = np.sin(phase)
-        arr = np.concatenate([mag, cos_phase, sin_phase], axis=1).astype(np.float32)
-
+        arr = np.concatenate([mag, np.cos(phase), np.sin(phase)], axis=1).astype(np.float32)
     else:
         raise ValueError(f"Unsupported mode: {mode}")
 
-    # If input was 1D, return a 1D array
+    # Restore 1D if needed
     if signals.shape[0] == 1:
         arr = arr[0]
 
