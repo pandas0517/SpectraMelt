@@ -16,6 +16,7 @@ from importlib import import_module
 from scipy.fft import fft, fftshift, ifftshift
 import pandas as pd
 from pathlib import Path
+import platform
 import tempfile
 import os
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -274,40 +275,52 @@ class DataSet:
 
 
     def set_directory_params(self, directory_params=None):
+        """
+        Set directory parameters, automatically selecting linux/windows base if available.
+        """
+        # Default structure
         if directory_params is None:
             directory_params = {}
-            directory_params['dataset_dir'] = "Data_Set"
-            directory_params['paths'] = [
-                "inputs",
-                "outputs",
-                "premultiply",
-                "wideband",
-                "recovery",
-                "ml_models"
-            ]
-            directory_params['base'] = {
-                "inputs": None,
-                "outputs": None,
-                "premultiply": None,
-                "wideband": None,
-                "recovery": None,
-                "ml_models": None
-            }
-            directory_params['tail'] = {
-                "inputs": "Inputs",
-                "outputs": "Outputs",
-                "premultiply": "Premultiply",
-                "wideband": "Wideband",
-                "recovery": "Recovery",
-                "ml_models": "ML_Models"
-            }
+        directory_params.setdefault('dataset_dir', "Data_Set")
+        directory_params.setdefault('paths', [
+            "inputs",
+            "outputs",
+            "premultiply",
+            "wideband",
+            "recovery",
+            "ml_models"
+        ])
+        directory_params.setdefault('base', {key: None for key in directory_params['paths']})
+        directory_params.setdefault('tail', {
+            "inputs": "Inputs",
+            "outputs": "Outputs",
+            "premultiply": "Premultiply",
+            "wideband": "Wideband",
+            "recovery": "Recovery",
+            "ml_models": "ML_Models"
+        })
 
-        for base_dir in directory_params['base']:
-            if directory_params['base'][base_dir] is None:
-                directory_params['base'][base_dir] = find_project_root()
+        # OS base paths if provided
+        linux_base = directory_params.get("linux_base")
+        windows_base = directory_params.get("windows_base")
+
+        if linux_base or windows_base:
+            # Detect OS
+            system = platform.system().lower()
+            os_base = linux_base if "linux" in system else windows_base
+
+            # Assign only unset paths
+            for key in directory_params['paths']:
+                if directory_params['base'].get(key) is None:
+                    directory_params['base'][key] = os_base.get(key, find_project_root())
+        else:
+            # No OS-specific base provided → assign unset paths to project root
+            for key in directory_params['paths']:
+                if directory_params['base'].get(key) is None:
+                    directory_params['base'][key] = find_project_root()
 
         self.internal_directory_params = copy.deepcopy(directory_params)
-        self.directory_params = directory_params            
+        self.directory_params = directory_params           
         
 
     def set_filenames(self, filenames=None):

@@ -65,7 +65,15 @@
             "recovery",
             "ml_models"
         ],
-        "base": {
+        "linux_base": {
+            "inputs": "/mnt/fdata",
+            "outputs": "/mnt/fdata",
+            "premultiply": "/mnt/fdata",
+            "wideband": "/mnt/fdata",
+            "recovery": "/mnt/fdata",
+            "ml_models": "/mnt/fdata"
+        },
+        "windows_base": {
             "inputs": "F:/",
             "outputs": "F:/",
             "premultiply": "F:/",
