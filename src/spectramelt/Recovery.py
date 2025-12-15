@@ -3,14 +3,10 @@ from importlib import import_module
 from .utils import(
     load_config_from_json,
     get_logger,
+    VALID_SAVED_FREQ_MODES
 )
 import pickle
 
-VALID_SAVED_FREQ_MODES = {
-    "complex", "real", "imag",
-    "real_imag", "mag", "ang",
-    "mag_ang", "mag_ang_sincos"
-}
 
 class Recovery:
     VALID_RECOVERY_METHODS = {

@@ -26,6 +26,7 @@ from .file_utils import (
 
 # From signal_utils.py
 from .signal_utils import (
+    VALID_SAVED_FREQ_MODES,
     sparse_fft,
     fft_encode_signals,
     fft_decode_signals
@@ -53,5 +54,6 @@ __all__ = [
     "sparse_fft",
     "fft_encode_signals",
     "fft_decode_signals",
-    "plot_dynamic_frequency_modes"
+    "plot_dynamic_frequency_modes",
+    "VALID_SAVED_FREQ_MODES"
 ]

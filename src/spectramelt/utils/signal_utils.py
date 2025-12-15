@@ -7,6 +7,14 @@ from scipy.fft import (
 )
 from scipy.interpolate import interp1d
 
+
+VALID_SAVED_FREQ_MODES = {
+    "complex", "real", "imag",
+    "real_imag", "mag", "ang",
+    "mag_ang", "mag_ang_sincos"
+}
+
+
 def fft_encode_signals(
     signals,
     mode="mag_ang_sincos",

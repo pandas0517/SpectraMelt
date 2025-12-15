@@ -6,7 +6,8 @@ from .utils import (
     find_project_root,
     save_to_json,
     fft_encode_signals,
-    fft_decode_signals
+    fft_decode_signals,
+    VALID_SAVED_FREQ_MODES
 )
 import numpy as np
 import pickle
@@ -20,7 +21,7 @@ import platform
 import tempfile
 import os
 from zipfile import ZipFile, ZIP_DEFLATED
-from .Recovery import VALID_SAVED_FREQ_MODES
+
 
 class DataSet:
     VALID_DUT_TYPES = {
@@ -1102,6 +1103,7 @@ class DataSet:
         output_dir = self.directories.get('outputs', "Outputs")
         premultiply_dir = self.directories.get('premultiply', "Premultiply")       
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
+        freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
         if input_config_name is not None:
             self.set_input_config_name(input_config_name)
@@ -1141,7 +1143,7 @@ class DataSet:
         
         recovery_params = recovery.get_recovery_params()
         recovery_method = recovery_params.get('method').lower()
-        saved_freq_modes = self.freq_modes.get('recovery', [])
+        freq_modes = self.freq_modes.get('recovery', [])
         
         if recovery_method != "mlp":
             for file_path in output_dir.iterdir():
@@ -1161,53 +1163,48 @@ class DataSet:
                             
                     np.save(recovery_file, np.array(recovered_sig_list))
                     self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
-        elif saved_freq_modes:
+        elif freq_modes:
             ml_models_dir = self.directories.get('ml_models', "ML_Models")
             ml_model_filename = self.filenames.get('ml_model', "ml_model.keras")
-            
-            for mode in saved_freq_modes:
-                key = self.FREQ_FILE_KEYS[mode]
-                filename = self.flat_filenames.get(key)
-                
-                if not filename:
-                    self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                    continue
-                recovery.set_recovery_type(mode)
 
-                if mlp is None:
-                    self.logger.error("No MLP object given")
-                    raise ValueError("No MLP object given")
+            for file_path in premultiply_dir.iterdir():
+                if (file_path.is_file() and 
+                    file_path.name.endswith(freq_signals_filename) and 
+                    "recovery" in file_path.name.lower()):
 
-                norm_premultiply_h5_file = premultiply_dir / f"{Path(filename).stem}_norm.h5"
-                if not norm_premultiply_h5_file.exists():
-                    self.logger.error(f"{norm_premultiply_h5_file} file does not exist")
-                    raise ValueError(f"{norm_premultiply_h5_file} file does not exist")
-                mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                    all_output_signals = np.load(file_path)
+                    # Extract identifying portion
+                    stem = file_path.name
+                    key_part = stem.split(freq_signals_filename)[0]
+                    recovery_file = recovery_dirs / f"{key_part}{freq_signals_filename}"
                     
-                norm_output_h5_file = output_dir / f"wbf_{Path(filename).stem}_norm.h5"
-                if not norm_output_h5_file.exists():
-                    self.logger.error(f"{norm_output_h5_file} file does not exist")
-                    raise ValueError(f"{norm_output_h5_file} file does not exist")
-                mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
-                
-                ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
-                if not ml_model_file.exists():
-                    self.logger.error(f"{ml_model_file} file does not exist")
-                    raise ValueError(f"{ml_model_file} file does not exist")
-                mlp.set_model_file_path(ml_model_file)
-                mlp_model = mlp.load_model()
+                    all_recovered_signals = []
+                    for mode in freq_modes:
+                        if mlp is None:
+                            self.logger.error("No MLP object given")
+                            raise ValueError("No MLP object given")
 
-                for file_path in premultiply_dir.iterdir():
-                    if (file_path.is_file() and 
-                        file_path.name.endswith(filename) and 
-                        "recovery" in file_path.name.lower()):
-
-                        output_signals = np.load(file_path)
-                        # Extract identifying portion (for example, everything up to "signals.npy")
-                        stem = file_path.name
-                        key_part = stem.split(filename)[0]
-                        recovery_file = recovery_dirs / f"{key_part}{filename}"
+                        norm_premultiply_h5_file = premultiply_dir / f"{Path(freq_signals_filename).stem}_{mode}_norm.h5"
+                        if not norm_premultiply_h5_file.exists():
+                            self.logger.error(f"{norm_premultiply_h5_file} file does not exist")
+                            raise ValueError(f"{norm_premultiply_h5_file} file does not exist")
+                        mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                            
+                        norm_output_h5_file = output_dir / f"wbf_{Path(freq_signals_filename).stem}_{mode}_norm.h5"
+                        if not norm_output_h5_file.exists():
+                            self.logger.error(f"{norm_output_h5_file} file does not exist")
+                            raise ValueError(f"{norm_output_h5_file} file does not exist")
+                        mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
                         
+                        ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
+                        if not ml_model_file.exists():
+                            self.logger.error(f"{ml_model_file} file does not exist")
+                            raise ValueError(f"{ml_model_file} file does not exist")
+                        mlp.set_model_file_path(ml_model_file)
+                        mlp_model = mlp.load_model()
+                        
+                        recovery.set_recovery_type(mode)
+                        output_signals = all_output_signals[mode]        
                         recovered_sig_list = []
 
                         self.logger.info(f"Starting Recovery Set Creation for {file_path}")
@@ -1218,9 +1215,14 @@ class DataSet:
 
                         stop = time.time()
                         self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
+                        
+                        all_recovered_signals.append(np.array(recovered_sig_list))
                                 
-                        np.save(recovery_file, np.array(recovered_sig_list))
-                        self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
+                    np.savez(
+                        recovery_file,
+                        **{name: arr for name, arr in zip(freq_modes, all_recovered_signals)}
+                    )
+                    self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
         else:
             self.logger.error(f"Recovery method is {recovery_method} but no save frequency list given")
             raise ValueError(f"Recovery method is {recovery_method} but no save frequency list given")
