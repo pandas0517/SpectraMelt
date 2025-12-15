@@ -1141,7 +1141,7 @@ class DataSet:
         
         recovery_params = recovery.get_recovery_params()
         recovery_method = recovery_params.get('method').lower()
-        saved_freq_modes = self.outputset_params.get('saved_freq_modes', [])
+        saved_freq_modes = self.freq_modes.get('recovery', [])
         
         if recovery_method != "mlp":
             for file_path in output_dir.iterdir():
@@ -1163,7 +1163,7 @@ class DataSet:
                     self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
         elif saved_freq_modes:
             ml_models_dir = self.directories.get('ml_models', "ML_Models")
-            ml_model_filename = self.flat_filenames.get('ml_model', "ml_model.keras")
+            ml_model_filename = self.filenames.get('ml_model', "ml_model.keras")
             
             for mode in saved_freq_modes:
                 key = self.FREQ_FILE_KEYS[mode]
