@@ -25,7 +25,7 @@ if __name__ == '__main__':
     create_recovery_dataframe = False
     set_recovery_dataframe = False
 
-    display_recovered_signals = True
+    display_recovered_signals = False
     DUT_type = "NYFR"
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
