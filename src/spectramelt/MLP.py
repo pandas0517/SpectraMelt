@@ -104,6 +104,8 @@ class MLP:
         self.set_model_params(model_params)
         self.set_training_params(training_params)
         self.set_config_name(config_name)
+        self.set_input_recovery_stats()
+        self.set_output_recovery_stats()
         
     
     def set_config_name(self, config_name):
@@ -826,15 +828,29 @@ class MLP:
             restore_best_weights=early_stopping_params.get('restore_best_weights', True),
         )
 
-        norm_h5_input_path = h5_input_path
-        if ("norm" not in norm_h5_input_path.name.lower()):
-            norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path, dataset_name="X")
-            self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+        norm_h5_input_path = h5_input_path.with_name(
+            h5_input_path.stem + "_norm" + h5_input_path.suffix
+        )
+            
+        if ("norm" in h5_input_path.name.lower() and h5_input_path.exists()):
+            norm_h5_input_path = h5_input_path
+        else:
+            if not norm_h5_input_path.exists():
+                norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path, dataset_name="X")
+        
+        self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
-        norm_h5_output_path = h5_output_path
-        if ("norm" not in norm_h5_output_path.name.lower()):
-            norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path, dataset_name="y")
-            self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
+        norm_h5_output_path = h5_output_path.with_name(
+            h5_output_path.stem + "_norm" + h5_output_path.suffix
+        )
+        
+        if ("norm" in h5_output_path.name.lower() and h5_output_path.exists()):
+            norm_h5_output_path = h5_output_path
+        else:
+            if not norm_h5_output_path.exists():
+                norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path, dataset_name="y")
+        
+        self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
         # Build HDF5 loader
         get_batch, total_num_sigs = self.make_hdf5_batch_loader(norm_h5_input_path, norm_h5_output_path)

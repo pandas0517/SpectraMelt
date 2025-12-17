@@ -1186,15 +1186,15 @@ class DataSet:
 
                         norm_premultiply_h5_file = premultiply_dir / f"{Path(freq_signals_filename).stem}_{mode}_norm.h5"
                         if not norm_premultiply_h5_file.exists():
-                            self.logger.error(f"{norm_premultiply_h5_file} file does not exist")
-                            raise ValueError(f"{norm_premultiply_h5_file} file does not exist")
-                        mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                            self.logger.warning(f"{norm_premultiply_h5_file} file does not exist")
+                        else:
+                            mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
                             
                         norm_output_h5_file = output_dir / f"wbf_{Path(freq_signals_filename).stem}_{mode}_norm.h5"
                         if not norm_output_h5_file.exists():
-                            self.logger.error(f"{norm_output_h5_file} file does not exist")
-                            raise ValueError(f"{norm_output_h5_file} file does not exist")
-                        mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
+                            self.logger.warning(f"{norm_output_h5_file} file does not exist")
+                        else:
+                            mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
                         
                         ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
                         if not ml_model_file.exists():
@@ -1230,29 +1230,72 @@ class DataSet:
         self.logger.info("Recovery Set Creation Complete\n")
 
 
-    def decode_complex_sets(self, dir):
-        if dir is None:
-            self.logger.error("Directory can not be None")
-            raise ValueError("Directory can not be None")
-        if not dir.is_dir():
-            self.logger.error(f"{dir} does not exist")
-            raise ValueError(f"{dir} does not exist")
+    def decode_time_signals(self):
+        """
+        Decode all frequency-domain .npz files in the recovery directory
+        into time-domain signals and save them as .npy files.
 
-        self.logger.info(f"Decoding complex signals from {dir} into separate magnitude and phase arrays")
-        for file in dir.iterdir():
-            if ("sincos" in file.name.lower() and
-                not file.suffix.lower() == ".h5"):
-                complex_npz_filename = file.with_suffix(".npz")
-                mag_ang_sincos = np.load(file)
-                complex_recovery = fft_decode_signals(mag_ang_sincos)
-                complex_mag_recovery = np.abs(complex_recovery)
-                complex_phase_recovery = np.angle(complex_recovery)
-                np.savez(complex_npz_filename,
-                         complex_mag=complex_mag_recovery,
-                         complex_phase=complex_phase_recovery,
-                         source=str(file),
-                         encoding="mag_ang_sincos")
-                self.logger.info(f"Converted {file} to {complex_npz_filename}")
+        Priority for reconstruction:
+            1. 'real_imag'  -> concatenated [real0, imag0, real1, imag1, ...]
+            2. 'mag_ang'    -> concatenated [mag0, ang0, mag1, ang1, ...]
+            3. 'mag_ang_sincos' -> concatenated [mag0, sin0, cos0, mag1, sin1, cos1, ...]
+
+        Signals are assumed Physics-normalized (denormalize by multiplying by signal length).
+        """
+        recovery_dir = Path(self.directories.get('recovery', "Recovery"))
+        time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
+        freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
+
+        recovery_dir.mkdir(parents=True, exist_ok=True)
+
+        for file_path in recovery_dir.iterdir():
+            if not file_path.is_file() or not file_path.name.endswith(freq_signals_filename):
+                continue
+
+            # Key for saving
+            stem = file_path.stem
+            key_part = stem.split(freq_signals_filename)[0]
+            recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename}"
+
+            with np.load(file_path) as freq_data:
+                keys = freq_data.files
+                time_signal = None
+
+                # Priority 1: real_imag
+                if 'real_imag' in keys:
+                    arr = freq_data['real_imag']
+                    arr = arr.reshape(-1, 2)  # shape (N, 2)
+                    real = arr[:, 0]
+                    imag = arr[:, 1]
+                    time_signal = np.fft.ifft(real + 1j*imag) * arr.shape[0]
+
+                # Priority 2: mag_ang
+                elif 'mag_ang' in keys:
+                    arr = freq_data['mag_ang']
+                    arr = arr.reshape(-1, 2)  # shape (N, 2)
+                    mag = arr[:, 0]
+                    ang = arr[:, 1]
+                    complex_freq = mag * np.exp(1j * ang)
+                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+
+                # Priority 3: mag_ang_sincos
+                elif 'mag_ang_sincos' in keys:
+                    arr = freq_data['mag_ang_sincos']
+                    arr = arr.reshape(-1, 3)  # shape (N, 3)
+                    mag = arr[:, 0]
+                    sin_comp = arr[:, 1]
+                    cos_comp = arr[:, 2]
+                    ang = np.arctan2(sin_comp, cos_comp)
+                    complex_freq = mag * np.exp(1j * ang)
+                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+
+                else:
+                    self.logger.warning(f"Cannot reconstruct time signal from {file_path}")
+                    continue
+
+                # Save the time-domain signal
+                np.save(recovery_time_file, time_signal)
+                self.logger.info(f"Saved time-domain signal: {recovery_time_file}")
 
         
     def create_recovery_dataframe(self):

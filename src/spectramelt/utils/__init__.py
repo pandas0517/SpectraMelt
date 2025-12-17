@@ -34,7 +34,8 @@ from .signal_utils import (
 
 # From plotting_utils.py
 from .plotting_utils import (
-    plot_dynamic_frequency_modes
+    plot_dynamic_frequency_modes,
+    REQUIRED_AXIS_KEYS
 )
 
 # Optional: define __all__ for clean "from utils import *"
@@ -55,5 +56,6 @@ __all__ = [
     "fft_encode_signals",
     "fft_decode_signals",
     "plot_dynamic_frequency_modes",
-    "VALID_SAVED_FREQ_MODES"
+    "VALID_SAVED_FREQ_MODES",
+    "REQUIRED_AXIS_KEYS"
 ]

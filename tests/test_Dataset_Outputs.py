@@ -7,14 +7,14 @@ if __name__ == '__main__':
     from spectramelt.utils import (
         load_config_from_json,
         get_logger,
-        plot_dynamic_frequency_modes
+        plot_dynamic_frequency_modes,
+        REQUIRED_AXIS_KEYS
     )
     from pathlib import Path
     from spectramelt.NYFR import NYFR
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
-    from scipy.fft import fft, ifft, fftshift, ifftshift
     import logging
     import pickle
 
@@ -74,10 +74,13 @@ if __name__ == '__main__':
     if display_output_signals:
         DUT_type = type(nyfr).__name__
         samp_time_freq_filename = filenames.get('samp_time_freq', "sampled_time_freq.npz")
-        
-        time_freq = np.load(output_dir / samp_time_freq_filename)
-        time = time_freq["time"]
-        freq = time_freq["freq"]
+        time_freq_file = output_dir / samp_time_freq_filename
+        with np.load(time_freq_file) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
+            time = time_freq["time"]
+            freq = time_freq["freq"]
         
         output_freq_range = [freq[0], -freq[0]]
         signals_per_file = 3
@@ -91,42 +94,40 @@ if __name__ == '__main__':
                 key_part = stem.split(input_time_signal_filename)[0]
                 wave_file = Path(f"{key_part}{input_wave_params_filename}")
                 freq_signal_file = Path(f"{key_part}{input_freq_signal_filename}")
-                test_freq_signal_file = Path(f"{key_part}nyfr_test_freq_signals.npz")
-
+                
                 if not wave_file.exists():
-                    logger.error(f"Wave parameter file {wave_file} does not exist")
-                    raise ValueError(f"Wave parameter file {wave_file} does not exist")
-                with open(wave_file, "rb") as f:
-                    wave_params = pickle.load(f)
+                    logger.warning(f"Wave parameter file {wave_file} does not exist")
+                    wave_file = None
                     
                 if not freq_signal_file.exists():
-                    logger.error(f"Input frequency file {freq_signal_file} does not exist")
-                    raise ValueError(f"Input frequency file {freq_signal_file} does not exist")
-                
-                freq_signals = np.load(freq_signal_file)
-                time_signals = np.load(file_path)
+                    logger.error(f"{DUT_type} frequency file {freq_signal_file} does not exist")
+                    raise ValueError(f"{DUT_type} frequency file {freq_signal_file} does not exist")
+
                 base_title = f"Output for DUT Type {DUT_type}\n"
                 
                 plot_dynamic_frequency_modes(
-                    freq_signals,
-                    time_signals,
+                    freq_signal_file,
                     time,
                     freq,
                     output_freq_modes,
                     output_freq_range,
                     signals_per_file,
-                    wave_params,
+                    file_path,
+                    wave_file,
                     base_title,
-                    file_path
                 )
-                
-    if display_wbf_signals:
+    
+    if display_wbf_signals or display_premultiply_signals:
         wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
-        time_freq = np.load(wideband_dir / wbf_time_freq_filename)
-        
-        time = time_freq["time"]
-        freq = time_freq["freq"]
-        
+        time_freq_file = wideband_dir / wbf_time_freq_filename
+        with np.load(time_freq_file) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
+            time = time_freq["time"]
+            freq = time_freq["freq"]
+            
+    if display_wbf_signals:
         signals_per_file = 3
         
         for file_path in wideband_dir.iterdir():
@@ -137,41 +138,30 @@ if __name__ == '__main__':
                 freq_signal_file = Path(f"{key_part}{input_freq_signal_filename}")
                 
                 if not wave_file.exists():
-                    logger.error(f"Wave parameter file {wave_file} does not exist")
-                    raise ValueError(f"Wave parameter file {wave_file} does not exist")
-                with open(wave_file, "rb") as f:
-                    wave_params = pickle.load(f)
+                    logger.warning(f"Wave parameter file {wave_file} does not exist")
+                    wave_file = None
                     
                 if not freq_signal_file.exists():
-                    logger.error(f"Input frequency file {freq_signal_file} does not exist")
-                    raise ValueError(f"Input frequency file {freq_signal_file} does not exist")
-                
-                freq_signals = np.load(freq_signal_file)
-                time_signals = np.load(file_path)
+                    logger.error(f"Wideband frequency file {freq_signal_file} does not exist")
+                    raise ValueError(f"Wideband frequency file {freq_signal_file} does not exist")
+
                 base_title = f"Output for Wideband Frequency\n"
                 
                 plot_dynamic_frequency_modes(
-                    freq_signals,
-                    time_signals,
+                    freq_signal_file,
                     time,
                     freq,
                     wideband_freq_modes,
                     freq_range,
                     signals_per_file,
-                    wave_params,
-                    base_title,
                     file_path,
+                    wave_file,
+                    base_title,
                     fft_shift=True
                 )
                         
     if display_premultiply_signals:
         premultiply_dir = directories.get('premultiply', "Premultiply")
-        wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
-        
-        time_freq = np.load(wideband_dir / wbf_time_freq_filename)
-        time = time_freq["time"]
-        freq = time_freq["freq"]
-        
         N = len(freq)
         signals_per_file = 3
         
@@ -181,19 +171,18 @@ if __name__ == '__main__':
 
                 time_signals = None
                 base_title = f"Output for Premultiplication Signals\n"
-                wave_params = None
+                wave_file = None
 
                 plot_dynamic_frequency_modes(
                     freq_signals,
-                    time_signals,
                     time,
                     freq,
                     output_freq_modes,
                     freq_range,
                     signals_per_file,
-                    wave_params,
+                    time_signals,
+                    wave_file,
                     base_title,
-                    file_path,
                     fft_shift=True
                 )
             

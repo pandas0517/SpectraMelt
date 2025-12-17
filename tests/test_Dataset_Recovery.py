@@ -7,7 +7,8 @@ if __name__ == '__main__':
     from spectramelt.utils import(
         load_config_from_json,
         get_logger,
-        plot_dynamic_frequency_modes
+        plot_dynamic_frequency_modes,
+        REQUIRED_AXIS_KEYS
     )
     from pathlib import Path
     from spectramelt.Recovery import Recovery
@@ -19,8 +20,9 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_set = True
+    create_recovery_set = True
     use_mlp = True
+    decode_recovery_to_time = False
 
     create_recovery_dataframe = False
     set_recovery_dataframe = False
@@ -54,13 +56,16 @@ if __name__ == '__main__':
     selected_freq_modes = recovery_freq_modes
     # selected_freq_modes = recovery_freq_modes[1:2]
 
-    if create_set:
+    if create_recovery_set:
         if use_mlp:
             from spectramelt.MLP import MLP
             mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
             dataset.create_recovery_set(recovery, mlp=mlp)
         else:
             dataset.create_recovery_set(recovery)
+            
+    if decode_recovery_to_time:
+        dataset.decode_time_signals()
 
     if create_recovery_dataframe:
         dataset.create_recovery_dataframe()
@@ -72,43 +77,48 @@ if __name__ == '__main__':
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
         
+        time_signal_filename = filenames.get('time_signals', "time_signals.npy")
         wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
-        time_freq = np.load(wideband_dir / wbf_time_freq_filename)
-        time = time_freq["time"]
-        freq = time_freq["freq"]
+        time_freq_file = wideband_dir / wbf_time_freq_filename
+        with np.load(time_freq_file) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
+            time = time_freq["time"]
+            freq = time_freq["freq"]
         
         N = len(freq)
         signals_per_file = 3
         
         for file_path in recovery_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(freq_signal_filename):         
-                freq_signals = np.load(file_path)
-
-                time_signals = None
-                base_title = f"Recovery for {DUT_type} Signals\n"
-                
                 # Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
                 key_part = stem.split(freq_signal_filename)[0]
-                wave_file = wideband_dir / f"{key_part}{wave_params_filename}"
                 
+                wave_file = wideband_dir / f"{key_part}{wave_params_filename}"
                 if not wave_file.exists():
-                    logger.error(f"Wave parameter file {wave_file} does not exist")
-                    raise ValueError(f"Wave parameter file {wave_file} does not exist")
-                with open(wave_file, "rb") as f:
-                    wave_params = pickle.load(f)
+                    logger.warning(f"Wave parameter file {wave_file} does not exist")
+                    wave_file = None
+
+                recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename}"
+                if not recovery_time_file.exists():
+                    logger.warning(f"Recovered time file {recovery_time_file} does not exist")
+                    recovery_time_file = None
+                    
+                base_title = f"Recovery for {DUT_type} Signals\n"
+
                     
                 plot_dynamic_frequency_modes(
-                    freq_signals,
-                    time_signals,
+                    file_path,
                     time,
                     freq,
                     recovery_freq_modes,
                     freq_range,
                     signals_per_file,
-                    wave_params,
+                    recovery_time_file,
+                    wave_file,
                     base_title,
-                    file_path,
                     fft_shift=True
                 )
                      

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 from dataclasses import dataclass
 from scipy.fft import fftshift
 from .signal_utils import VALID_SAVED_FREQ_MODES
@@ -8,6 +9,7 @@ valid_display_freq_modes = VALID_SAVED_FREQ_MODES - {"complex"}
 
 mode_to_key = {m: m for m in valid_display_freq_modes}
 
+REQUIRED_AXIS_KEYS = {"time", "freq"}
 
 @dataclass
 class PlotBlock:
@@ -80,12 +82,12 @@ def expand_freq_modes(freq_arrays, freq_modes, idx, wp=None):
     return blocks
 
 
-def load_and_prepare_arrays(freq_signals, freq_modes, fft_shift_flag=False, normalize=False, N=None):
+def load_and_prepare_arrays(freq_signals_filename, freq_modes, fft_shift_flag=False, normalize=False, N=None):
     loaded = {}
-    for mode in freq_modes:
-        loaded[mode] = freq_signals[mode] if mode in freq_signals.files else None
-
-    freq_arrays = {mode: loaded.get(mode) for mode in valid_display_freq_modes}
+    with np.load(freq_signals_filename) as freq_signals:
+        for mode in freq_modes:
+            loaded[mode] = freq_signals[mode] if mode in freq_signals.files else None
+        freq_arrays = {mode: loaded.get(mode) for mode in valid_display_freq_modes}
 
     # Apply fftshift / normalization
     for key, arrays in freq_arrays.items():
@@ -130,11 +132,24 @@ def plot_column(axs, col_blocks, freq=None, time=None, freq_range=None):
         ax.set_title(block.label)
 
 
-def plot_dynamic_frequency_modes(freq_signals, time_signals, time, freq, freq_modes, freq_range,
-                                signals_per_file, wave_params=None, base_title=None,
-                                signal_file=None, normalize=False, fft_shift_flag=False):
+def plot_dynamic_frequency_modes(freq_signal_file, time, freq, freq_modes, freq_range,
+                                signals_per_file, time_signal_file=None, wave_params_file=None,
+                                base_title=None, normalize=False, fft_shift_flag=False):   
+    
+    wave_params = None
+    if wave_params_file is not None and wave_params_file.exists():
+        with open(wave_params_file, "rb") as f:
+            wave_params = pickle.load(f)
+
+    if not freq_signal_file.exists() or freq_signal_file is None:
+        raise ValueError(f"Frequency file {freq_signal_file} does not exist")
+    
+    time_signals = None
+    if time_signal_file is not None and time_signal_file.exists():
+        time_signals = np.load(time_signal_file)
+    
     N = len(freq)
-    freq_arrays = load_and_prepare_arrays(freq_signals, freq_modes, fft_shift_flag, normalize, N)
+    freq_arrays = load_and_prepare_arrays(freq_signal_file, freq_modes, fft_shift_flag, normalize, N)
 
     for idx in range(signals_per_file):
         time_signal = time_signals[idx] if time_signals is not None else None
@@ -143,7 +158,7 @@ def plot_dynamic_frequency_modes(freq_signals, time_signals, time, freq, freq_mo
 
         sup = f"{num_tones}-Tone Signals" if num_tones else "Signal"
         if base_title: sup = base_title + sup
-        if signal_file: sup += f"\n{signal_file}"
+        sup += f"\n{freq_signal_file}"
 
         blocks = expand_freq_modes(freq_arrays, freq_modes, idx, wp=wp)
         columns = assign_columns(blocks, time_signal)

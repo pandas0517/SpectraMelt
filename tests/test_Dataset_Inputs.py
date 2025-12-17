@@ -6,14 +6,14 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from spectramelt.utils import (
         get_logger,
-        plot_dynamic_frequency_modes
+        plot_dynamic_frequency_modes,
+        REQUIRED_AXIS_KEYS
     )
     from pathlib import Path
     from spectramelt.InputSignal import InputSignal
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
-    import pickle
     import logging
 
     load_dotenv()
@@ -61,10 +61,15 @@ if __name__ == '__main__':
         freq_modes = dataset.get_freq_modes()
         input_freq_modes = freq_modes.get('input', [])
         
-        real_time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
-        real_time_freq = np.load(input_dir / real_time_freq_filename)
-        real_time = real_time_freq["time"]
-        real_freq = real_time_freq["freq"]
+        time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
+        time_freq_file = input_dir / time_freq_filename
+
+        with np.load(time_freq_filename) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_filename} missing required arrays: {missing}")
+            time = time_freq["time"]
+            freq = time_freq["freq"]
 
         signals_per_file = 3
         for file_path in input_dir.iterdir():
@@ -75,30 +80,24 @@ if __name__ == '__main__':
                 freq_signal_file = Path(f"{key_part}{input_freq_signal_filename}")
 
                 if not wave_params_file.exists():
-                    logger.error(f"Wave parameter file {wave_params_file} does not exist")
-                    raise ValueError(f"Wave parameter file {wave_params_file} does not exist")
-                with open(wave_params_file, "rb") as f:
-                    wave_params = pickle.load(f)
+                    logger.warning(f"Wave parameter file {wave_params_file} does not exist")
+                    wave_params_file = None
 
                 if not freq_signal_file.exists():
                     logger.error(f"Input frequency file {freq_signal_file} does not exist")
                     raise ValueError(f"Input frequency file {freq_signal_file} does not exist")
-                
-                freq_signals = np.load(freq_signal_file)
-                time_signals = np.load(file_path)
+
                 base_title = f"Simulated Analog\n"
 
                 plot_dynamic_frequency_modes(
-                    freq_signals,
-                    time_signals,
-                    real_time,
-                    real_freq,
+                    freq_signal_file,
+                    time,
+                    freq,
                     input_freq_modes,
                     freq_range,
                     signals_per_file,
-                    wave_params,
-                    base_title,
-                    file_path
+                    file_path,
+                    wave_params_file,
                 )
             
     atexit.register(logger.info, "Completed Test\n")

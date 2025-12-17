@@ -19,8 +19,6 @@ if __name__ == '__main__':
     
     create_mlp_model = True
     prepare_large_dataset = True
-    use_normed_h5_file = False
-    
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -82,12 +80,8 @@ if __name__ == '__main__':
                         del output_test_signals
                         get_test_signal = False
 
-            if use_normed_h5_file:
-                premultiply_h5_file = premultiply_dir / f"{Path(freq_signal_filename).stem}_{mode}_norm.h5"
-                output_h5_file = wideband_dir / f"wbf_{Path(freq_signal_filename).stem}_{mode}_norm.h5"
-            else:
-                premultiply_h5_file= premultiply_dir / f"{Path(freq_signal_filename).stem}_{mode}.h5"
-                output_h5_file = wideband_dir / f"wbf_{Path(freq_signal_filename).stem}_{mode}.h5"               
+            premultiply_h5_file= premultiply_dir / f"{Path(freq_signal_filename).stem}_{mode}.h5"
+            output_h5_file = wideband_dir / f"wbf_{Path(freq_signal_filename).stem}_{mode}.h5"               
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
 
