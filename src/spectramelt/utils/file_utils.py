@@ -1,5 +1,34 @@
 from pathlib import Path
 from .logging_utils import get_logger
+import gc
+import numpy as np
+
+
+def update_npz(path, **arrays):
+    """
+    Load an existing .npz, update/add arrays, and resave safely.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to .npz file
+    arrays : dict
+        Named numpy arrays to add or overwrite
+    """
+    path = Path(path)
+
+    if path.exists():
+        with np.load(path, allow_pickle=True) as data:
+            data_dict = dict(data)
+    else:
+        data_dict = {}
+
+    data_dict.update(arrays)
+    np.savez(path, **data_dict)
+
+    # aggressive cleanup (important for long runs)
+    del data_dict
+    gc.collect()
 
 
 def replace_file(old_filepath, new_filepath, log_file=None, level="INFO", console=True):

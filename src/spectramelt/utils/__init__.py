@@ -21,7 +21,8 @@ from .config_utils import (
 # From file_utils.py
 from .file_utils import (
     build_flat_paths,
-    flatten_files
+    flatten_files,
+    update_npz
 )
 
 # From signal_utils.py
@@ -57,5 +58,6 @@ __all__ = [
     "fft_decode_signals",
     "plot_dynamic_frequency_modes",
     "VALID_SAVED_FREQ_MODES",
-    "REQUIRED_AXIS_KEYS"
+    "REQUIRED_AXIS_KEYS",
+    "update_npz"
 ]
