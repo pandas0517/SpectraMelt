@@ -157,7 +157,6 @@ class DataSet:
         if outputset_params is None:
             outputset_params = {
                 "DUT_type": "NYFR",
-                "scale_dict": 1.0,
                 "decode_to_time": True,
                 "normalize": True,
                 "fft_shift": True,
@@ -177,6 +176,7 @@ class DataSet:
     def set_premultiply_params(self, premultiply_params):
         if premultiply_params is None:
             premultiply_params = {
+                "scale_dict": 1.0,
                 "normalize": True,
                 "apply_fft": False,
                 "fft_shift": True,
@@ -775,7 +775,7 @@ class DataSet:
                     self.logger.info(f"{key_part[:-1]} wideband filter frequency set saved to {wbf_freq_signals_file}")
 
                     for path in temp_arr.values():
-                        os.remove(path) 
+                        os.remove(path)
                 
         self.logger.info("Output Set Creation Complete\n")
 
@@ -1036,7 +1036,7 @@ class DataSet:
         premultiply_dir.mkdir(parents=True, exist_ok=True)
         premultiply_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
-        scale_dict = self.outputset_params.get('scale_dict', 1.0)
+        scale_dict = self.premultiply_params.get('scale_dict', 1.0)
         scaled_dictionary = scale_dict * dictionary
 
         cp = import_module("cupy")
@@ -1072,8 +1072,6 @@ class DataSet:
                                                  apply_fft=apply_fft,
                                                  apply_fftshift=fft_shift,
                                                  normalize=normalize)
-                        #unsure why this step is necessary
-                        arr = arr * 2
                         fd, path_arr = tempfile.mkstemp(suffix=".npy")
                         os.close(fd)
                         np.save(path_arr, arr)

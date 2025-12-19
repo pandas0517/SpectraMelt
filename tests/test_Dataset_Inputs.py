@@ -64,10 +64,10 @@ if __name__ == '__main__':
         time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
         time_freq_file = input_dir / time_freq_filename
 
-        with np.load(time_freq_filename) as time_freq:
+        with np.load(time_freq_file) as time_freq:
             missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
             if missing:
-                raise ValueError(f"{time_freq_filename} missing required arrays: {missing}")
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
             time = time_freq["time"]
             freq = time_freq["freq"]
 
@@ -98,6 +98,7 @@ if __name__ == '__main__':
                     signals_per_file,
                     file_path,
                     wave_params_file,
+                    base_title
                 )
             
     atexit.register(logger.info, "Completed Test\n")

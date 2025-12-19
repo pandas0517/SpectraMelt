@@ -16,18 +16,17 @@ if __name__ == '__main__':
     import atexit
     import numpy as np
     import logging
-    import pickle
 
     load_dotenv()
     
-    create_recovery_set = True
-    use_mlp = True
+    create_recovery_set = False
+    use_mlp = False
     decode_recovery_to_time = False
 
     create_recovery_dataframe = False
     set_recovery_dataframe = False
 
-    display_recovered_signals = False
+    display_recovered_signals = True
     DUT_type = "NYFR"
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -95,8 +94,9 @@ if __name__ == '__main__':
                 # Extract identifying portion (for example, everything up to "signals.npy")
                 stem = file_path.name
                 key_part = stem.split(freq_signal_filename)[0]
-                
-                wave_file = wideband_dir / f"{key_part}{wave_params_filename}"
+                key = key_part.replace("centered_", "")
+
+                wave_file = wideband_dir / f"{key}{wave_params_filename}"
                 if not wave_file.exists():
                     logger.warning(f"Wave parameter file {wave_file} does not exist")
                     wave_file = None
@@ -119,7 +119,7 @@ if __name__ == '__main__':
                     recovery_time_file,
                     wave_file,
                     base_title,
-                    fft_shift=True
+                    fft_shift_flag=True
                 )
                      
     atexit.register(logger.info, "Completed Test\n")

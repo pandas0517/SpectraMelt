@@ -16,7 +16,7 @@ if __name__ == '__main__':
     import atexit
     import numpy as np
     import logging
-    import pickle
+
 
     load_dotenv()
     
@@ -103,7 +103,7 @@ if __name__ == '__main__':
                     logger.error(f"{DUT_type} frequency file {freq_signal_file} does not exist")
                     raise ValueError(f"{DUT_type} frequency file {freq_signal_file} does not exist")
 
-                base_title = f"Output for DUT Type {DUT_type}\n"
+                base_title = f"Output for DUT Type {DUT_type}\n"            
                 
                 plot_dynamic_frequency_modes(
                     freq_signal_file,
@@ -145,7 +145,7 @@ if __name__ == '__main__':
                     logger.error(f"Wideband frequency file {freq_signal_file} does not exist")
                     raise ValueError(f"Wideband frequency file {freq_signal_file} does not exist")
 
-                base_title = f"Output for Wideband Frequency\n"
+                base_title = f"Output for Wideband Frequency\n" 
                 
                 plot_dynamic_frequency_modes(
                     freq_signal_file,
@@ -157,7 +157,7 @@ if __name__ == '__main__':
                     file_path,
                     wave_file,
                     base_title,
-                    fft_shift=True
+                    fft_shift_flag=True
                 )
                         
     if display_premultiply_signals:
@@ -167,23 +167,22 @@ if __name__ == '__main__':
         
         for file_path in premultiply_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_freq_signal_filename):         
-                freq_signals = np.load(file_path)
 
                 time_signals = None
                 base_title = f"Output for Premultiplication Signals\n"
                 wave_file = None
-
+                test = np.load(file_path)
                 plot_dynamic_frequency_modes(
-                    freq_signals,
+                    file_path,
                     time,
                     freq,
-                    output_freq_modes,
+                    wideband_freq_modes,
                     freq_range,
                     signals_per_file,
                     time_signals,
                     wave_file,
                     base_title,
-                    fft_shift=True
+                    fft_shift_flag=True
                 )
             
     atexit.register(logger.info, "Completed Test\n")
