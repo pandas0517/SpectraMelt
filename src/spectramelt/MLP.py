@@ -397,7 +397,7 @@ class MLP:
             if self.input_mean is not None:
                 init_guess = init_guess - self.input_mean
             if (self.input_std is not None):
-                init_guess / self.input_std
+                init_guess = init_guess / self.input_std
 
             reshaped_guess = init_guess.reshape((1, init_guess.shape[0]))
             reshaped_coef_predict = mlp_model.predict(reshaped_guess)
