@@ -19,8 +19,8 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_recovery_set = False
-    use_mlp = False
+    create_recovery_set = True
+    use_mlp = True
     decode_recovery_to_time = False
 
     create_recovery_dataframe = False

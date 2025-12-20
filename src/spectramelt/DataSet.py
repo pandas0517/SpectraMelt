@@ -1195,8 +1195,7 @@ class DataSet:
                 for file_path in premultiply_dir.iterdir():
                     if (file_path.is_file() and 
                         file_path.name.endswith(freq_signals_filename) and 
-                        "recovery" in file_path.name.lower() and
-                        "centered" in file_path.name.lower()):
+                        "recovery" in file_path.name.lower()):
 
                         freq_dict = {}
                         all_output_signals = np.load(file_path)
