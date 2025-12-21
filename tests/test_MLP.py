@@ -18,7 +18,7 @@ if __name__ == '__main__':
     load_dotenv()
     
     create_mlp_model = True
-    prepare_large_dataset = True
+    prepare_large_dataset = False
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
 
-            from spectramelt.MLP import MLP
+            from spectramelt.mlp_module import MLP
             mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
             if not ml_config_file.exists():
                 save_to_json(mlp.get_mlp_params(), ml_config_file)

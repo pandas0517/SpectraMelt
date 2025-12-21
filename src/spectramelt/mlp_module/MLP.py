@@ -22,7 +22,7 @@ from keras.callbacks import EarlyStopping
 from keras.activations import get as get_activation
 from keras.utils import get_custom_objects
 from sklearn.model_selection import train_test_split
-
+from . import losses
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
@@ -30,16 +30,11 @@ if gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 
 
-@keras.saving.register_keras_serializable(package="CustomLosses")
-def root_mean_squared_error(y_true, y_pred):
-    return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
-
-
 class MLP:
     """
     """
     # Sets for fast membership checking
-    CUSTOM_LOSSES = {"root_mean_squared_error"}
+    CUSTOM_LOSSES = {"root_mean_squared_error", "HuberSparseAmplitudeLoss"}
     VALID_MONITORS = {
         "loss", "val_loss", "accuracy",
         "acc", "val_accuracy", "val_acc"
@@ -148,20 +143,24 @@ class MLP:
             training_params = {
                 "total_num_sigs": 40000,
                 "test_fraction": 0.3,
-                "loss_type": "root_mean_squared_error",
-                "learning_rate": 0.00001,
-                "num_epochs": 200,
-                "batch_sz": 128,
+                "seed": None,
+                "shuffle": True,
+                "loss_type": "HuberSparseAmplitudeLoss",
+                "loss_params": {
+                    "tau": 0.02,
+                    "amplitude_weight": 0.1,
+                    "delta": 1.0
+                },
+                "learning_rate": 0.00005,
+                "num_epochs": 100,
+                "batch_sz": 256,
                 "early_stopping": {
                     "monitor": "val_loss",
-                    "min_delta": 0.1,
-                    "patience": 4,
-                    "verbose": 1,
-                    "start_from_epoch": 5,
-                    "restore_best_weights" :True
-                },
-                "seed": None,
-                "shuffle": True
+                    "min_delta": 0.005,
+                    "patience": 25,
+                    "start_from_epoch": 10,
+                    "restore_best_weights": True
+                }
             }
             
         self.rng = np.random.default_rng(training_params.get('seed', None))
@@ -301,32 +300,43 @@ class MLP:
     def create_model(self, input_signal_size, output_signal_size, model_file_path=None):
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
-            
+
         loss_type = self.training_params.get('loss_type', "mean_squared_error")
+        loss_params = self.training_params.get('loss_params', {})
         learning_rate = self.training_params.get('learning_rate', 0.00001)
+
         hidden_layer_width_mult = self.model_params.get('hidden_layer_width_mult', [1])
-        activation_functions = self.model_params.get('activation_per_layer',
-                                                     ["linear", "linear"])
+        activation_functions = self.model_params.get(
+            'activation_per_layer', ["linear", "linear"]
+        )
 
         mlp_model = Sequential()
-        mlp_model.add(Input(shape=(input_signal_size,),
-                            name="mlp_model_in"))
-        
+        mlp_model.add(Input(shape=(input_signal_size,), name="mlp_model_in"))
+
         for idx, layer_width_mult in enumerate(hidden_layer_width_mult):
             size = int(layer_width_mult * input_signal_size)
             activation_function = activation_functions[idx]
             layer_name = f"mlp_model_layer_{idx}"
             mlp_model.add(layers.Dense(size,
-                                       activation=activation_function,
-                                       name=layer_name))
-            
+                                    activation=activation_function,
+                                    name=layer_name))
+
         mlp_model.add(layers.Dense(output_signal_size,
-                                   activation=activation_functions[-1],
-                                   name="mlp_model_out"))
-        
+                                activation=activation_functions[-1],
+                                name="mlp_model_out"))
+
         mlp_opt = optimizers.Adam(learning_rate=learning_rate)
-        mlp_model.compile(optimizer=mlp_opt, loss=get_custom_objects().get(loss_type, loss_type))
+
+        loss_fn = self.resolve_loss(loss_type, loss_params)
+
+        mlp_model.compile(
+            optimizer=mlp_opt,
+            loss=loss_fn
+        )
+
         mlp_model.save(model_file_path, overwrite=True)
+
+        return mlp_model
         
 
     def load_model(self, model_file_path=None):
