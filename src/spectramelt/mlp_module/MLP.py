@@ -2,14 +2,13 @@ import numpy as np
 # import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 from pathlib import Path
-from .utils import (
+from spectramelt.utils import (
     load_config_from_json,
     get_logger
 )
 import tensorflow as tf
 import h5py
 import time
-import keras
 from keras import (
     layers,
     losses,
@@ -20,9 +19,12 @@ from keras import (
 )
 from keras.callbacks import EarlyStopping
 from keras.activations import get as get_activation
-from keras.utils import get_custom_objects
 from sklearn.model_selection import train_test_split
-from . import losses
+from .losses import (
+    root_mean_squared_error,
+    resolve_loss,
+    HuberSparseAmplitudeLoss
+)
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
@@ -34,7 +36,7 @@ class MLP:
     """
     """
     # Sets for fast membership checking
-    CUSTOM_LOSSES = {"root_mean_squared_error", "HuberSparseAmplitudeLoss"}
+    CUSTOM_LOSSES = {"root_mean_squared_error", "hubersparseamplitudeloss"}
     VALID_MONITORS = {
         "loss", "val_loss", "accuracy",
         "acc", "val_accuracy", "val_acc"
@@ -68,8 +70,6 @@ class MLP:
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
 
-        # Ensure custom losses are registered
-        get_custom_objects().update({"root_mean_squared_error": root_mean_squared_error})
  
     # -------------------------------
     # Setters
@@ -327,7 +327,7 @@ class MLP:
 
         mlp_opt = optimizers.Adam(learning_rate=learning_rate)
 
-        loss_fn = self.resolve_loss(loss_type, loss_params)
+        loss_fn = resolve_loss(loss_type, loss_params)
 
         mlp_model.compile(
             optimizer=mlp_opt,
