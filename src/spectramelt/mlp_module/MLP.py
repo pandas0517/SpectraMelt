@@ -41,6 +41,9 @@ class MLP:
         "loss", "val_loss", "accuracy",
         "acc", "val_accuracy", "val_acc"
     }
+    VALID_NORM_TYPES = {
+        "zscore", "maxabs", "minmax"
+    } 
     
     def __init__(self,
                  mlp_params=None,
@@ -143,6 +146,7 @@ class MLP:
             training_params = {
                 "total_num_sigs": 40000,
                 "test_fraction": 0.3,
+                "norm_type": None,
                 "seed": None,
                 "shuffle": True,
                 "loss_type": "HuberSparseAmplitudeLoss",
@@ -177,6 +181,11 @@ class MLP:
         if not self.is_valid_test_fraction(test_fraction):
             self.logger.error(f"{test_fraction} is not a valid percentage")
             raise ValueError(f"{test_fraction} is not a valid percentage")
+        
+        norm_type = training_params.get('norm_type', None)
+        if not self.is_valid_norm(norm_type):
+            self.logger.error(f"{norm_type} is not a valid norm type")
+            raise ValueError(f"{norm_type} is not a valid norm type")
   
         early_stopping_params = training_params.get('early_stopping', {})
         monitor = early_stopping_params.get('monitor', "val_loss")
@@ -198,25 +207,50 @@ class MLP:
 
 
     def set_recovery_stats_from_h5(self, norm_h5_path, dataset_name):
-        if (norm_h5_path is None):
-            self.logger.error("h5 file path can not be None")
-            raise ValueError("h5 file path can not be None")
-        elif (not norm_h5_path.is_file()):
-            self.logger.error(f"{norm_h5_path} is not a valid file")
-            raise ValueError(f"{norm_h5_path} is not a valid file")             
-        elif ("norm" not in norm_h5_path.name.lower()):
-            self.logger.error(f"{norm_h5_path} does not contain normed signals")
-            raise ValueError(f"{norm_h5_path} does not contain normed signals")
-        else:
-            mean, std, _ = self.load_normalization_stats(norm_h5_path)
+        if norm_h5_path is None:
+            self.logger.error("h5 file path cannot be None")
+            raise ValueError("h5 file path cannot be None")
 
+        if not norm_h5_path.is_file():
+            self.logger.error(f"{norm_h5_path} is not a valid file")
+            raise ValueError(f"{norm_h5_path} is not a valid file")
+
+        if "norm" not in norm_h5_path.name.lower():
+            self.logger.error(f"{norm_h5_path} does not appear to be a normalized dataset")
+            raise ValueError(f"{norm_h5_path} does not appear to be a normalized dataset")
+
+        # ------------------------------------------------------------
+        # Load normalization metadata
+        # ------------------------------------------------------------
+        with h5py.File(norm_h5_path, "r") as f:
+            if "normalization" not in f:
+                raise ValueError("Normalization group missing in HDF5 file")
+
+            norm_grp = f["normalization"]
+
+            norm_type = norm_grp.attrs.get("method", None)
+            if norm_type is None:
+                raise ValueError("Normalization type missing in HDF5 metadata")
+
+            # --- Load normalization parameters ---
+            mean = norm_grp["mean"][:] if "mean" in norm_grp else None
+            scale = norm_grp["scale"][:] if "scale" in norm_grp else None
+
+        # ------------------------------------------------------------
+        # Validate normalization type
+        # ------------------------------------------------------------
+        if not self.is_valid_norm(norm_type):
+            raise ValueError(f"Unsupported normalization type: {norm_type}")
+
+        # ------------------------------------------------------------
+        # Assign recovery parameters
+        # ------------------------------------------------------------
         if dataset_name == "X":
-            self.set_input_recovery_stats(mean, std)
+            self.set_input_recovery_stats(mean, scale, norm_type)
         elif dataset_name == "y":
-            self.set_output_recovery_stats(mean, std)
+            self.set_output_recovery_stats(mean, scale, norm_type)
         else:
-            self.logger.error(f"{dataset_name} not valid")
-            raise ValueError(f"{dataset_name} not valid")
+            raise ValueError(f"Invalid dataset name: {dataset_name}")
 
         
     def set_input_recovery_stats(self,
@@ -233,6 +267,12 @@ class MLP:
     # -------------------------------
     # Core functional methods
     # -------------------------------
+
+    @classmethod
+    def is_valid_norm(cls, norm_type) -> bool:
+        if not isinstance(norm_type, str):
+            return False
+        return norm_type.lower() in cls.VALID_NORM_TYPES
 
     def is_valid_keras_activation(self, name):
         """Check if a single activation name is valid in Keras."""
@@ -581,61 +621,82 @@ class MLP:
             hf_out.move("y_shuffled", "y")
 
         self.logger.info("[DONE] Dataset creation and shuffle complete.")
-
+       
         
-        
-    def compute_hdf5_stats(self,
-                           h5_path,
-                           dataset_name="X",
-                           batch_size=4096):
+    def scan_hdf5_stats(
+        self,
+        h5_path,
+        dataset_name,
+        batch_size=4096,
+        norm_type="zscore",
+    ):
         """
-        Computes per-feature mean and std from an HDF5 dataset
-        where signals are already encoded for MLP input.
+        Scan HDF5 dataset and compute normalization statistics.
 
-        Assumes dataset shape:
-            (N, features) or (N, ..., features)
+        Returns a dict suitable for saving under /normalization.
         """
 
         with h5py.File(h5_path, "r") as f:
             data = f[dataset_name]
             N = data.shape[0]
+            feat_dim = int(np.prod(data.shape[1:]))
 
-            # Determine feature dimension
-            sample = data[0]
-            sample = sample.reshape(-1)
-            feat_dim = sample.size
+            # Allocate accumulators
+            if norm_type == "zscore":
+                sum_x  = np.zeros(feat_dim, dtype=np.float64)
+                sum_x2 = np.zeros(feat_dim, dtype=np.float64)
 
-            mean = np.zeros(feat_dim, dtype=np.float64)
-            var = np.zeros(feat_dim, dtype=np.float64)
-            count = 0
+            elif norm_type == "maxabs":
+                max_abs = np.zeros(feat_dim, dtype=np.float64)
+
+            elif norm_type == "minmax":
+                min_val = np.full(feat_dim,  np.inf)
+                max_val = np.full(feat_dim, -np.inf)
 
             for start in range(0, N, batch_size):
                 end = min(start + batch_size, N)
-                batch = data[start:end]
+                batch = data[start:end].reshape(end - start, -1)
+                batch = np.asarray(batch, dtype=np.float64)
 
-                # Flatten to (batch_size, features)
-                batch = batch.reshape(batch.shape[0], -1).astype(np.float64)
+                if norm_type == "zscore":
+                    sum_x  += batch.sum(axis=0)
+                    sum_x2 += np.square(batch).sum(axis=0)
 
-                batch_count = batch.shape[0]
-                batch_mean = np.mean(batch, axis=0)
-                batch_var = np.var(batch, axis=0)
+                elif norm_type == "maxabs":
+                    max_abs = np.maximum(max_abs, np.abs(batch).max(axis=0))
 
-                # Welford update
-                delta = batch_mean - mean
-                new_count = count + batch_count
+                elif norm_type == "minmax":
+                    min_val = np.minimum(min_val, batch.min(axis=0))
+                    max_val = np.maximum(max_val, batch.max(axis=0))
 
-                mean += delta * batch_count / new_count
-                var = (
-                    count * var +
-                    batch_count * batch_var +
-                    (delta ** 2) * count * batch_count / new_count
-                ) / new_count
+        eps = 1e-8
 
-                count = new_count
+        if norm_type == "zscore":
+            mean = sum_x / N
+            var  = (sum_x2 / N) - mean**2
+            std  = np.sqrt(np.maximum(var, eps))
+            return {
+                "method": "zscore",
+                "mean": mean,
+                "std": std,
+                "epsilon": eps,
+            }
 
-            std = np.sqrt(var) + 1e-8
+        if norm_type == "maxabs":
+            scale = np.maximum(max_abs, eps)
+            return {
+                "method": "maxabs",
+                "max_abs": scale,
+            }
 
-        return mean, std
+        if norm_type == "minmax":
+            scale = np.maximum(max_val - min_val, eps)
+            return {
+                "method": "minmax",
+                "min": min_val,
+                "max": max_val,
+                "scale": scale,
+            }
     
 
     def normalize_hdf5_dataset(
@@ -643,131 +704,84 @@ class MLP:
         input_h5_path,
         dataset_name,
         batch_size=4096,
-        stats_batch_size=None,
         output_dataset_name=None,
         dtype=np.float32,
+        norm_type="zscore",
     ):
-        """
-        Normalize an HDF5 dataset by computing mean/std internally.
-
-        Creates a new HDF5 file with a normalized version of the dataset.
-        The output file name is automatically generated as:
-
-            original_name_norm.h5
-
-        Stores normalization stats in the output HDF5 file as datasets:
-            /normalization/mean
-            /normalization/std
-            /normalization/epsilon
-        """
 
         input_h5_path = Path(input_h5_path)
-
-        if stats_batch_size is None:
-            stats_batch_size = batch_size
-
-        # ------------------------------------------------------------
-        # 1. Compute statistics from the dataset
-        # ------------------------------------------------------------
-        self.logger.info("Computing dataset mean and std...")
-
-        mean, std = self.compute_hdf5_stats(
+        stats = self.scan_hdf5_stats(
             input_h5_path,
-            dataset_name=dataset_name,
-            batch_size=stats_batch_size
+            dataset_name,
+            batch_size=batch_size,
+            norm_type=norm_type,
         )
 
-        mean = mean.astype(np.float64)
-        std = std.astype(np.float64)
-
-        epsilon = 1e-8
-        std = std + epsilon
-
-        self.logger.info("Mean/std computation complete.")
-
-        mean_reshape = mean.reshape(1, -1)
-        std_reshape = std.reshape(1, -1)
-
-        # ------------------------------------------------------------
-        # 2. Generate output file path
-        # ------------------------------------------------------------
         output_h5_path = input_h5_path.with_name(
-            input_h5_path.stem + "_norm" + input_h5_path.suffix
+            input_h5_path.stem + f"_{norm_type}" + input_h5_path.suffix
         )
 
         if output_dataset_name is None:
             output_dataset_name = dataset_name
 
-        # ------------------------------------------------------------
-        # 3. Normalize dataset + write to new file
-        # ------------------------------------------------------------
         with h5py.File(input_h5_path, "r") as f_in, \
             h5py.File(output_h5_path, "w") as f_out:
 
             data = f_in[dataset_name]
             N = data.shape[0]
-            original_shape = data.shape[1:]
 
-            self.logger.info(f"Normalizing {N} samples...")
-
-            out_dset = f_out.create_dataset(
+            out = f_out.create_dataset(
                 output_dataset_name,
                 shape=data.shape,
                 dtype=dtype,
                 chunks=True,
-                compression="gzip"
+                compression="gzip",
             )
 
-            # ------------------------------------------------------------
-            # 4. Store normalization stats as DATASETS (not attributes)
-            # ------------------------------------------------------------
-            norm_group = f_out.create_group("normalization")
+            # ------------------------
+            # Save normalization stats
+            # ------------------------
+            norm_grp = f_out.create_group("normalization")
+            norm_grp.attrs["method"] = stats["method"]
+            norm_grp.attrs["source_dataset"] = dataset_name
 
-            norm_group.create_dataset("mean", data=mean)
-            norm_group.create_dataset("std", data=std)
-            norm_group.create_dataset("epsilon", data=epsilon)
+            for k, v in stats.items():
+                if k != "method":
+                    norm_grp.create_dataset(k, data=v)
 
-            # Metadata attributes (small and safe)
-            norm_group.attrs["method"] = "z-score"
-            norm_group.attrs["num_features"] = mean.shape[0]
-            norm_group.attrs["source_dataset"] = dataset_name
-            norm_group.attrs["normalized"] = True
-
-            # File-level provenance
-            f_out.attrs["source_file"] = input_h5_path.name
-            f_out.attrs["source_dataset"] = dataset_name
-
-            # ------------------------------------------------------------
-            # 5. Stream normalization
-            # ------------------------------------------------------------
+            # ------------------------
+            # Streaming normalization
+            # ------------------------
             for start in range(0, N, batch_size):
                 end = min(start + batch_size, N)
+                batch = data[start:end].reshape(end - start, -1)
+                batch = np.asarray(batch, dtype=np.float64)
 
-                batch = data[start:end]
-                flat = batch.reshape(batch.shape[0], -1).astype(np.float64)
+                if norm_type == "zscore":
+                    batch = (batch - stats["mean"]) / stats["std"]
 
-                flat = (flat - mean_reshape) / std_reshape
+                elif norm_type == "maxabs":
+                    batch = batch / stats["max_abs"]
 
-                flat = flat.reshape((flat.shape[0],) + original_shape)
+                elif norm_type == "minmax":
+                    batch = (batch - stats["min"]) / stats["scale"]
 
-                out_dset[start:end] = flat.astype(dtype)
+                out[start:end] = batch.reshape(
+                    (end - start,) + data.shape[1:]
+                ).astype(dtype)
 
                 if start % (10 * batch_size) == 0:
-                    self.logger.info(f"Normalized {start}/{N} samples")
-
-        self.logger.info(f"Normalization complete! Saved to: {output_h5_path}")
+                    self.logger.info(f"Normalized {start}/{N}")
 
         return output_h5_path
     
 
     def load_normalization_stats(self, norm_h5_path):
         with h5py.File(norm_h5_path, "r") as f:
-            norm = f["normalization"]
-            mean = norm["mean"][:]
-            std  = norm["std"][:]
-            eps  = norm["epsilon"][()]
-
-        return mean, std, eps
+            grp = f["normalization"]
+            stats = {k: grp[k][:] for k in grp.keys()}
+            stats["method"] = grp.attrs["method"]
+        return stats
 
 
     def make_hdf5_batch_loader(self, h5_input_path, h5_output_path):
@@ -826,6 +840,7 @@ class MLP:
         num_epochs = self.training_params.get("num_epochs", 200)
         batch_sz   = self.training_params.get("batch_sz", 128)
         test_frac  = self.training_params.get("test_fraction", 0.3)
+        norm_type = self.training_params.get("norm_type", None)
 
         # Early stopping
         early_stopping_params = self.training_params.get('early_stopping', {})
@@ -846,7 +861,9 @@ class MLP:
             norm_h5_input_path = h5_input_path
         else:
             if not norm_h5_input_path.exists():
-                norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path, dataset_name="X")
+                norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path,
+                                                                 dataset_name="X",
+                                                                 norm_type=norm_type)
         
         self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
@@ -858,7 +875,9 @@ class MLP:
             norm_h5_output_path = h5_output_path
         else:
             if not norm_h5_output_path.exists():
-                norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path, dataset_name="y")
+                norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path,
+                                                                  dataset_name="y",
+                                                                  norm_type=norm_type)
         
         self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
