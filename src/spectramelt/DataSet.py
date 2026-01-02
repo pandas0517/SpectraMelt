@@ -1170,18 +1170,33 @@ class DataSet:
                 if mlp is None:
                     self.logger.error("No MLP object given")
                     raise ValueError("No MLP object given")
+                
+                training_params = mlp.get_training_params()
+                norm_params = training_params.get('norm_params', None)
+                if norm_params is not None:
+                    input_norm_type = norm_params.get('input_type', None)
+                    output_norm_type = norm_params.get('output_type', None)
 
-                norm_premultiply_h5_file = premultiply_dir / f"{Path(freq_signals_filename).stem}_{mode}_norm.h5"
-                if not norm_premultiply_h5_file.exists():
-                    self.logger.warning(f"{norm_premultiply_h5_file} file does not exist")
-                else:
-                    mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                    if input_norm_type is not None:
+                        norm_premultiply_h5_file = premultiply_dir / f"{Path(freq_signals_filename).stem}_{mode}_{input_norm_type}.h5"
+                        if not norm_premultiply_h5_file.exists():
+                            self.logger.warning(f"{norm_premultiply_h5_file} file does not exist")
+                        else:
+                            mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
+                    else:
+                        self.logger.warning("No normalization type specified for input set")
                     
-                norm_output_h5_file = wideband_dir / f"wbf_{Path(freq_signals_filename).stem}_{mode}_norm.h5"
-                if not norm_output_h5_file.exists():
-                    self.logger.warning(f"{norm_output_h5_file} file does not exist")
+                    if output_norm_type is not None:
+                        norm_output_h5_file = wideband_dir / f"wbf_{Path(freq_signals_filename).stem}_{mode}_{output_norm_type}.h5"
+                        if not norm_output_h5_file.exists():
+                            self.logger.warning(f"{norm_output_h5_file} file does not exist")
+                        else:
+                            mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
+                    else:
+                        self.logger.warning("No normalization type specified for output set")
+                
                 else:
-                    mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
+                    self.logger.warning("No normalization parameters found for the MLP")
                 
                 ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
                 if not ml_model_file.exists():

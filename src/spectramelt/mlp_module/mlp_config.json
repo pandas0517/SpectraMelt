@@ -18,7 +18,12 @@
     "training_params": {
         "total_num_sigs": 40000,
         "test_fraction": 0.3,
-        "norm_type": "maxabs",
+        "norm_params": {
+            "input_type": "maxabs",
+            "input_scope": "global",
+            "output_type": "maxabs",
+            "output_scope": "global"
+        },
         "seed": null,
         "shuffle": true,
         "loss_type": "HuberSparseAmplitudeLoss",
@@ -27,13 +32,13 @@
             "amplitude_weight": 0.1,
             "delta": 1.0
         },
-        "learning_rate": 0.0001,
+        "learning_rate": 0.00008,
         "num_epochs": 50,
         "batch_sz": 256,
         "early_stopping": {
             "monitor": "val_loss",
             "min_delta": 0.05,
-            "patience": 10,
+            "patience": 5,
             "start_from_epoch": 10,
             "restore_best_weights": true
         }

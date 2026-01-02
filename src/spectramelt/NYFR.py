@@ -339,6 +339,7 @@ class NYFR:
         sampled_indicies = np.searchsorted(real_time, quantized_signals.get('mid_times'))
         
         if isinstance(lo_phase_mod, np.ndarray):
+            # This really needs to be quantized to add that noise into the dictionary
             # Extract the corresponding lo_phase_mod values
             self.lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
          

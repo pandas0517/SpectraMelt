@@ -43,7 +43,11 @@ class MLP:
     }
     VALID_NORM_TYPES = {
         "zscore", "maxabs", "minmax"
-    } 
+    }
+    VALID_NORM_SCOPE = {
+        "global",
+        "elementwise"
+    }
     
     def __init__(self,
                  mlp_params=None,
@@ -67,8 +71,6 @@ class MLP:
             mlp_params['log_params'] = log_params
 
         self.set_mlp_params(mlp_params)
-        self.set_input_recovery_stats()
-        self.set_output_recovery_stats()
 
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
@@ -102,8 +104,6 @@ class MLP:
         self.set_model_params(model_params)
         self.set_training_params(training_params)
         self.set_config_name(config_name)
-        self.set_input_recovery_stats()
-        self.set_output_recovery_stats()
         
     
     def set_config_name(self, config_name):
@@ -146,7 +146,12 @@ class MLP:
             training_params = {
                 "total_num_sigs": 40000,
                 "test_fraction": 0.3,
-                "norm_type": None,
+                "norm_params": {
+                    "input_type": "maxabs",
+                    "input_scope": "global",
+                    "output_type": "maxabs",
+                    "output_scope": "global"
+                },
                 "seed": None,
                 "shuffle": True,
                 "loss_type": "HuberSparseAmplitudeLoss",
@@ -182,16 +187,43 @@ class MLP:
             self.logger.error(f"{test_fraction} is not a valid percentage")
             raise ValueError(f"{test_fraction} is not a valid percentage")
         
-        norm_type = training_params.get('norm_type', None)
-        if not self.is_valid_norm(norm_type):
-            self.logger.error(f"{norm_type} is not a valid norm type")
-            raise ValueError(f"{norm_type} is not a valid norm type")
+        norm_params = training_params.get('norm_params', None)
+
+        if norm_params is not None:
+            input_type = norm_params.get('input_type', None)
+            output_type = norm_params.get('output_type', None)
+
+            if input_type is not None:
+                if not self.is_valid_norm_type(input_type):
+                    self.logger.error(f"{input_type} is not a valid input norm type")
+                    raise ValueError(f"{input_type} is not a valid input norm type")
+            
+            if output_type is not None:
+                if not self.is_valid_norm_type(output_type):
+                    self.logger.error(f"{output_type} is not a valid output norm type")
+                    raise ValueError(f"{output_type} is not a valid output norm type")
+            
+            input_scope = norm_params.get('input_scope', None)
+            output_scope = norm_params.get('output_scope', None)
+
+            if input_scope is not None:
+                if not self.is_valid_norm_scope(input_scope):
+                    self.logger.error(f"{input_scope} is not a valid input norm type")
+                    raise ValueError(f"{input_scope} is not a valid input norm type")
+            
+            if output_scope is not None:
+                if not self.is_valid_norm_scope(output_scope):
+                    self.logger.error(f"{output_scope} is not a valid output norm type")
+                    raise ValueError(f"{output_scope} is not a valid output norm type")
+                
+            self.set_input_recovery_stats(norm_type=input_type, norm_scope=input_scope)
+            self.set_output_recovery_stats(norm_type=output_type, norm_scope=output_scope) 
   
         early_stopping_params = training_params.get('early_stopping', {})
         monitor = early_stopping_params.get('monitor', "val_loss")
         if not self.is_valid_monitor(monitor):
             self.logger.error(f"{monitor} is not a valid Keras monitor value")
-            raise ValueError(f"{monitor} is not a valid Keras monitor value")           
+            raise ValueError(f"{monitor} is not a valid Keras monitor value")        
         
         self.training_params = training_params
 
@@ -208,16 +240,20 @@ class MLP:
 
     def set_recovery_stats_from_h5(self, norm_h5_path, dataset_name):
         if norm_h5_path is None:
-            self.logger.error("h5 file path cannot be None")
             raise ValueError("h5 file path cannot be None")
 
         if not norm_h5_path.is_file():
-            self.logger.error(f"{norm_h5_path} is not a valid file")
             raise ValueError(f"{norm_h5_path} is not a valid file")
 
-        if "norm" not in norm_h5_path.name.lower():
-            self.logger.error(f"{norm_h5_path} does not appear to be a normalized dataset")
-            raise ValueError(f"{norm_h5_path} does not appear to be a normalized dataset")
+        # ------------------------------------------------------------
+        # Check that the file name contains a valid normalization type
+        # ------------------------------------------------------------
+        filename_lower = norm_h5_path.name.lower()
+        if not any(norm_type in filename_lower for norm_type in self.VALID_NORM_TYPES):
+            raise ValueError(
+                f"{norm_h5_path} does not appear to contain a normalized dataset "
+                f"(expected one of: {sorted(self.VALID_NORM_TYPES)})"
+        )
 
         # ------------------------------------------------------------
         # Load normalization metadata
@@ -228,51 +264,155 @@ class MLP:
 
             norm_grp = f["normalization"]
 
-            norm_type = norm_grp.attrs.get("method", None)
+            norm_type = norm_grp.attrs.get("method")
             if norm_type is None:
                 raise ValueError("Normalization type missing in HDF5 metadata")
-
-            # --- Load normalization parameters ---
-            mean = norm_grp["mean"][:] if "mean" in norm_grp else None
+            
+            norm_scope = norm_grp.attrs.get("scope")
+            if norm_scope is None:
+                raise ValueError("Normalization scope missing in HDF5 metadata")
+            
+            # Load optional fields safely
+            mean  = norm_grp["mean"][:]  if "mean"  in norm_grp else None
             scale = norm_grp["scale"][:] if "scale" in norm_grp else None
+            min_  = norm_grp["min"][:]   if "min"   in norm_grp else None
+            max_  = norm_grp["max"][:]   if "max"   in norm_grp else None
 
         # ------------------------------------------------------------
-        # Validate normalization type
+        # Validate normalization type and scope
         # ------------------------------------------------------------
-        if not self.is_valid_norm(norm_type):
+        if not self.is_valid_norm_type(norm_type):
             raise ValueError(f"Unsupported normalization type: {norm_type}")
+        
+        if not self.is_valid_norm_scope(norm_scope):
+            raise ValueError(f"Unsupported normalization scope: {norm_scope}")
 
         # ------------------------------------------------------------
-        # Assign recovery parameters
+        # Dispatch to appropriate setter
         # ------------------------------------------------------------
         if dataset_name == "X":
-            self.set_input_recovery_stats(mean, scale, norm_type)
+            self.set_input_recovery_stats(
+                mean=mean,
+                scale=scale,
+                norm_type=norm_type,
+                norm_scope=norm_scope,
+                min_val=min_,
+                max_val=max_,
+            )
         elif dataset_name == "y":
-            self.set_output_recovery_stats(mean, scale, norm_type)
+            self.set_output_recovery_stats(
+                mean=mean,
+                scale=scale,
+                norm_type=norm_type,
+                norm_scope=norm_scope,
+                min_val=min_,
+                max_val=max_,
+            )
         else:
             raise ValueError(f"Invalid dataset name: {dataset_name}")
-
         
-    def set_input_recovery_stats(self,
-                           mean=None, std=None):
+
+    def set_input_recovery_stats(
+        self,
+        mean=None,
+        scale=None,
+        norm_type=None,
+        norm_scope=None,
+        min_val=None,
+        max_val=None,
+    ):
+        self.input_norm_type = norm_type
+        self.input_norm_scope = norm_scope
         self.input_mean = mean
-        self.input_std = std
+        self.input_scale = scale
+        self.input_min = min_val
+        self.input_max = max_val
+        # ---------------- Logging ----------------
+        self.logger.info("=== Input Recovery Statistics Loaded ===")
+        self.logger.info(f"Normalization type : {self.input_norm_type}")
+        self.logger.info(f"Normalization type : {self.input_norm_scope}")
+
+        if self.input_mean is not None:
+            self.logger.info(f"Mean shape/value  : {getattr(self.input_mean, 'shape', 'scalar')} | {self.input_mean}")
+        else:
+            self.logger.info("Mean              : None")
+
+        if self.input_scale is not None:
+            self.logger.info(f"Scale shape/value : {getattr(self.input_scale, 'shape', 'scalar')} | {self.input_scale}")
+        else:
+            self.logger.info("Scale             : None")
+
+        if self.input_min is not None:
+            self.logger.info(f"Min value shape   : {getattr(self.input_min, 'shape', 'scalar')} | {self.input_min}")
+        else:
+            self.logger.info("Min value         : None")
+
+        if self.input_max is not None:
+            self.logger.info(f"Max value shape   : {getattr(self.input_max, 'shape', 'scalar')} | {self.input_max}")
+        else:
+            self.logger.info("Max value         : None")
+
+        self.logger.info("=======================================")
 
 
-    def set_output_recovery_stats(self,
-                           mean=None, std=None):
+    def set_output_recovery_stats(
+        self,
+        mean=None,
+        scale=None,
+        norm_type=None,
+        norm_scope=None,
+        min_val=None,
+        max_val=None,
+    ):
+        self.output_norm_type = norm_type
+        self.output_norm_scope = norm_scope
         self.output_mean = mean
-        self.output_std = std
+        self.output_scale = scale
+        self.output_min = min_val
+        self.output_max = max_val
+
+        # ---------------- Logging ----------------
+        self.logger.info("=== Output Recovery Statistics Loaded ===")
+        self.logger.info(f"Normalization type : {self.output_norm_type}")
+        self.logger.info(f"Normalization type : {self.output_norm_scope}")
+
+        if self.output_mean is not None:
+            self.logger.info(f"Mean shape/value  : {getattr(self.output_mean, 'shape', 'scalar')} | {self.output_mean}")
+        else:
+            self.logger.info("Mean              : None")
+
+        if self.output_scale is not None:
+            self.logger.info(f"Scale shape/value : {getattr(self.output_scale, 'shape', 'scalar')} | {self.output_scale}")
+        else:
+            self.logger.info("Scale             : None")
+
+        if self.output_min is not None:
+            self.logger.info(f"Min value shape   : {getattr(self.output_min, 'shape', 'scalar')} | {self.output_min}")
+        else:
+            self.logger.info("Min value         : None")
+
+        if self.output_max is not None:
+            self.logger.info(f"Max value shape   : {getattr(self.output_max, 'shape', 'scalar')} | {self.output_max}")
+        else:
+            self.logger.info("Max value         : None")
+
+        self.logger.info("========================================")
 
     # -------------------------------
     # Core functional methods
     # -------------------------------
 
     @classmethod
-    def is_valid_norm(cls, norm_type) -> bool:
+    def is_valid_norm_type(cls, norm_type) -> bool:
         if not isinstance(norm_type, str):
             return False
         return norm_type.lower() in cls.VALID_NORM_TYPES
+
+    @classmethod
+    def is_valid_norm_scope(cls, norm_scope) -> bool:
+        if not isinstance(norm_scope, str):
+            return False
+        return norm_scope.lower() in cls.VALID_NORM_SCOPE
 
     def is_valid_keras_activation(self, name):
         """Check if a single activation name is valid in Keras."""
@@ -430,11 +570,17 @@ class MLP:
     def model_prediction(self, init_guess, mode,
                          norm_h5_input_path=None,
                          norm_h5_output_path=None,
-                         mlp_model=None):
+                         mlp_model=None,
+                         in_norm_type=None,
+                         out_norm_type=None):
+
         if (norm_h5_input_path is not None and
             norm_h5_input_path.is_file() and 
             "norm" in norm_h5_input_path.name.lower()):
             self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+
+        if in_norm_type is None:
+            in_norm_type = self.input_norm_type
 
         coef_predict = None
         if mlp_model is None:
@@ -444,11 +590,16 @@ class MLP:
             raise ValueError("Complex values not supported by MLPs")
         else:
             # ---------------- Normalize input signal ----------------
-            if self.input_mean is not None:
-                init_guess = init_guess - self.input_mean
-            if (self.input_std is not None):
-                init_guess = init_guess / self.input_std
+            if in_norm_type is not None:
+                if in_norm_type == "zscore":
+                    init_guess = (init_guess - self.input_mean) / self.input_scale
 
+                elif in_norm_type == "maxabs":
+                    init_guess = init_guess / self.input_scale
+
+                elif in_norm_type == "minmax":
+                    init_guess  = (init_guess  - self.input_min) / (self.input_max - self.input_min)
+                
             reshaped_guess = init_guess.reshape((1, init_guess.shape[0]))
             reshaped_coef_predict = mlp_model.predict(reshaped_guess)
             coef_predict = reshaped_coef_predict.reshape(-1)
@@ -458,11 +609,19 @@ class MLP:
             "norm" in norm_h5_output_path.name.lower()):
             self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
+        if out_norm_type is None:
+            out_norm_type = self.output_norm_type
+
         # ---------------- Denormalize signal ----------------
-        if (self.output_std is not None):
-            coef_predict = coef_predict * self.output_std
-        if (self.output_mean is not None):
-            coef_predict = coef_predict + self.output_mean
+        if out_norm_type is not None:
+            if out_norm_type == "zscore":
+                coef_predict = coef_predict * self.output_scale + self.output_mean
+
+            elif out_norm_type == "maxabs":
+                coef_predict = coef_predict * self.output_scale
+
+            elif out_norm_type == "minmax":
+                coef_predict = coef_predict * (self.output_max - self.output_min) + self.output_min
         
         return coef_predict
         
@@ -628,71 +787,47 @@ class MLP:
         h5_path,
         dataset_name,
         batch_size=4096,
-        norm_type="zscore",
+        norm_scope="global",  # "global" or "elementwise"
     ):
-        """
-        Scan HDF5 dataset and compute normalization statistics.
-
-        Returns a dict suitable for saving under /normalization.
-        """
-
         with h5py.File(h5_path, "r") as f:
             data = f[dataset_name]
             N = data.shape[0]
-            feat_dim = int(np.prod(data.shape[1:]))
 
-            # Allocate accumulators
-            if norm_type == "zscore":
-                sum_x  = np.zeros(feat_dim, dtype=np.float64)
-                sum_x2 = np.zeros(feat_dim, dtype=np.float64)
+            if norm_scope == "elementwise":
+                feat_dim = int(np.prod(data.shape[1:]))
+            else:
+                feat_dim = 1
 
-            elif norm_type == "maxabs":
-                max_abs = np.zeros(feat_dim, dtype=np.float64)
-
-            elif norm_type == "minmax":
-                min_val = np.full(feat_dim,  np.inf)
-                max_val = np.full(feat_dim, -np.inf)
+            # Initialize accumulators
+            sum_x = np.zeros(feat_dim)
+            sum_x2 = np.zeros(feat_dim)
+            min_val = np.full(feat_dim, np.inf)
+            max_val = np.full(feat_dim, -np.inf)
 
             for start in range(0, N, batch_size):
                 end = min(start + batch_size, N)
-                batch = data[start:end].reshape(end - start, -1)
-                batch = np.asarray(batch, dtype=np.float64)
+                batch = data[start:end].astype(np.float64)
 
-                if norm_type == "zscore":
-                    sum_x  += batch.sum(axis=0)
-                    sum_x2 += np.square(batch).sum(axis=0)
+                if norm_scope == "elementwise":
+                    batch = batch.reshape(batch.shape[0], -1)
+                else:
+                    batch = batch.reshape(-1)
 
-                elif norm_type == "maxabs":
-                    max_abs = np.maximum(max_abs, np.abs(batch).max(axis=0))
+                sum_x += batch.sum(axis=0)
+                sum_x2 += np.square(batch).sum(axis=0)
+                min_val = np.minimum(min_val, batch.min(axis=0))
+                max_val = np.maximum(max_val, batch.max(axis=0))
 
-                elif norm_type == "minmax":
-                    min_val = np.minimum(min_val, batch.min(axis=0))
-                    max_val = np.maximum(max_val, batch.max(axis=0))
+            eps = 1e-8
+            mean = sum_x / (N if norm_scope == "global" else (N * batch.shape[1]))
+            var = (sum_x2 / (N if norm_scope == "global" else (N * batch.shape[1]))) - mean**2
+            std = np.sqrt(np.maximum(var, eps))
+            scale = np.maximum(max_val - min_val, eps)
 
-        eps = 1e-8
-
-        if norm_type == "zscore":
-            mean = sum_x / N
-            var  = (sum_x2 / N) - mean**2
-            std  = np.sqrt(np.maximum(var, eps))
             return {
-                "method": "zscore",
+                "scope": norm_scope,
                 "mean": mean,
                 "std": std,
-                "epsilon": eps,
-            }
-
-        if norm_type == "maxabs":
-            scale = np.maximum(max_abs, eps)
-            return {
-                "method": "maxabs",
-                "max_abs": scale,
-            }
-
-        if norm_type == "minmax":
-            scale = np.maximum(max_val - min_val, eps)
-            return {
-                "method": "minmax",
                 "min": min_val,
                 "max": max_val,
                 "scale": scale,
@@ -707,14 +842,15 @@ class MLP:
         output_dataset_name=None,
         dtype=np.float32,
         norm_type="zscore",
+        norm_scope="global",
     ):
-
         input_h5_path = Path(input_h5_path)
+
         stats = self.scan_hdf5_stats(
             input_h5_path,
             dataset_name,
             batch_size=batch_size,
-            norm_type=norm_type,
+            norm_scope=norm_scope,
         )
 
         output_h5_path = input_h5_path.with_name(
@@ -723,6 +859,8 @@ class MLP:
 
         if output_dataset_name is None:
             output_dataset_name = dataset_name
+
+        self.logger.info(f"Normalizing {input_h5_path} → {output_h5_path}")
 
         with h5py.File(input_h5_path, "r") as f_in, \
             h5py.File(output_h5_path, "w") as f_out:
@@ -738,41 +876,38 @@ class MLP:
                 compression="gzip",
             )
 
-            # ------------------------
-            # Save normalization stats
-            # ------------------------
+            # ---- Save metadata ----
             norm_grp = f_out.create_group("normalization")
-            norm_grp.attrs["method"] = stats["method"]
-            norm_grp.attrs["source_dataset"] = dataset_name
+            norm_grp.attrs["method"] = norm_type
+            norm_grp.attrs["scope"] = norm_scope
 
             for k, v in stats.items():
-                if k != "method":
+                if isinstance(v, np.ndarray):
                     norm_grp.create_dataset(k, data=v)
+                else:
+                    norm_grp.attrs[k] = v
 
-            # ------------------------
-            # Streaming normalization
-            # ------------------------
+            # ---- Apply normalization ----
             for start in range(0, N, batch_size):
                 end = min(start + batch_size, N)
-                batch = data[start:end].reshape(end - start, -1)
-                batch = np.asarray(batch, dtype=np.float64)
+                batch = data[start:end].astype(np.float64)
+
+                if norm_scope == "elementwise":
+                    batch = batch.reshape(batch.shape[0], -1)
 
                 if norm_type == "zscore":
                     batch = (batch - stats["mean"]) / stats["std"]
-
                 elif norm_type == "maxabs":
-                    batch = batch / stats["max_abs"]
-
+                    batch = batch / stats["max"]
                 elif norm_type == "minmax":
                     batch = (batch - stats["min"]) / stats["scale"]
 
-                out[start:end] = batch.reshape(
-                    (end - start,) + data.shape[1:]
-                ).astype(dtype)
+                out[start:end] = batch.reshape((end - start,) + data.shape[1:])
 
                 if start % (10 * batch_size) == 0:
                     self.logger.info(f"Normalized {start}/{N}")
 
+        self.logger.info(f"Saved normalized dataset → {output_h5_path}")
         return output_h5_path
     
 
@@ -856,30 +991,22 @@ class MLP:
         norm_h5_input_path = h5_input_path.with_name(
             h5_input_path.stem + "_norm" + h5_input_path.suffix
         )
-            
-        if ("norm" in h5_input_path.name.lower() and h5_input_path.exists()):
-            norm_h5_input_path = h5_input_path
-        else:
-            if not norm_h5_input_path.exists():
+
+        norm_h5_input_path = h5_input_path
+        if not any(norm_type in h5_input_path.name.lower() for norm_type in self.VALID_NORM_TYPES):
                 norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path,
                                                                  dataset_name="X",
-                                                                 norm_type=norm_type)
-        
-        self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+                                                                 norm_type=self.input_norm_type,
+                                                                 norm_scope=self.input_norm_scope)
+                self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
-        norm_h5_output_path = h5_output_path.with_name(
-            h5_output_path.stem + "_norm" + h5_output_path.suffix
-        )
-        
-        if ("norm" in h5_output_path.name.lower() and h5_output_path.exists()):
-            norm_h5_output_path = h5_output_path
-        else:
-            if not norm_h5_output_path.exists():
+        norm_h5_output_path = h5_output_path
+        if not any(norm_type in h5_output_path.name.lower() for norm_type in self.VALID_NORM_TYPES):
                 norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path,
-                                                                  dataset_name="y",
-                                                                  norm_type=norm_type)
-        
-        self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
+                                                                 dataset_name="y",
+                                                                 norm_type=self.output_norm_type,
+                                                                 norm_scope=self.output_norm_scope)
+                self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
         # Build HDF5 loader
         get_batch, total_num_sigs = self.make_hdf5_batch_loader(norm_h5_input_path, norm_h5_output_path)

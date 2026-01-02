@@ -18,7 +18,7 @@ if __name__ == '__main__':
     load_dotenv()
     
     create_mlp_model = True
-    prepare_large_dataset = True
+    prepare_large_dataset = False
     train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
