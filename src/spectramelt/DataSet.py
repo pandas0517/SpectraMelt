@@ -1184,7 +1184,7 @@ class DataSet:
                         else:
                             mlp.set_recovery_stats_from_h5(norm_premultiply_h5_file, dataset_name="X")
                     else:
-                        self.logger.warning("No normalization type specified for input set")
+                        self.logger.info("No normalization type specified for input set")
                     
                     if output_norm_type is not None:
                         norm_output_h5_file = wideband_dir / f"wbf_{Path(freq_signals_filename).stem}_{mode}_{output_norm_type}.h5"
@@ -1193,7 +1193,7 @@ class DataSet:
                         else:
                             mlp.set_recovery_stats_from_h5(norm_output_h5_file, dataset_name="y")
                     else:
-                        self.logger.warning("No normalization type specified for output set")
+                        self.logger.info("No normalization type specified for output set")
                 
                 else:
                     self.logger.warning("No normalization parameters found for the MLP")

@@ -19,10 +19,10 @@
         "total_num_sigs": 40000,
         "test_fraction": 0.3,
         "norm_params": {
-            "input_type": "maxabs",
-            "input_scope": "global",
-            "output_type": "maxabs",
-            "output_scope": "global"
+            "input_type": null,
+            "input_scope": null,
+            "output_type": null,
+            "output_scope": null
         },
         "seed": null,
         "shuffle": true,

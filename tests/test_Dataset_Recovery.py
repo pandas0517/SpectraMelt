@@ -52,8 +52,8 @@ if __name__ == '__main__':
     amp_range = input_wave_params.get('amp_range')
     
     recovery_freq_modes = freq_modes.get('recovery', [])
-    selected_freq_modes = recovery_freq_modes
-    # selected_freq_modes = recovery_freq_modes[1:2]
+    # selected_freq_modes = recovery_freq_modes
+    selected_freq_modes = recovery_freq_modes[0:1]
 
     if create_recovery_set:
         if use_mlp:

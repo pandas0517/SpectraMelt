@@ -21,9 +21,7 @@ from keras.callbacks import EarlyStopping
 from keras.activations import get as get_activation
 from sklearn.model_selection import train_test_split
 from .losses import (
-    root_mean_squared_error,
     resolve_loss,
-    HuberSparseAmplitudeLoss
 )
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -576,7 +574,7 @@ class MLP:
 
         if (norm_h5_input_path is not None and
             norm_h5_input_path.is_file() and 
-            "norm" in norm_h5_input_path.name.lower()):
+            any(tag in norm_h5_input_path.name.lower() for tag in self.VALID_NORM_TYPES)):
             self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
         if in_norm_type is None:
@@ -606,7 +604,7 @@ class MLP:
 
         if (norm_h5_output_path is not None and
             norm_h5_output_path.is_file() and 
-            "norm" in norm_h5_output_path.name.lower()):
+            any(tag in norm_h5_output_path.name.lower() for tag in self.VALID_NORM_TYPES)):
             self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
         if out_norm_type is None:
@@ -909,14 +907,6 @@ class MLP:
 
         self.logger.info(f"Saved normalized dataset → {output_h5_path}")
         return output_h5_path
-    
-
-    def load_normalization_stats(self, norm_h5_path):
-        with h5py.File(norm_h5_path, "r") as f:
-            grp = f["normalization"]
-            stats = {k: grp[k][:] for k in grp.keys()}
-            stats["method"] = grp.attrs["method"]
-        return stats
 
 
     def make_hdf5_batch_loader(self, h5_input_path, h5_output_path):
@@ -975,7 +965,6 @@ class MLP:
         num_epochs = self.training_params.get("num_epochs", 200)
         batch_sz   = self.training_params.get("batch_sz", 128)
         test_frac  = self.training_params.get("test_fraction", 0.3)
-        norm_type = self.training_params.get("norm_type", None)
 
         # Early stopping
         early_stopping_params = self.training_params.get('early_stopping', {})
@@ -988,25 +977,25 @@ class MLP:
             restore_best_weights=early_stopping_params.get('restore_best_weights', True),
         )
 
-        norm_h5_input_path = h5_input_path.with_name(
-            h5_input_path.stem + "_norm" + h5_input_path.suffix
-        )
-
         norm_h5_input_path = h5_input_path
-        if not any(norm_type in h5_input_path.name.lower() for norm_type in self.VALID_NORM_TYPES):
-                norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path,
-                                                                 dataset_name="X",
-                                                                 norm_type=self.input_norm_type,
-                                                                 norm_scope=self.input_norm_scope)
-                self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
+        if self.input_norm_type is not None:
+            if not any(self.input_norm_type in h5_input_path.name.lower()
+                       for self.input_norm_type in self.VALID_NORM_TYPES):
+                    norm_h5_input_path = self.normalize_hdf5_dataset(h5_input_path,
+                                                                    dataset_name="X",
+                                                                    norm_type=self.input_norm_type,
+                                                                    norm_scope=self.input_norm_scope)
+                    self.set_recovery_stats_from_h5(norm_h5_input_path, dataset_name="X")
 
         norm_h5_output_path = h5_output_path
-        if not any(norm_type in h5_output_path.name.lower() for norm_type in self.VALID_NORM_TYPES):
-                norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path,
-                                                                 dataset_name="y",
-                                                                 norm_type=self.output_norm_type,
-                                                                 norm_scope=self.output_norm_scope)
-                self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
+        if self.output_norm_type is not None:
+            if not any(self.output_norm_type in h5_output_path.name.lower()
+                    for self.output_norm_type in self.VALID_NORM_TYPES):
+                    norm_h5_output_path = self.normalize_hdf5_dataset(h5_output_path,
+                                                                    dataset_name="y",
+                                                                    norm_type=self.output_norm_type,
+                                                                    norm_scope=self.output_norm_scope)
+                    self.set_recovery_stats_from_h5(norm_h5_output_path, dataset_name="y")
 
         # Build HDF5 loader
         get_batch, total_num_sigs = self.make_hdf5_batch_loader(norm_h5_input_path, norm_h5_output_path)

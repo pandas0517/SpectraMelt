@@ -36,8 +36,8 @@ if __name__ == '__main__':
     
     freq_modes = dataset.get_freq_modes()
     mlp_freq_modes = freq_modes.get('mlp', [])
-    # selected_freq_modes = saved_freq_modes[1:2]
-    selected_freq_modes = mlp_freq_modes
+    selected_freq_modes = mlp_freq_modes[0:1]
+    # selected_freq_modes = mlp_freq_modes
     filenames = dataset.get_filenames()
     ml_model_filename = filenames.get('ml_model', "ml_model.keras")
     ml_config_filename = filenames.get('ml_config', "ml_config.json")
