@@ -34,7 +34,9 @@ class MLP:
     """
     """
     # Sets for fast membership checking
-    CUSTOM_LOSSES = {"root_mean_squared_error", "hubersparseamplitudeloss"}
+    CUSTOM_LOSSES = {"root_mean_squared_error",
+                     "weighted_root_mean_squared_error",
+                     "hubersparseamplitudeloss"}
     VALID_MONITORS = {
         "loss", "val_loss", "accuracy",
         "acc", "val_accuracy", "val_acc"

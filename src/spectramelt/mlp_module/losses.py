@@ -13,6 +13,33 @@ def root_mean_squared_error(y_true, y_pred):
 
 
 @keras.saving.register_keras_serializable(package="CustomLosses")
+def weighted_root_mean_squared_error(
+    y_true,
+    y_pred,
+    alpha=5.0,
+    eps=1e-6
+):
+    """
+    Weighted RMSE that emphasizes non-zero targets.
+    
+    alpha : strength of weighting for non-zero targets
+    eps   : threshold to detect sparsity
+    """
+
+    # Identify non-zero (pulse) locations
+    nonzero_mask = tf.cast(tf.abs(y_true) > eps, tf.float32)
+
+    # Weight: 1 for zeros, (1 + alpha) for non-zeros
+    weights = 1.0 + alpha * nonzero_mask
+
+    squared_error = tf.square(y_pred - y_true)
+
+    weighted_mse = tf.reduce_mean(weights * squared_error)
+
+    return tf.sqrt(weighted_mse)
+
+
+@keras.saving.register_keras_serializable(package="CustomLosses")
 class HuberSparseAmplitudeLoss(keras.losses.Loss):
     def __init__(
         self,

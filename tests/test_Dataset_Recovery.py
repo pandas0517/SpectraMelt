@@ -19,14 +19,14 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_recovery_set = True
-    use_mlp = True
+    create_recovery_set = False
+    use_mlp = False
     decode_recovery_to_time = False
 
     create_recovery_dataframe = False
     set_recovery_dataframe = False
 
-    display_recovered_signals = False
+    display_recovered_signals = True
     DUT_type = "NYFR"
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
