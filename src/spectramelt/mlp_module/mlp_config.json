@@ -33,13 +33,13 @@
             "delta": 1.0
         },
         "learning_rate": 0.00008,
-        "num_epochs": 50,
+        "num_epochs": 120,
         "batch_sz": 256,
         "early_stopping": {
             "monitor": "val_loss",
-            "min_delta": 0.05,
+            "min_delta": 0.005,
             "patience": 5,
-            "start_from_epoch": 20,
+            "start_from_epoch": 90,
             "restore_best_weights": true
         }
     }
