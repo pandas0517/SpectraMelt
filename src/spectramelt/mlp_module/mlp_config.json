@@ -39,7 +39,7 @@
             "monitor": "val_loss",
             "min_delta": 0.05,
             "patience": 5,
-            "start_from_epoch": 10,
+            "start_from_epoch": 20,
             "restore_best_weights": true
         }
     }
