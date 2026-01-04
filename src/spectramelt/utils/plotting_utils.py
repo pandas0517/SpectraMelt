@@ -238,7 +238,7 @@ def expand_freq_modes(freq_arrays, freq_modes, idx,
     # ---- Direct modes with shift/normalize ----
     if "mag" in freq_modes and freq_arrays.get("mag") is not None:
         arr = extract(freq_arrays["mag"], idx)
-        # arr = arr * 5
+        # arr = arr * 2
         if arr is not None:
             if arr.ndim == 1:
                 if fft_shift_flag:
