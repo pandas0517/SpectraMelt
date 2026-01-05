@@ -26,7 +26,7 @@
         },
         "seed": null,
         "shuffle": true,
-        "loss_type": "weighted_root_mean_squared_error",
+        "loss_type": "weighted_rmse_with_energy",
         "loss_params": {
             "tau": 0.02,
             "amplitude_weight": 0.1,
@@ -39,7 +39,7 @@
             "monitor": "val_loss",
             "min_delta": 0.005,
             "patience": 5,
-            "start_from_epoch": 90,
+            "start_from_epoch": 80,
             "restore_best_weights": true
         }
     }

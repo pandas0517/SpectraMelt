@@ -44,19 +44,23 @@ def weighted_rmse_with_energy(
     y_true,
     y_pred,
     alpha=5.0,
-    gamma=0.1,
+    gamma=0.03,
     eps=1e-6
 ):
-    # --- Weighted RMSE (what already works) ---
+    # --- Weighted RMSE ---
     nonzero = tf.cast(tf.abs(y_true) > eps, tf.float32)
     weights = 1.0 + alpha * nonzero
     rmse = tf.sqrt(tf.reduce_mean(weights * tf.square(y_pred - y_true)))
 
-    # --- Per-sample magnitude conservation ---
+    # --- Per-sample normalized energy conservation ---
     true_energy = tf.reduce_sum(tf.abs(y_true), axis=-1)
     pred_energy = tf.reduce_sum(tf.abs(y_pred), axis=-1)
 
-    energy_loss = tf.reduce_mean(tf.square(pred_energy - true_energy))
+    pulse_count = tf.reduce_sum(nonzero, axis=-1) + eps
+
+    energy_loss = tf.reduce_mean(
+        tf.square((pred_energy - true_energy) / pulse_count)
+    )
 
     return rmse + gamma * energy_loss
 
