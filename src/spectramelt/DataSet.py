@@ -7,7 +7,9 @@ from .utils import (
     save_to_json,
     fft_encode_signals,
     update_npz,
-    VALID_SAVED_FREQ_MODES
+    process_signal_file,
+    VALID_SAVED_FREQ_MODES,
+    REQUIRED_AXIS_KEYS
 )
 import numpy as np
 import pickle
@@ -26,6 +28,10 @@ from zipfile import ZipFile, ZIP_DEFLATED
 class DataSet:
     VALID_DUT_TYPES = {
         "nyfr"
+    }
+    VALID_RECOVERY_MODE_ANALYSIS = {
+        "mag",
+        "real_imag"
     }
     def __init__(self,
                  input_config_name=None,
@@ -1359,9 +1365,7 @@ class DataSet:
             self.logger.info(f"Saved CSV Dataframe to {recovery_df_file_path_csv}")
             
             
-    def set_recovery_dataframe(self, saved_freq_modes=None):
-        import re
-
+    def set_recovery_dataframe(self, freq_modes=None):
         def numeric_key(s):
             # Extract the first number in the string
             m = re.search(r'\d+', s)
@@ -1373,16 +1377,22 @@ class DataSet:
             return filename[:idx] if idx != -1 else filename
         
         input_dir = self.directories.get('inputs', "Inputs")
-        inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
-        input_time_signal_filename = self.flat_filenames.get('input.time_signal', "time_signals.npy")
-        input_wave_params_filename = self.flat_filenames.get('input.wave_params', "wave_params.pkl")
+        inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
+        input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
+        freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz",)
+        wave_params_filename = self.flat_filenames.get('wave_params', "wave_params.pkl")
         inputset_config_file = input_dir.parent / inputset_config_filename
         
-        output_dir = self.directories.get('outputs', "Outputs")
-        wbf_freq_filename = self.filenames.get('wbf_freq', "wbf_freq.npy")
-        wbf_freq_file = output_dir / wbf_freq_filename
-        wbf_freq = np.load(wbf_freq_file)
+        wideband_dir = self.directories.get('wideband', "Wideband")
+        wbf_time_freq_filename = self.filenames.get('wbf_time_freq', "wbf_time_freq.npz")
+        time_freq_file = wideband_dir / wbf_time_freq_filename
+        with np.load(time_freq_file) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
+            wbf_freq = time_freq["freq"]
 
+        output_dir = self.directories.get('outputs', "Outputs")
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
         DUT_config_file = output_dir.parent / DUT_config_filename
         
@@ -1428,238 +1438,87 @@ class DataSet:
         
         recovery_mag_threshold = self.dataframe_params.get('recovery_mag_thresh', 0.5)
         
-        if saved_freq_modes is None:
-            saved_freq_modes = self.inputset_params.get('saved_freq_modes', [])
+        if freq_modes is None:
+            freq_modes = self.freq_modes.get('recovery', [])
 
-        #Need to add support for real_imag, real, and imag modes in the future
-        unsupported_freq_modes = {"real_imag", "real", "imag"}
-        if any(t in saved_freq_modes for t in unsupported_freq_modes):
-            self.logger.warning("Unsupported frequency modes found. Removing")
-            saved_freq_modes = [x for x in saved_freq_modes if x not in unsupported_freq_modes]
+            #Need to add support for real and imag modes in the future
+            unsupported = set(freq_modes) - set(self.VALID_RECOVERY_MODE_ANALYSIS)
+
+            if unsupported:
+                self.logger.warning(f"Unsupported frequency modes {unsupported} found. Removing")
+                freq_modes = [
+                    m for m in freq_modes
+                    if m not in unsupported
+                ]
             
-        for mode in saved_freq_modes:
-            key = self.FREQ_FILE_KEYS[mode]
-            filename = self.flat_filenames.get(key)
-            if not filename:
-                self.logger.error(f"No filename configured for freq mode '{mode}' (key='{key}')")
-                continue
-
-            # npz modes must use .npz naming
-            if mode in ("mag_ang_sincos", "mag_ang" ,"real_imag"):
-                filename = str(Path(filename).with_suffix(".npz"))
-
-            input_dict = {
-                get_prefix_before_recovery(p.name): p
-                for p in input_dir.iterdir()
-                if p.is_file()
-                and p.name.endswith(input_time_signal_filename)
-                and "recovery" in p.name.lower()
-            }
-
-            recovery_dict = {
-                get_prefix_before_recovery(p.name): p
-                for p in recovery_dir.iterdir()
-                if p.is_file()
-                and p.name.endswith(filename)
-                and "recovery" in p.name.lower()
-            }
-
-            wbf_wave_dict = {
-                get_prefix_before_recovery(p.name): p
-                for p in output_dir.iterdir()
-                if p.is_file()
-                and p.name.endswith(input_wave_params_filename)
-                and "recovery" in p.name.lower()
-            }
-
-            wbf_freq_sig_dict = {
-                get_prefix_before_recovery(p.name.replace("_wbf", "")): p
-                for p in output_dir.iterdir()
-                if p.is_file()
-                and p.name.endswith(filename)
-                and "recovery" in p.name.lower()
-            }
-            
-            missing_in_wbf = recovery_dict.keys() - wbf_freq_sig_dict.keys()
-            missing_in_recovery = wbf_freq_sig_dict.keys() - recovery_dict.keys()
-            missing_in_input = recovery_dict.keys() - input_dict.keys()
-
-            if missing_in_wbf:
-                self.logger.error("Files missing in wideband filtered input:", missing_in_wbf)
-                raise ValueError("Files missing in wideband filtered input:", missing_in_wbf)
-
-            if missing_in_recovery:
-                self.logger.error("Files missing in recovery:", missing_in_recovery)
-                raise ValueError("Files missing in recovery:", missing_in_recovery)
-
-            if missing_in_input:
-                self.logger.error("Files missing in recovery:", missing_in_input)
-                raise ValueError("Files missing in recovery:", missing_in_input)        
-            
-            sorted_keys = sorted(recovery_dict.keys(), key=numeric_key)
-
-            matched_recovery_files = [recovery_dict[k] for k in sorted_keys]
-            matched_wbf_files      = [wbf_freq_sig_dict[k] for k in sorted_keys]
-            matched_wave_file      = [wbf_wave_dict[k] for k in sorted_keys]
-            input_files            = [input_dict[k] for k in sorted_keys]
-            
-            for idx, recovery_file in enumerate(matched_recovery_files):
-                input_file = input_files[idx]
-                wbf_file = matched_wbf_files[idx]
-
-                wbf_signals = np.load(wbf_file)
-                recovered_signals = np.load(recovery_file)
-
-                # -------------------------------
-                # MODE: MAG + PHASE
-                # -------------------------------
-                if mode in ("mag_ang", "mag_ang_sincos"):
-                    num_recovered_sigs = recovered_signals["complex_mag"].shape[0]
-                    num_wbf_sigs = wbf_signals["complex_mag"].shape[0]
-                
-                # -------------------------------
-                # MODE: REAL + IMAG
-                # -------------------------------
-                elif mode == "real_imag":
-                    num_recovered_sigs = recovered_signals["real"].shape[0]
-                    num_wbf_sigs = wbf_signals["real"].shape[0]
-
-                else:
-                    num_recovered_sigs = recovered_signals.shape[0]
-                    num_wbf_sigs = wbf_signals.shape[0]
-                
-                wbf_wave_file = matched_wave_file[idx]
-                with open(wbf_wave_file, "rb") as f:
-                    wbf_waves = pickle.load(f)
-                    
-                if (num_recovered_sigs != num_recovery_sigs):
-                    self.logger.error(f"Recovered signal set size {num_recovered_sigs} does not equal expected size {num_recovery_sigs}")
-                    raise ValueError(f"Recovered signal set size {num_recovered_sigs} does not equal expected size {num_recovery_sigs}")
-                if (num_wbf_sigs != num_recovery_sigs):
-                    self.logger.error(f"Input signal set size {num_wbf_sigs} does not equal expected size {num_recovery_sigs}")
-                    raise ValueError(f"Input signal set size {num_wbf_sigs} does not equal expected size {num_recovery_sigs}")  
-                if (num_recovered_sigs != num_wbf_sigs):
-                    self.logger.error(f"Input signal length {num_wbf_sigs} does not equal Recovered signal length {num_recovered_sigs}")
-                    raise ValueError(f"Input signal length {num_wbf_sigs} does not equal Recovered signal length {num_recovered_sigs}")
-                
-                # Build the new row as a dict
-                new_row = {
-                    "input_file_name": input_file,
-                    "wbf_file_name": wbf_file,
-                    "recovery_file_name": recovery_file,
-                    "input_config_name": inputset_config_name,
-                    "DUT_config_name": DUT_config_name,
-                    "recovery_config_name": recovery_config_name,
-                    "Frequency_mode": mode,
-                }
-
-                # Currently only supporting magnitude stats
-                for idx, rec_sig in enumerate(recovered_signals):
-                    meta_data = self.__create_meta_data_dictionary(idx)
-
-                    if mode in ("mag_ang", "mag_ang_sincos"):
-                        rec_mag = rec_sig["complex_mag"]
-                        rec_phase = rec_sig["complex_phase"]
-
-                    wbf_wave = wbf_waves[idx]
-
-                    # Extract freqs, amps, and phases
-                    freqs = np.array([d['freq'] for d in wbf_wave])
-                    amps = np.array([d['amp'] for d in wbf_wave]) / 2
-                    phases = np.array([d['phase'] for d in wbf_wave])
-
-                    # Positive and negative indices
-                    pos_indices = np.array([np.argmin(np.abs(wbf_freq - f)) for f in freqs])
-                    neg_indices = np.array([np.argmin(np.abs(wbf_freq + f)) for f in freqs])
-                    wbf_unsorted_indices = np.concatenate([neg_indices, pos_indices])
-
-                    # Combined amps and phases
-                    amps_combined = np.concatenate([amps, amps])
-                    phases_combined = np.concatenate([-phases, phases])
-
-                    # Recovered tones
-                    rec_sig_tones = np.where(rec_mag > recovery_mag_threshold)[0]
-                    mask_recovered = np.isin(wbf_unsorted_indices, rec_sig_tones)
-
-                    recovered_indices = rec_sig_tones[mask_recovered]
-                    spur_indices = wbf_unsorted_indices[~mask_recovered]
-
-                    rec_mag = np.abs(rec_mag[recovered_indices])
-                    spur_mag = np.abs(rec_mag[spur_indices])
-
-                    # Populate meta_data using dict comprehension
-                    meta_data.update({
-                        k: {'col_name': v['col_name'], 'value': val}
-                        for k, v, val in [
-                            ('num_rec_freq', meta_data['num_rec_freq'], recovered_indices.size),
-                            ('num_spur_freq', meta_data['num_spur_freq'], spur_indices.size),
-                            ('total_input_tones', meta_data['total_input_tones'], len(wbf_wave)),
-                            ('rec_tone_thresh', meta_data['rec_tone_thresh'], recovery_mag_threshold),
-                            ('ave_rec_mag_err', meta_data['ave_rec_mag_err'], abs(np.mean(amps_combined) - np.mean(rec_mag)) if rec_mag.size else -1),
-                            ('ave_rec_mag', meta_data['ave_rec_mag'], np.mean(rec_mag) if rec_mag.size else -1),
-                            ('max_rec_mag', meta_data['max_rec_mag'], np.max(rec_mag) if rec_mag.size else -1),
-                            ('min_rec_mag', meta_data['min_rec_mag'], np.min(rec_mag) if rec_mag.size else -1),
-                            ('ave_spur_mag', meta_data['ave_spur_mag'], np.mean(spur_mag) if spur_mag.size else -1),
-                            ('max_spur_mag', meta_data['max_spur_mag'], np.max(spur_mag) if spur_mag.size else -1),
-                            ('min_spur_mag', meta_data['min_spur_mag'], np.min(spur_mag) if spur_mag.size else -1)
-                        ]
-                    })
-
-                    # Append meta_data to new_row
-                    new_row.update({v['col_name']: v['value'] for v in meta_data.values()})
-                
-                # Append row
-                recovery_df.loc[len(recovery_df)] = new_row
-
-                
-    def __create_meta_data_dictionary(self, idx):
-        meta_data = {
-            'num_rec_freq': {
-                'col_name': "num_rec_freq_" + str(idx),
-                'value': 0
-            },
-            'num_spur_freq': {
-                'col_name': "num_spur_freq_" + str(idx),
-                'value': 0
-            },
-            'ave_rec_mag_err': {
-                'col_name': "ave_rec_mag_err_" + str(idx),
-                'value': 0
-            },
-            'total_input_tones': {
-                'col_name': "total_input_tones_" + str(idx),
-                'value': 0
-            },
-            'rec_tone_thresh': {
-                'col_name': "rec_tone_thresh_" + str(idx),
-                'value': 0
-            },
-            'ave_rec_mag': {
-                'col_name': "ave_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'max_rec_mag': {
-                'col_name': "max_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'min_rec_mag': {
-                'col_name': "min_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'ave_spur_mag': {
-                'col_name': "ave_spur_mag_" + str(idx),
-                'value': 0
-            },
-            'max_spur_mag': {
-                'col_name': "max_spur_mag_" + str(idx),
-                'value': 0
-            },
-            'min_spur_mag': {
-                'col_name': "min_spur_mag_" + str(idx),
-                'value': 0
-            }
+        input_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in input_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(input_time_signal_filename)
+            and "recovery" in p.name.lower()
         }
-        return meta_data
+
+        recovery_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in recovery_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(freq_signals_filename)
+            and "recovery" in p.name.lower()
+        }
+
+        wbf_wave_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in wideband_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(wave_params_filename)
+            and "recovery" in p.name.lower()
+        }
+        
+        missing_in_wbf = recovery_dict.keys() - wbf_wave_dict.keys()
+        missing_in_recovery = wbf_wave_dict.keys() - recovery_dict.keys()
+        missing_in_input = recovery_dict.keys() - input_dict.keys()
+
+        if missing_in_wbf:
+            self.logger.error("Files missing in wideband filtered input:", missing_in_wbf)
+            raise ValueError("Files missing in wideband filtered input:", missing_in_wbf)
+
+        if missing_in_recovery:
+            self.logger.error("Files missing in recovery:", missing_in_recovery)
+            raise ValueError("Files missing in recovery:", missing_in_recovery)
+
+        if missing_in_input:
+            self.logger.error("Files missing in recovery:", missing_in_input)
+            raise ValueError("Files missing in recovery:", missing_in_input)        
+        
+        sorted_keys = sorted(recovery_dict.keys(), key=numeric_key)
+        matched_recovery_files = [recovery_dict[k] for k in sorted_keys]
+        matched_wave_files     = [wbf_wave_dict[k] for k in sorted_keys]
+        input_files            = [input_dict[k] for k in sorted_keys]
+
+        all_rows = []
+
+        for idx_file, recovery_file in enumerate(matched_recovery_files):
+            rows = process_signal_file(
+                recovery_file=recovery_file,
+                wbf_wave_file=matched_wave_files[idx_file],
+                input_file=input_files[idx_file],
+                freq_modes=freq_modes,
+                recovery_mag_threshold=recovery_mag_threshold,
+                num_recovery_sigs=num_recovery_sigs,
+                inputset_config_name=inputset_config_name,
+                DUT_config_name=DUT_config_name,
+                recovery_config_name=recovery_config_name,
+                wbf_freq=wbf_freq
+            )
+            all_rows.extend(rows)
+
+        # --- Build final dataframe ---
+        recovery_df = pd.DataFrame(all_rows)
+        recovery_df.to_pickle(recovery_df_file_path)
+        if self.dataframe_params.get('save_as_csv', True):
+            recovery_df.to_csv(recovery_df_file_path.with_suffix(".csv"), index=False)
+
         
     # -------------------------------
     # Getters

@@ -30,7 +30,13 @@ from .signal_utils import (
     VALID_SAVED_FREQ_MODES,
     sparse_fft,
     fft_encode_signals,
-    fft_decode_signals
+    fft_decode_signals,
+    flatten_dict,
+    numeric_key,
+    get_prefix_before_recovery,
+    compute_recovery_stats,
+    create_meta_data_dictionary,
+    process_signal_file
 )
 
 # From plotting_utils.py
@@ -59,5 +65,11 @@ __all__ = [
     "plot_dynamic_frequency_modes",
     "VALID_SAVED_FREQ_MODES",
     "REQUIRED_AXIS_KEYS",
-    "update_npz"
+    "update_npz",
+    "flatten_dict",
+    "numeric_key",
+    "get_prefix_before_recovery",
+    "compute_recovery_stats",
+    "create_meta_data_dictionary",
+    "process_signal_file"
 ]
