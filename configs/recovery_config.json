@@ -1,5 +1,9 @@
 {
     "config_name": "Recovery_Config_1",
+    "freq_modes": [
+        "mag",
+        "real_imag"
+    ],
     "log_params": {
         "enabled": true,
         "log_file": null,
@@ -12,5 +16,45 @@
         "recovery_type": "complex",
         "sigma": 0.001,
         "dict_mag_adj": 1.0
+    },
+    "dataframe_params": {
+        "file_path": "recovery_df.pkl",
+        "save_as_csv": true,
+        "recovery_mag_thresh": 0.1,
+        "meta_column_names": {
+            "input_time_file_name": "str",
+            "wideband_filtered_file_name": "str",
+            "recovery_file_name": "str",
+            "dataset_config_name": "str",
+            "input_config_name": "str",
+            "DUT_config_name": "str",
+            "recovery_config_name": "str",
+            "Frequency_mode": "str",
+            "total_input_tones": "float64",
+            "rec_tone_thresh": "float64"
+        },
+        "signal_column_names": {
+            "num_rec_freq_" : "float64",
+            "num_spur_freq_": "float64",
+            "ave_rec_mag_err_": "float64",
+            "ave_rec_mag_": "float64",
+            "max_rec_mag_": "float64",
+            "min_rec_mag_": "float64",
+            "ave_spur_mag_": "float64",
+            "max_spur_mag_": "float64",
+            "min_spur_mag_": "float64"
+        },
+        "signal_column_stats": {
+            "ave_num_rec" : "float64",
+            "recovery_rate": "float64",
+            "ave_num_spur": "float64",
+            "ave_rec_mag_err": "float64",
+            "ave_rec_mag": "float64",
+            "max_rec_mag": "float64",
+            "min_rec_mag": "float64",
+            "ave_spur_mag": "float64",
+            "max_spur_mag": "float64",
+            "min_spur_mag": "float64"
+        }
     }
 }

@@ -1,5 +1,9 @@
 {
     "config_name": "MLP_Config_1",
+    "freq_modes": [
+        "mag",
+        "real_imag"
+    ],
     "log_params": {
         "enabled": true,
         "log_file": null,
