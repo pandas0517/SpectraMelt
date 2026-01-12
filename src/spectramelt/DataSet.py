@@ -7,6 +7,8 @@ from .utils import (
     save_to_json,
     fft_encode_signals,
     update_npz,
+    get_prefix_before_recovery,
+    numeric_key,
     process_signal_file,
     VALID_SAVED_FREQ_MODES,
     REQUIRED_AXIS_KEYS
@@ -359,23 +361,39 @@ class DataSet:
                 "save_as_csv": True,
                 "recovery_mag_thresh": 0.5,
                 "meta_column_names": {
-                    "input_file_name": "str",
+                    "input_time_file_name": "str",
+                    "wideband_filtered_file_name": "str",
                     "recovery_file_name": "str",
+                    "dataset_config_name": "str",
                     "input_config_name": "str",
                     "DUT_config_name": "str",
+                    "recovery_config_name": "str",
+                    "Frequency_mode": "str",
+                    "total_input_tones": "float64",
+                    "rec_tone_thresh": "float64"
                 },
                 "signal_column_names": {
                     "num_rec_freq_" : "float64",
                     "num_spur_freq_": "float64",
                     "ave_rec_mag_err_": "float64",
-                    "total_input_tones_": "float64",
-                    "rec_tone_thresh_": "float64",
                     "ave_rec_mag_": "float64",
                     "max_rec_mag_": "float64",
                     "min_rec_mag_": "float64",
                     "ave_spur_mag_": "float64",
                     "max_spur_mag_": "float64",
                     "min_spur_mag_": "float64"
+                },
+                "signal_column_stats": {
+                    "ave_num_rec" : "float64",
+                    "recovery_rate": "float64",
+                    "ave_num_spur": "float64",
+                    "ave_rec_mag_err": "float64",
+                    "ave_rec_mag": "float64",
+                    "max_rec_mag": "float64",
+                    "min_rec_mag": "float64",
+                    "ave_spur_mag": "float64",
+                    "max_spur_mag": "float64",
+                    "min_spur_mag": "float64"
                 }
             }
         self.dataframe_params = dataframe_params
@@ -456,6 +474,7 @@ class DataSet:
             
         input_dirs = self.directories.get('inputs', "Inputs")
         real_time_freq_filename = self.filenames.get("real_time_freq", "real_time_freq.npz")
+        dataset_config_filename = self.filenames.get('dataset_config', "dataset_config.json")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
         input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
         input_time_signals_filename = self.filenames.get('time_signals', "time_signals.npy")
@@ -472,8 +491,16 @@ class DataSet:
                      time=real_time,
                      freq=real_freq)
             self.logger.info(f"Real Time and Frequency Signal saved to file {real_time_freq_file}")
+
+        # --- Dataset Config file ---
+        dataset_config_file = input_dirs.parent.parent / dataset_config_filename
+        dataset_params = self.get_all_params()
         
-        # --- Config file ---
+        if not dataset_config_file.exists() or overwrite:
+            save_to_json(dataset_params, dataset_config_file)
+            self.logger.info(f"Saved Input Set configuration to file {dataset_config_file}")
+        
+        # --- Input Config file ---
         inputset_config_file = input_dirs.parent / inputset_config_filename
         input_signal_params = input_signal.get_all_params()
         input_signal_wave_params = input_signal_params.get('wave_params', None)
@@ -1340,6 +1367,7 @@ class DataSet:
                         
         meta_column_names = self.dataframe_params.get('meta_column_names')
         signal_column_names = self.dataframe_params.get('signal_column_names')
+        signal_column_stats = self.dataframe_params.get('signal_column_stats')
         input_config = inputset_config.get('inputset')
         num_recovery_sigs = input_config.get('num_recovery_sigs')
         
@@ -1349,6 +1377,9 @@ class DataSet:
         for sig in range(num_recovery_sigs):
             for prefix, dtype in signal_column_names.items():
                 full_column_dict[f"{prefix}{sig}"] = dtype
+
+        for prefix, dtype in signal_column_stats.items():
+            full_column_dict[f"{prefix}"] = dtype
 
         # Create empty DataFrame
         recovery_df = pd.DataFrame({
@@ -1365,17 +1396,7 @@ class DataSet:
             self.logger.info(f"Saved CSV Dataframe to {recovery_df_file_path_csv}")
             
             
-    def set_recovery_dataframe(self, freq_modes=None):
-        def numeric_key(s):
-            # Extract the first number in the string
-            m = re.search(r'\d+', s)
-            return int(m.group()) if m else float('inf')
-        
-        def get_prefix_before_recovery(filename: str) -> str:
-            lower = filename.lower()
-            idx = lower.find("recovery")
-            return filename[:idx] if idx != -1 else filename
-        
+    def set_recovery_dataframe(self, freq_modes=None):        
         input_dir = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
@@ -1391,6 +1412,10 @@ class DataSet:
             if missing:
                 raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
             wbf_freq = time_freq["freq"]
+
+        # --- Dataset Config file ---
+        dataset_config_filename = self.filenames.get('dataset_config', "dataset_config.json")
+        dataset_config_file = input_dir.parent.parent / dataset_config_filename
 
         output_dir = self.directories.get('outputs', "Outputs")
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
@@ -1416,15 +1441,24 @@ class DataSet:
         else:
             recovery_config = load_config_from_json(recovery_config_file)
         
-        recovery_config_name = recovery_config.get('config_name')        
+        recovery_recovery = recovery_config.get('recovery')
+        recovery_config_name = recovery_recovery.get('config_name')
+
+        if not dataset_config_file.exists():
+            self.logger.error(f"{dataset_config_file} does not exist")
+            raise ValueError(f"{dataset_config_file} does not exist")
+        else:
+            dataset_config = load_config_from_json(dataset_config_file)
+
+        dataset_config_name = dataset_config.get('config_name')   
 
         if not inputset_config_file.exists():
             self.logger.error(f"{inputset_config_file} does not exist")
             raise ValueError(f"{inputset_config_file} does not exist")
         else:
             inputset_config = load_config_from_json(inputset_config_file)
-        
-        inputset_config_name = inputset_config.get('config_name')
+        inputset_input = inputset_config.get('input')
+        inputset_config_name = inputset_input.get('config_name')
         inputset_params = inputset_config.get('inputset')
         num_recovery_sigs = inputset_params.get('num_recovery_sigs')
 
@@ -1434,7 +1468,8 @@ class DataSet:
         else:
             DUT_config = load_config_from_json(DUT_config_file)
         
-        DUT_config_name = DUT_config.get('config_name')
+        DUT_output = DUT_config.get('output')
+        DUT_config_name = DUT_output.get('config_name')
         
         recovery_mag_threshold = self.dataframe_params.get('recovery_mag_thresh', 0.5)
         
@@ -1506,6 +1541,7 @@ class DataSet:
                 freq_modes=freq_modes,
                 recovery_mag_threshold=recovery_mag_threshold,
                 num_recovery_sigs=num_recovery_sigs,
+                dataset_config_name=dataset_config_name,
                 inputset_config_name=inputset_config_name,
                 DUT_config_name=DUT_config_name,
                 recovery_config_name=recovery_config_name,
@@ -1513,9 +1549,22 @@ class DataSet:
             )
             all_rows.extend(rows)
 
+        signal_column_stats = self.dataframe_params.get('signal_column_stats')
+
         # --- Build final dataframe ---
         recovery_df = pd.DataFrame(all_rows)
         recovery_df.to_pickle(recovery_df_file_path)
+
+        significant_digits = 4
+        # Round each column to 4 significant digits
+        for col in signal_column_stats:
+            if col in recovery_df.columns:
+                # Use np.format_float_positional to maintain significant digits, then convert back to float
+                recovery_df[col] = recovery_df[col].apply(
+                    lambda x: float(np.format_float_positional(x, precision=significant_digits, unique=False, trim='k')) 
+                    if pd.notnull(x) else x
+                )
+
         if self.dataframe_params.get('save_as_csv', True):
             recovery_df.to_csv(recovery_df_file_path.with_suffix(".csv"), index=False)
 
@@ -1593,10 +1642,12 @@ class DataSet:
             "ML_config_name": self.ML_config_name,
             "inputset_params": self.inputset_params,
             "outputset_params": self.outputset_params,
+            "premultiply_params": self.premultiply_params,
             "directory_params": self.directory_params,
             "log_params": self.log_params,
             "directories": self.directories,
             "filenames": self.filenames,
-            "filenames_flat": self.filenames_flat
+            "freq_modes": self.freq_modes,
+            "dataframe_params": self.dataframe_params
         }
         return dataset_params

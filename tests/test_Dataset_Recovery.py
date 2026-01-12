@@ -19,16 +19,16 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_recovery_set = True
-    use_mlp = True
+    create_recovery_set = False
+    use_mlp = False
     decode_recovery_to_time = False
 
-    create_recovery_dataframe = False
-    set_recovery_dataframe = False
+    create_recovery_dataframe = True
+    set_recovery_dataframe = True
 
     display_recovered_signals = False
     DUT_type = "NYFR"
-    
+
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
     nyfr_config = load_config_from_json(Path(getenv('NYFR_CONF')))
@@ -52,8 +52,8 @@ if __name__ == '__main__':
     amp_range = input_wave_params.get('amp_range')
     
     recovery_freq_modes = freq_modes.get('recovery', [])
-    # selected_freq_modes = recovery_freq_modes
-    selected_freq_modes = recovery_freq_modes[0:1]
+    selected_freq_modes = recovery_freq_modes
+    # selected_freq_modes = recovery_freq_modes[0:1]
 
     if create_recovery_set:
         if use_mlp:
