@@ -1,54 +1,6 @@
 {
     "config_name": "Dataset_Config_1",
     "seed": null,
-    "freq_modes": {
-        "input": ["mag",
-                  "ang",
-                  "real",
-                  "imag"],
-        "output": ["mag",
-                  "ang",
-                  "real",
-                  "imag"],
-        "wideband": ["mag",
-                     "ang",
-                     "real",
-                     "imag",
-                     "real_imag",
-                     "mag_ang_sincos"],
-        "mlp": ["mag",
-                "real_imag"],
-        "recovery": ["mag",
-                     "real_imag"] 
-    },
-    "inputset_params": {
-        "num_sigs": 4000,
-        "num_recovery_sigs": 100,
-        "wave_precision": 3,
-        "tones_per_sig": [
-            2, 3, 4, 5, 6,
-            7, 8, 9, 10, 11
-        ],
-        "normalize": true,
-        "fft_shift": true,
-        "overwrite": true
-    },
-    "outputset_params": {
-        "DUT_type": "NYFR",
-        "decode_to_time": true,
-        "normalize": true,
-        "fft_shift": true,
-        "normalize_wbf": true,
-        "fft_shift_wbf": false,
-        "overwrite": false
-    },
-    "premultiply_params": {
-        "scale_dict": 0.5,
-        "normalize": true,
-        "apply_fft": false,
-        "fft_shift": false,
-        "overwrite": true
-    },
     "log_params": {
         "enabled": true,
         "log_file": null,
@@ -105,45 +57,5 @@
         "DUT_config": "DUT_config.json",
         "dictionary": "dictionary.npy",
         "recovery_df": "recovery_df.pkl"
-    },
-    "dataframe_params": {
-        "file_path": "recovery_df.pkl",
-        "save_as_csv": true,
-        "recovery_mag_thresh": 0.1,
-        "meta_column_names": {
-            "input_time_file_name": "str",
-            "wideband_filtered_file_name": "str",
-            "recovery_file_name": "str",
-            "dataset_config_name": "str",
-            "input_config_name": "str",
-            "DUT_config_name": "str",
-            "recovery_config_name": "str",
-            "Frequency_mode": "str",
-            "total_input_tones": "float64",
-            "rec_tone_thresh": "float64"
-        },
-        "signal_column_names": {
-            "num_rec_freq_" : "float64",
-            "num_spur_freq_": "float64",
-            "ave_rec_mag_err_": "float64",
-            "ave_rec_mag_": "float64",
-            "max_rec_mag_": "float64",
-            "min_rec_mag_": "float64",
-            "ave_spur_mag_": "float64",
-            "max_spur_mag_": "float64",
-            "min_spur_mag_": "float64"
-        },
-        "signal_column_stats": {
-            "ave_num_rec" : "float64",
-            "recovery_rate": "float64",
-            "ave_num_spur": "float64",
-            "ave_rec_mag_err": "float64",
-            "ave_rec_mag": "float64",
-            "max_rec_mag": "float64",
-            "min_rec_mag": "float64",
-            "ave_spur_mag": "float64",
-            "max_spur_mag": "float64",
-            "min_spur_mag": "float64"
-        }
     }
 }

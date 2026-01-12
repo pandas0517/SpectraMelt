@@ -67,10 +67,17 @@ if __name__ == '__main__':
         dataset.decode_time_signals()
 
     if create_recovery_dataframe:
-        dataset.create_recovery_dataframe()
+        dataset.create_recovery_dataframe(recovery)
 
     if set_recovery_dataframe:
-        dataset.set_recovery_dataframe(selected_freq_modes)
+        # selected_freq_modes = ["mag"]
+        # original_freq_modes = recovery.get_freq_modes()
+        
+        # recovery.set_freq_modes(selected_freq_modes)
+        
+        dataset.set_recovery_dataframe(recovery)
+        
+        # recovery.set_freq_modes(original_freq_modes)
 
     if display_recovered_signals:
         logging.getLogger('matplotlib').setLevel(logging.INFO)

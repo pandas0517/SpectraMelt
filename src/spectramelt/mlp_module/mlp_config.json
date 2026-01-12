@@ -10,6 +10,13 @@
         "level": "INFO",
         "console": true
     },
+    "premultiply_params": {
+        "scale_dict": 0.5,
+        "normalize": true,
+        "apply_fft": false,
+        "fft_shift": false,
+        "overwrite": true
+    },
     "model_params": {
         "file_path": null,
         "hidden_layer_width_mult": [1.0, 1.0],

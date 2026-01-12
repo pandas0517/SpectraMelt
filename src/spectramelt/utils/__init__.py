@@ -28,6 +28,7 @@ from .file_utils import (
 # From signal_utils.py
 from .signal_utils import (
     VALID_SAVED_FREQ_MODES,
+    filter_valid_names,
     sparse_fft,
     fft_encode_signals,
     fft_decode_signals,
@@ -36,7 +37,9 @@ from .signal_utils import (
     get_prefix_before_recovery,
     compute_recovery_stats,
     create_meta_data_dictionary,
-    process_signal_file
+    safe_mean,
+    safe_max,
+    safe_min
 )
 
 # From plotting_utils.py
@@ -71,5 +74,8 @@ __all__ = [
     "get_prefix_before_recovery",
     "compute_recovery_stats",
     "create_meta_data_dictionary",
-    "process_signal_file"
+    "safe_mean",
+    "safe_max",
+    "safe_min",
+    "filter_valid_names"
 ]

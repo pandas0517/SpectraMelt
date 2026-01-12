@@ -21,14 +21,12 @@ if __name__ == '__main__':
     load_dotenv()
     
     create_output_set = False
-    create_premultiply_set = False
 
     create_wbf_wave_params = False
     create_nyfr_wave_params = False
 
     display_output_signals = False
     display_wbf_signals = False
-    display_premultiply_signals = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -40,8 +38,7 @@ if __name__ == '__main__':
     if create_output_set:
         dataset.create_output_set(nyfr)
 
-    if create_premultiply_set:
-        dataset.create_premultiply_set()
+
         
     if create_wbf_wave_params:
         dataset.create_wbf_wave_params()
@@ -59,7 +56,7 @@ if __name__ == '__main__':
     input_wave_params_filename = filenames.get('wave_params', "wave_params.pkl")
     input_freq_signal_filename = filenames.get('freq_signals', "freq_signals.npz")
 
-    freq_modes = dataset.get_freq_modes()
+    freq_modes = nyfr.get_freq_modes()
     
     output_freq_modes = freq_modes.get('output', [])
     wideband_freq_modes = freq_modes.get('wideband', [])
@@ -116,8 +113,8 @@ if __name__ == '__main__':
                     wave_file,
                     base_title,
                 )
-    
-    if display_wbf_signals or display_premultiply_signals:
+            
+    if display_wbf_signals:
         wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
         time_freq_file = wideband_dir / wbf_time_freq_filename
         with np.load(time_freq_file) as time_freq:
@@ -127,7 +124,6 @@ if __name__ == '__main__':
             time = time_freq["time"]
             freq = time_freq["freq"]
             
-    if display_wbf_signals:
         signals_per_file = 3
         
         for file_path in wideband_dir.iterdir():
@@ -159,30 +155,5 @@ if __name__ == '__main__':
                     base_title,
                     fft_shift_flag=True
                 )
-                        
-    if display_premultiply_signals:
-        premultiply_dir = directories.get('premultiply', "Premultiply")
-        N = len(freq)
-        signals_per_file = 3
-        
-        for file_path in premultiply_dir.iterdir():
-            if file_path.is_file() and file_path.name.endswith(input_freq_signal_filename):         
 
-                time_signals = None
-                base_title = f"Output for Premultiplication Signals\n"
-                wave_file = None
-                test = np.load(file_path)
-                plot_dynamic_frequency_modes(
-                    file_path,
-                    time,
-                    freq,
-                    wideband_freq_modes,
-                    freq_range,
-                    signals_per_file,
-                    time_signals,
-                    wave_file,
-                    base_title,
-                    fft_shift_flag=True
-                )
-            
     atexit.register(logger.info, "Completed Test\n")

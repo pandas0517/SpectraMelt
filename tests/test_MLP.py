@@ -7,19 +7,24 @@ if __name__ == '__main__':
     from spectramelt.utils import (
         load_config_from_json,
         get_logger,
-        save_to_json
+        save_to_json,
+        plot_dynamic_frequency_modes,
+        REQUIRED_AXIS_KEYS
     )
     from pathlib import Path
-    
+    from spectramelt.mlp_module import MLP
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
 
     load_dotenv()
     
-    create_mlp_model = True
+    create_premultiply_set = False
+    display_premultiply_signals = False
+    
+    create_mlp_model = False
     prepare_large_dataset = False
-    train_mlp_model = True
+    train_mlp_model = False
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -27,6 +32,10 @@ if __name__ == '__main__':
     dataset = DataSet(input_config_name=input_config.get('config_name'),
                       DUT_config_name=nyfr_config.get('config_name'),
                       config_file_path=Path(getenv('DATASET_CONF')))
+    mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
+
+    if create_premultiply_set:
+        dataset.create_premultiply_set(mlp.get_premultiply_params())
     
     directories = dataset.get_directories()
     premultiply_dir = directories.get('premultiply', "Premultiply")
@@ -34,8 +43,48 @@ if __name__ == '__main__':
     ml_models_dir.mkdir(parents=True, exist_ok=True)
     wideband_dir = directories.get('wideband', "Wideband")
     
-    freq_modes = dataset.get_freq_modes()
-    mlp_freq_modes = freq_modes.get('mlp', [])
+    filenames = dataset.get_filenames()
+    input_freq_signal_filename = filenames.get('freq_signals', "freq_signals.npz")
+    
+    if display_premultiply_signals:
+        freq_modes = nyfr_config['freq_modes']      
+        wideband_freq_modes = freq_modes.get('wideband', [])
+        wave_params = input_config.get('wave_params', None)
+        freq_range = tuple(wave_params.get('freq_range'))
+        
+        wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
+        time_freq_file = wideband_dir / wbf_time_freq_filename
+        with np.load(time_freq_file) as time_freq:
+            missing = [k for k in REQUIRED_AXIS_KEYS if k not in time_freq]
+            if missing:
+                raise ValueError(f"{time_freq_file} missing required arrays: {missing}")
+            time = time_freq["time"]
+            freq = time_freq["freq"]
+        
+        N = len(freq)
+        signals_per_file = 3
+        
+        for file_path in premultiply_dir.iterdir():
+            if file_path.is_file() and file_path.name.endswith(input_freq_signal_filename):         
+
+                time_signals = None
+                base_title = f"Output for Premultiplication Signals\n"
+                wave_file = None
+                test = np.load(file_path)
+                plot_dynamic_frequency_modes(
+                    file_path,
+                    time,
+                    freq,
+                    wideband_freq_modes,
+                    freq_range,
+                    signals_per_file,
+                    time_signals,
+                    wave_file,
+                    base_title,
+                    fft_shift_flag=True
+                )  
+
+    mlp_freq_modes = mlp.get_freq_modes()
     # selected_freq_modes = mlp_freq_modes[0:1]
     selected_freq_modes = mlp_freq_modes
     filenames = dataset.get_filenames()
@@ -84,10 +133,8 @@ if __name__ == '__main__':
                     
             ml_model_file = ml_models_dir / f"{mode}_{ml_model_filename}"
 
-            from spectramelt.mlp_module import MLP
-            mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
             if not ml_config_file.exists():
-                save_to_json(mlp.get_mlp_params(), ml_config_file)
+                save_to_json(mlp.get_all_params(), ml_config_file)
             mlp.set_model_file_path(ml_model_file)
             
             if create_mlp_model:

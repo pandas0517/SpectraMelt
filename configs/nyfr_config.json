@@ -1,5 +1,8 @@
 {
     "config_name": "NYFR_Config_1",
+    "store_internal_sigs": true,
+    "dict_type": "real",
+    "create_dict": true,
     "freq_modes": {
         "output": [
             "mag",
@@ -25,16 +28,6 @@
         "fft_shift_wbf": false,
         "overwrite": false
     },
-    "premultiply_params": {
-        "scale_dict": 0.5,
-        "normalize": true,
-        "apply_fft": false,
-        "fft_shift": false,
-        "overwrite": true
-    },
-    "store_internal_sigs": true,
-    "dict_type": "real",
-    "create_dict": true,
     "log_params": {
         "enabled": true,
         "log_file": null,

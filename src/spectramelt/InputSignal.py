@@ -1,10 +1,15 @@
-from .utils import load_config_from_json, get_logger
-import copy
+from .utils import (
+    load_config_from_json,
+    get_logger,
+    filter_valid_names
+)
 import numpy as np
 
 class InputSignal:
     def __init__(self,
                  input_params=None,
+                 freq_modes=None,
+                 inputset_params=None,
                  time_params=None,
                  adc_params=None,
                  env_params=None,
@@ -16,6 +21,8 @@ class InputSignal:
             input_params = load_config_from_json(config_file_path)
         elif input_params is None:
             input_params = {}
+            input_params['freq_modes'] = freq_modes
+            input_params['inputset_params'] = inputset_params
             input_params['time_params'] = time_params
             input_params['adc_params'] = adc_params
             input_params['env_params'] =env_params
@@ -35,10 +42,13 @@ class InputSignal:
     # -------------------------------
     # Setters
     # -------------------------------
+    
     def set_input_params(self, input_params=None):
         if input_params is None:
             input_params = {}
         
+        freq_modes = input_params.get('freq_modes', None)
+        inputset_params = input_params.get('inputset_params', None)
         time_params = input_params.get('time_params', None)
         adc_params = input_params.get('adc_params', None)
         env_params = input_params.get('env_params', None)
@@ -61,16 +71,20 @@ class InputSignal:
             level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-                
+        
+        self.set_freq_modes(freq_modes)    
+        self.set_inputset_params(inputset_params)        
         self.set_time_params(time_params)
         self.set_adc_params(adc_params)
         self.set_env_params(env_params)
         self.set_wave_params(wave_params)
         self.set_config_name(config_name)
         
+    
     def set_config_name(self, config_name):
         self.config_name = config_name
         
+    
     def set_log_params(self, log_params=None):
         if log_params is None:
             log_params = {
@@ -80,6 +94,40 @@ class InputSignal:
                 "console": True
             }
         self.log_params = log_params
+        
+
+    def set_freq_modes(self, freq_modes=None):
+        if freq_modes is None:
+            freq_modes = [
+                "mag",
+                "ang",
+                "real",
+                "imag"
+            ]
+        
+        valid_modes, removed_modes = filter_valid_names(freq_modes)
+        if removed_modes:
+            self.logger.warning(f"Invalid modes removed from frequency mode list: {removed_modes}")
+        self.freq_modes = valid_modes
+        
+        
+    def set_inputset_params(self, inputset_params=None):
+        if inputset_params is None:
+            inputset_params = {
+                "num_sigs": 4000,
+                "num_recovery_sigs": 100,
+                "wave_precision": 3,
+                "tones_per_sig": [
+                    2, 3, 4, 5, 6,
+                    7, 8, 9, 10, 11
+                ],
+                "normalize": True,
+                "fft_shift": True,
+                "overwrite": True
+            }
+            
+        self.inputset_params = inputset_params
+
 
     def set_time_params(self, time_params=None):
         if time_params is None:
@@ -89,6 +137,7 @@ class InputSignal:
             }
         self.time_params = time_params
 
+    
     def set_adc_params(self, adc_params=None):
         if adc_params is None:
             adc_params = {
@@ -98,6 +147,7 @@ class InputSignal:
             }           
         self.adc_params = adc_params
         
+    
     def set_env_params(self, env_params=None):
         if env_params is None:
             env_params = {
@@ -114,6 +164,7 @@ class InputSignal:
         self.rng = np.random.default_rng(env_params.get('seed', None))
         self.env_params = env_params
 
+    
     def set_wave_params(self, wave_params=None):
         if wave_params is None:
             wave_params = {
@@ -174,6 +225,7 @@ class InputSignal:
                                    endpoint=False)
         self.analog = analog
 
+    
     def create_input_signal(self):
         """
         Generate composite signal with environmental effects and random wave generation.
@@ -221,6 +273,7 @@ class InputSignal:
                 
         self.input_signal = input_signal
 
+    
     def _generate_signal(self, waves):
         store_internal_sigs = self.env_params.get('store_internal_sigs', True)
         effects = {
@@ -307,48 +360,70 @@ class InputSignal:
     def get_input_signal(self):
         return self.input_signal.copy()
     
+    
     def get_config_name(self):
         return self.config_name
     
+    
     def get_analog_signals(self):
         return self.analog
+    
     
     def get_analog_signal_params(self):
         exclude = ["time", "frequency"]
         analog_signal_params = {k: v for k, v in self.analog.items() if k not in exclude}
         return analog_signal_params
     
+    
     def get_analog_time(self):
         return self.analog['time']
+    
     
     def get_analog_frequency(self):
         return self.analog['frequency']
     
+    
     def get_all_params(self):
         input_params = {
             "config_name": self.config_name,
+            "freq_modes": self.freq_modes,
+            "inputset_params": self.inputset_params,
             "time_params": self.time_params,
             "adc_params": self.adc_params,
             "env_params": self.env_params,
             "wave_params": self.wave_params,
             "log_params": self.log_params
         }
-        return input_params       
+        return input_params
+    
+    
+    def get_freq_modes(self):
+        return self.freq_modes
+    
+    
+    def get_inputset_params(self):
+        return self.inputset_params
+           
     
     def get_time_params(self):
         return self.time_params
     
+    
     def get_adc_params(self):
         return self.adc_params
+    
     
     def get_env_params(self):
         return self.env_params
     
+    
     def get_wave_params(self):
         return self.wave_params
     
+    
     def get_log_params(self):
         return self.log_params
+    
     
     def get_effects(self):
         return self.effects

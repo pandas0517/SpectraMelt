@@ -3,36 +3,47 @@ from importlib import import_module
 from .utils import(
     load_config_from_json,
     get_logger,
-    VALID_SAVED_FREQ_MODES
+    compute_recovery_stats,
+    flatten_dict,
+    create_meta_data_dictionary,
+    safe_min,
+    safe_max,
+    safe_mean,
+    filter_valid_names
 )
+import pandas as pd
 import pickle
+from pathlib import Path
 
 
 class Recovery:
     VALID_RECOVERY_METHODS = {
         "iht", "omp", "spgl1", "mlp"
     }    
-
+    VALID_RECOVERY_MODE_ANALYSIS = {
+        "mag",
+        "real_imag"
+    }
     def __init__(self,
                 signal=None,
                 dictionary=None,
+                all_params=None,
+                freq_modes=None,
                 recovery_params=None,
+                dataframe_params=None,
                 log_params=None,
                 config_name=None,
                 num_waves=1,
                 config_file_path=None) -> None:
         if config_file_path is not None:
             all_params = load_config_from_json(config_file_path)
-        else:
+        elif all_params is None:
             all_params = {}
+            all_params = ["freq_modes"] = freq_modes
             all_params["recovery_params"] = recovery_params
+            all_params["dataframe_params"] = dataframe_params
             all_params["log_params"] = log_params
             all_params["config_name"] = config_name
-            self.set_recovery_params(recovery_params)
-            if recovery_params is None:
-                config_name = "Default_Recovery_Config"
-            self.set_config_name(config_name)
-            self.set_log_params(log_params)
         
         self.set_all_params(all_params)
         
@@ -50,8 +61,10 @@ class Recovery:
     def set_all_params(self, all_params=None):
         if all_params is None:
             all_params = {}
-            
+        
+        freq_modes = all_params.get('freq_modes', None)
         recovery_params = all_params.get('recovery_params', None)
+        dataframe_params = all_params.get('dataframe_params', None)
         log_params = all_params.get('log_params', None)
         
         config_name = all_params.get('config_name', "Recovery_Config_1")
@@ -66,9 +79,70 @@ class Recovery:
             level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-    
+            
+        self.set_freq_modes(freq_modes)
+        self.set_dataframe_params(dataframe_params)
         self.set_recovery_params(recovery_params)
         self.set_config_name(config_name)
+
+
+    def set_freq_modes(self, freq_modes=None):
+        if freq_modes is None:
+            freq_modes = [
+                "mag",
+                "real_imag"
+            ]
+
+        valid_modes, removed_modes = filter_valid_names(freq_modes)
+        if removed_modes:
+            self.logger.warning(f"Invalid modes removed from frequency mode list: {removed_modes}")
+        self.freq_modes = valid_modes
+        
+        
+    def set_dataframe_params(self, dataframe_params=None):
+        if dataframe_params is None:
+            dataframe_params= {
+                "file_path": "recovery_df.pkl",
+                "save_as_csv": True,
+                "recovery_mag_thresh": 0.1,
+                "meta_column_names": {
+                    "input_time_file_name": "str",
+                    "wideband_filtered_file_name": "str",
+                    "recovery_file_name": "str",
+                    "dataset_config_name": "str",
+                    "input_config_name": "str",
+                    "DUT_config_name": "str",
+                    "recovery_config_name": "str",
+                    "Frequency_mode": "str",
+                    "total_input_tones": "float64",
+                    "rec_tone_thresh": "float64"
+                },
+                "signal_column_names": {
+                    "num_rec_freq_" : "float64",
+                    "num_spur_freq_": "float64",
+                    "ave_rec_mag_err_": "float64",
+                    "ave_rec_mag_": "float64",
+                    "max_rec_mag_": "float64",
+                    "min_rec_mag_": "float64",
+                    "ave_spur_mag_": "float64",
+                    "max_spur_mag_": "float64",
+                    "min_spur_mag_": "float64"
+                },
+                "signal_column_stats": {
+                    "ave_num_rec" : "float64",
+                    "recovery_rate": "float64",
+                    "ave_num_spur": "float64",
+                    "ave_rec_mag_err": "float64",
+                    "ave_rec_mag": "float64",
+                    "max_rec_mag": "float64",
+                    "min_rec_mag": "float64",
+                    "ave_spur_mag": "float64",
+                    "max_spur_mag": "float64",
+                    "min_spur_mag": "float64"
+                }
+            }
+        
+        self.dataframe_params = dataframe_params
 
 
     def set_config_name(self, config_name):
@@ -124,12 +198,6 @@ class Recovery:
     # -------------------------------
     # Core functional methods
     # -------------------------------
-    
-    def is_valid_saved_freq_mode(self, name) -> bool:
-        if isinstance(name, str):
-            name = [name]
-        return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
-
 
     def is_valid_recovery_method(self, name) -> bool:
         if isinstance(name, str):
@@ -203,330 +271,242 @@ class Recovery:
         return recovered_coef
 
 
-    def set_recovery_dataframe(self,
-                               input_dir,
-                               recovery_dir,
-                               recovery_file_name,
-                               wave_param_file_name,
-                               inputset_config_file=None,
-                               DUT_config_file=None,
-                               recovery_df_file_path=None):
-        if input_dir is None:
-            self.logger.error("Input directory not specified")
-            raise ValueError("Input directory not specified")
-        if recovery_dir is None:
-            self.logger.error("Recovery directory not specified")
-            raise ValueError("Recovery directory not specified")
-        if recovery_file_name is None:
-            self.logger.error("Recovery file base name not specified")
-            raise ValueError("Recovery file base name not specified")
-        if wave_param_file_name is None:
-            self.logger.error("Input wave parameters file base name not specified")
-            raise ValueError("Input wave parameters file base name not specified")
-                
-        if recovery_df_file_path is None:
-            recovery_df_file_path = self.dataframe_params.get('file_path', "recovery_df.pkl")
-            
-        if not recovery_df_file_path.exists():
-            self.logger.error(f"{recovery_df_file_path} does not exist.")
-        else:
-            recovery_df = pd.read_pickle(recovery_df_file_path)
-            
-        if inputset_config_file is None:
-            if self.inputset_config is None:
-                self.logger.error(f"{inputset_config_file} not specified")
-                raise ValueError(f"{inputset_config_file} not specified")
-            else:
-                inputset_config = self.inputset_config
-        elif not inputset_config_file.exists():
-            self.logger.error(f"{inputset_config_file} does not exist")
-            raise ValueError(f"{inputset_config_file} does not exist")
-        else:
-            inputset_config = load_config_from_json(inputset_config_file)
-        
-        inputset_config_name = inputset_config.get('config_name')
-        num_recovery_sigs = inputset_config.get('num_recovery_sigs')
-        
-        if DUT_config_file is None:
-            if self.DUT_config is None:
-                self.logger.error(f"{DUT_config_file} not specified")
-                raise ValueError(f"{DUT_config_file} not specified")
-            else:
-                DUT_config = self.DUT_config
-        elif not DUT_config_file.exists():
-            self.logger.error(f"{DUT_config_file} does not exist")
-            raise ValueError(f"{DUT_config_file} does not exist")
-        else:
-            DUT_config = load_config_from_json(DUT_config_file)
-        
-        DUT_config_name = DUT_config.get('config_name')
-            
-        recovery_dict = {p.name: p for p in recovery_dir.iterdir()
-                        if p.is_file() and p.name.endswith(recovery_file_name)
-                        and "recovery" in p.name.lower()}
-
-        input_dict = {p.name: p for p in input_dir.iterdir()
-                    if p.is_file() and p.name.endswith(recovery_file_name)
-                    and "recovery" in p.name.lower()}
-        
-        input_wave_dict = {p.name: p for p in input_dir.iterdir()
-                    if p.is_file() and p.name.endswith(wave_param_file_name)
-                    and "recovery" in p.name.lower()}
-        
-        missing_in_input = recovery_dict.keys() - input_dict.keys()
-        missing_in_recovery = input_dict.keys() - recovery_dict.keys()
-        missing_in_wave = input_wave_dict.key() - input_dict.keys()
-
-        if missing_in_input:
-            self.logger.error("Files missing in input:", missing_in_input)
-            raise ValueError("Files missing in input:", missing_in_input)
-
-        if missing_in_recovery:
-            self.logger.error("Files missing in recovery:", missing_in_recovery)
-            raise ValueError("Files missing in recovery:", missing_in_recovery)
-        
-        if missing_in_wave:
-            self.logger.error("Files missing in input wave parameters:", missing_in_wave)
-            raise ValueError("Files missing in input wave parameters:", missing_in_wave)            
-        
-        matched_recovery_files = [recovery_dict[name] for name in sorted(recovery_dict)]
-        matched_input_files = [input_dict[name] for name in sorted(input_dict)]
-        matched_wave_file = [input_wave_dict[name] for name in sorted(input_wave_dict)]
-        
-        for idx, recovery_file in enumerate(matched_recovery_files):
-            recovered_signals = np.load(recovery_file)
-            
-            input_file = matched_input_files[idx]
-            input_signals = np.load(input_file)
-            
-            input_wave_file = matched_wave_file[idx]
-            with open(input_wave_file, "rb") as f:
-                input_waves = pickle.load(f)
-                
-            if (recovered_signals.shape[0] != num_recovery_sigs):
-                self.logger.error(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
-                raise ValueError(f"Recovered signal set size {recovered_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
-            if (input_signals.shape[0] != num_recovery_sigs):
-                self.logger.error(f"Input signal set size {input_signals.shape[0]} does not equal expected size {num_recovery_sigs}")
-                raise ValueError(f"Input signal set size {input_signals.shape[0]} does not equal expected size {num_recovery_sigs}")  
-            if (recovered_signals.shape[1] != input_signals.shape[1]):
-                self.logger.error(f"Input signal length {input_signals.shape[1]} does not equal Recovered signal length {recovered_signals.shape[1]}")
-                raise ValueError(f"Input signal length {input_signals.shape[1]} does not equal Recovered signal length {recovered_signals.shape[1]}")
-                                    
-        for idx,rec_sig in enumerate(recovery_sig_set):
-            meta_data = self.__create_meta_data_dictionary(idx)
-            input_sig_param, _ = input_sig_params[idx]
-            analog_input, _ = self.nyfr.create_input_signal(wave_params=input_sig_param)
-            input_sig = self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate())
-            input_sig_xf = fft(input_sig)
-            input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
-            input_tone_mag = np.abs(input_sig_xf)
-            rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_thresh)[0]
-            mask = np.in1d(rec_sig_tones,input_sig_tones)
-            recovered_freq = np.where(mask)[0]
-            spur_freq = np.where(~mask)[0]
-            recovered_tones = rec_sig_tones[recovered_freq]
-            spur_tones = rec_sig_tones[spur_freq]
-            rec_mag = abs(rec_sig[recovered_tones])
-            spur_mag = abs(rec_sig[spur_tones])
-            meta_data['num_rec_freq']['value'] = recovered_freq.size
-            meta_data['num_spur_freq']['value'] = spur_freq.size
-            meta_data['total_input_tones']['value'] = input_sig_tones.size
-            meta_data['rec_tone_thresh']['value'] = recovery_mag_thresh
-            if ( recovered_freq.size == 0 ):
-                meta_data['ave_rec_mag_err']['value'] = -1
-                meta_data['ave_rec_mag']['value'] = -1
-                meta_data['max_rec_mag']['value'] = -1
-                meta_data['min_rec_mag']['value'] = -1
-            else:
-                meta_data['ave_rec_mag_err']['value'] = abs( np.average(input_tone_mag) - np.average(rec_mag) )
-                meta_data['ave_rec_mag']['value'] = np.average(rec_mag)
-                meta_data['max_rec_mag']['value'] = np.max(rec_mag)
-                meta_data['min_rec_mag']['value'] = np.min(rec_mag)
-            if ( spur_freq.size == 0 ):
-                meta_data['ave_spur_mag']['value'] = -1
-                meta_data['max_spur_mag']['value'] = -1
-                meta_data['min_spur_mag']['value'] = -1
-            else:
-                meta_data['ave_spur_mag']['value'] = np.average(spur_mag)
-                meta_data['max_spur_mag']['value'] = np.max(spur_mag)
-                meta_data['min_spur_mag']['value'] = np.min(spur_mag)
-            pass
-            for data in meta_data:
-                recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
-            
-                          
-    def set_recovery_df(self, nyfr=None, filenames=None, directories=None, input_set_params=None):
-        self.__set_init(nyfr=nyfr, filenames=filenames, directories=directories, input_set_params=input_set_params)
-        if self.__needs_init(include_set_params=True):
-            print("NYFR Test Harness not properly initialized.  Please re-initialize object")
-            return
-        dictionary_params = self.nyfr.get_dictionary_params()
-        recovery_params = self.nyfr.get_recovery_params()
-
-        add_columns = False
-        
-        recovery_df_path = os.path.join(self.df_dir, self.recovery_file['df'])
-        if os.path.exists(recovery_df_path):
-            recovery_df = pd.read_pickle(recovery_df_path)
-            if add_columns:
-                self.__add_columns_recovery_df(recovery_df, recovery_params['set_size'], recovery_df_path)
-            # recovery_df_file_path_csv = replace_extension(recovery_df_path, "csv")
-            # Save the DataFrame to a CSV file
-            # recovery_df.to_csv(recovery_df_file_path_csv, index=False)
-
-            for mode in recovery_params['modes']:
-                recovery_base_path = self.recovery_dir[dictionary_params['version']][recovery_params['type']]
-                if ( recovery_params['type'] == 'MLP1' ):
-                    recovery_base_path = os.path.join(recovery_base_path,
-                                                    mode)
-                for noise_level, _ in self.input_set_params["noise_levels"]:
-                    for phase_shift, _ in self.input_set_params["phase_shifts"]:
-                        for input_tones, _ in self.input_set_params["input_tones"]:
-                            input_list_path = os.path.join(self.input_dir,
-                                                           noise_level,
-                                                           phase_shift,
-                                                           self.input_tones[input_tones]['list'])
-                            for f_mod, f_mod_value in self.input_set_params["f_mods"]:
-                                for f_delta, f_delta_value in self.input_set_params["f_deltas"]:
-                                    recovery_file_path = os.path.join(recovery_base_path,
-                                                                      noise_level,
-                                                                      phase_shift,
-                                                                      f_mod,
-                                                                      f_delta,
-                                                                      self.input_tones[input_tones]['sigs'])
-                                    current_recovery_row = recovery_df.index[(recovery_df['num_tones']==input_tones) &
-                                                (recovery_df['noise_level']==noise_level) &
-                                                (recovery_df['phase_shift']==phase_shift) &
-                                                (recovery_df['f_mod']==f_mod_value) &
-                                                (recovery_df['f_delta']==f_delta_value) &
-                                                (recovery_df['dictionary_type']==dictionary_params['type']) &
-                                                (recovery_df['recovery_method']==recovery_params['type'])]
-                                    recovery_df = self.__update_recovery_df(recovery_df,                         
-                                                                            recovery_file_path,
-                                                                            input_list_path,
-                                                                            recovery_params["mag_thresh"],
-                                                                            current_recovery_row,
-                                                                            self.input_set_params["amp_min"],
-                                                                            recovery_params['set_size'])     
-                        recovery_df.to_pickle(recovery_df_path)
-                        recovery_df_file_path_csv = replace_extension(recovery_df_path, "csv")
-                        # Save the DataFrame to a CSV file
-                        recovery_df.to_csv(recovery_df_file_path_csv, index=False)
+    def create_rec_df(self,
+                      inputset_config_file=None,
+                      recovery_df_file_path=None):
+        inputset_config = load_config_from_json(inputset_config_file)
                         
-
-    def __update_recovery_df(self, 
-                             recovery_df,
-                             recovery_file_path,
-                             input_list_path,
-                             recovery_mag_thresh,
-                             current_recovery_row,
-                             input_tone_thresh,
-                             recovery_set_size):
-        input_sig_params = pd.read_pickle(input_list_path)
-        recovery_sig_set = np.load(recovery_file_path)
-        system_params = self.nyfr.get_system_params()
-        orig_system_noise_level = system_params["system_noise_level"]
-        system_params["system_noise_level"] = 0
-        self.nyfr.set_system_params(system_params=system_params)
-
-        if (recovery_sig_set.shape[0] != recovery_set_size):
-            print("Recovery signal set size does not match expected size")
-            return recovery_df
+        meta_column_names = self.dataframe_params.get('meta_column_names')
+        signal_column_names = self.dataframe_params.get('signal_column_names')
+        signal_column_stats = self.dataframe_params.get('signal_column_stats')
+        input_config = inputset_config.get('inputset')
+        num_recovery_sigs = input_config.get('num_recovery_sigs')
         
-        for idx,rec_sig in enumerate(recovery_sig_set):
-            meta_data = self.__create_meta_data_dictionary(idx)
-            input_sig_param, _ = input_sig_params[idx]
-            analog_input, _ = self.nyfr.create_input_signal(wave_params=input_sig_param)
-            input_sig = self.nyfr.sample_signals(data=analog_input, sample_rate=self.nyfr.get_wb_nyquist_rate())
-            input_sig_xf = fft(input_sig)
-            input_sig_tones = np.where(abs(input_sig_xf) > input_tone_thresh)[0]
-            input_tone_mag = np.abs(input_sig_xf)
-            rec_sig_tones = np.where(abs(rec_sig) > recovery_mag_thresh)[0]
-            mask = np.in1d(rec_sig_tones,input_sig_tones)
-            recovered_freq = np.where(mask)[0]
-            spur_freq = np.where(~mask)[0]
-            recovered_tones = rec_sig_tones[recovered_freq]
-            spur_tones = rec_sig_tones[spur_freq]
-            rec_mag = abs(rec_sig[recovered_tones])
-            spur_mag = abs(rec_sig[spur_tones])
-            meta_data['num_rec_freq']['value'] = recovered_freq.size
-            meta_data['num_spur_freq']['value'] = spur_freq.size
-            meta_data['total_input_tones']['value'] = input_sig_tones.size
-            meta_data['rec_tone_thresh']['value'] = recovery_mag_thresh
-            if ( recovered_freq.size == 0 ):
-                meta_data['ave_rec_mag_err']['value'] = -1
-                meta_data['ave_rec_mag']['value'] = -1
-                meta_data['max_rec_mag']['value'] = -1
-                meta_data['min_rec_mag']['value'] = -1
-            else:
-                meta_data['ave_rec_mag_err']['value'] = abs( np.average(input_tone_mag) - np.average(rec_mag) )
-                meta_data['ave_rec_mag']['value'] = np.average(rec_mag)
-                meta_data['max_rec_mag']['value'] = np.max(rec_mag)
-                meta_data['min_rec_mag']['value'] = np.min(rec_mag)
-            if ( spur_freq.size == 0 ):
-                meta_data['ave_spur_mag']['value'] = -1
-                meta_data['max_spur_mag']['value'] = -1
-                meta_data['min_spur_mag']['value'] = -1
-            else:
-                meta_data['ave_spur_mag']['value'] = np.average(spur_mag)
-                meta_data['max_spur_mag']['value'] = np.max(spur_mag)
-                meta_data['min_spur_mag']['value'] = np.min(spur_mag)
-            pass
-            for data in meta_data:
-                recovery_df.at[current_recovery_row[0], meta_data[data]['col_name']] = meta_data[data]['value']
-        system_params["system_noise_level"] = orig_system_noise_level
-        self.nyfr.set_system_params(system_params=system_params)
-        return recovery_df
+        # Build the master column dictionary
+        full_column_dict = dict(meta_column_names)   # start with static columns
 
-    def __create_meta_data_dictionary(self, idx):
-        meta_data = {
-            'num_rec_freq': {
-                'col_name': "num_rec_freq_" + str(idx),
-                'value': 0
-            },
-            'num_spur_freq': {
-                'col_name': "num_spur_freq_" + str(idx),
-                'value': 0
-            },
-            'ave_rec_mag_err': {
-                'col_name': "ave_rec_mag_err_" + str(idx),
-                'value': 0
-            },
-            'total_input_tones': {
-                'col_name': "total_input_tones_" + str(idx),
-                'value': 0
-            },
-            'rec_tone_thresh': {
-                'col_name': "rec_tone_thresh_" + str(idx),
-                'value': 0
-            },
-            'ave_rec_mag': {
-                'col_name': "ave_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'max_rec_mag': {
-                'col_name': "max_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'min_rec_mag': {
-                'col_name': "min_rec_mag_" + str(idx),
-                'value': 0
-            },
-            'ave_spur_mag': {
-                'col_name': "ave_spur_mag_" + str(idx),
-                'value': 0
-            },
-            'max_spur_mag': {
-                'col_name': "max_spur_mag_" + str(idx),
-                'value': 0
-            },
-            'min_spur_mag': {
-                'col_name': "min_spur_mag_" + str(idx),
-                'value': 0
+        for sig in range(num_recovery_sigs):
+            for prefix, dtype in signal_column_names.items():
+                full_column_dict[f"{prefix}{sig}"] = dtype
+
+        for prefix, dtype in signal_column_stats.items():
+            full_column_dict[f"{prefix}"] = dtype
+
+        # Create empty DataFrame
+        recovery_df = pd.DataFrame({
+            col: pd.Series(dtype=dtype) for col, dtype in full_column_dict.items()
+        })
+
+        recovery_df.to_pickle(recovery_df_file_path)
+        self.logger.info(f"Saved Dataframe to {recovery_df}")
+        
+        save_as_csv = self.dataframe_params.get('save_as_csv', True)
+        if save_as_csv:
+            recovery_df_file_path_csv = recovery_df_file_path.with_suffix(".csv")
+            recovery_df.to_csv(recovery_df_file_path_csv, index=False)
+            self.logger.info(f"Saved CSV Dataframe to {recovery_df_file_path_csv}")
+            
+            
+    def process_signal_file(
+        self,
+        recovery_file: Path,
+        wbf_wave_file: Path,
+        input_file: Path,
+        num_recovery_sigs: int,
+        dataset_config_name: str,
+        inputset_config_name: str,
+        DUT_config_name: str,
+        recovery_config_name: str,
+        wbf_freq: np.ndarray
+    ) -> list[dict]:
+        freq_modes = self.freq_modes
+        dataframe_params = self.dataframe_params
+        recovery_mag_threshold = dataframe_params.get('recovery_mag_thresh', 0.1)
+        
+        #Need to add support for real and imag modes in the future
+        unsupported = set(freq_modes) - set(self.VALID_RECOVERY_MODE_ANALYSIS)
+
+        if unsupported:
+            self.logger.warning(f"Unsupported frequency modes {unsupported} found. Removing")
+            freq_modes = [
+                m for m in freq_modes
+                if m not in unsupported
+                ]
+
+        # ---------- Load recovery ----------
+        with np.load(recovery_file) as recovery_npz:
+            available = set(recovery_npz.files)
+            valid = [m for m in freq_modes if m in available]
+            missing = set(freq_modes) - set(valid)
+            if missing:
+                print(f"Warning: Missing recovery modes in {recovery_file}: {missing}")
+            recovery = {m: recovery_npz[m] for m in valid}
+
+        # Split real_imag if present
+        if "real_imag" in recovery:
+            arr = recovery["real_imag"]
+            real, imag = np.array_split(arr, 2, axis=1)
+            recovery["real_imag"] = {"real": real, "imag": imag}
+
+        # FFT shift
+        for mode, data in recovery.items():
+            if isinstance(data, dict):
+                for k in data:
+                    data[k] = np.fft.fftshift(data[k], axes=-1)
+            else:
+                recovery[mode] = np.fft.fftshift(data, axes=-1)
+
+        flat_recovery = flatten_dict(recovery)
+
+        # ---------- Sanity check ----------
+        for k, arr in flat_recovery.items():
+            if arr.shape[0] != num_recovery_sigs:
+                raise ValueError(f"Recovered signal size mismatch: {k}")
+
+        # ---------- Load WBF waves ----------
+        with open(wbf_wave_file, "rb") as f:
+            wbf_waves = pickle.load(f)
+
+        rows = []
+
+        # ================================================================
+        # ONE ROW PER FREQUENCY MODE
+        # ================================================================
+        for mode in freq_modes:
+
+            row = {
+                "input_file_name": input_file,
+                "wbf_file_name": wbf_wave_file,
+                "recovery_file_name": recovery_file,
+                "dataset_config_name": dataset_config_name,
+                "input_config_name": inputset_config_name,
+                "DUT_config_name": DUT_config_name,
+                "recovery_config_name": recovery_config_name,
+                "Frequency_mode": mode,
             }
-        }
-        return meta_data
+
+            # ============================================================
+            # PER-SIGNAL STATS
+            # ============================================================
+            for idx_sig, wbf_wave in enumerate(wbf_waves):
+
+                if idx_sig == 0:
+                    row["total_input_tones"] = len(wbf_wave)
+                    row["rec_tone_thresh"] = recovery_mag_threshold
+
+                # ---- reference data ----
+                amps  = np.array([w["amp"]  for w in wbf_wave])
+                freqs = np.array([w["freq"] for w in wbf_wave])
+                reals = np.array([w["real"] for w in wbf_wave])
+                imags = np.array([w["imag"] for w in wbf_wave])
+
+                pos_idx = np.array([np.argmin(np.abs(wbf_freq - f)) for f in freqs])
+                neg_idx = np.array([np.argmin(np.abs(wbf_freq + f)) for f in freqs])
+                rec_bins = np.concatenate([neg_idx, pos_idx])
+
+                all_bins = np.arange(wbf_freq.size)
+                non_rec_bins = np.setdiff1d(all_bins, rec_bins)
+
+                # ========================================================
+                # MAG MODE
+                # ========================================================
+                if mode == "mag":
+                    mag = flat_recovery["mag"][idx_sig]
+                    mag_abs = np.abs(mag)
+
+                    rec_vals = mag_abs[rec_bins]
+                    rec_final = rec_vals[rec_vals > recovery_mag_threshold]
+
+                    spur_vals = mag_abs[non_rec_bins]
+                    spur_final = spur_vals[spur_vals > recovery_mag_threshold]
+
+                    ref_vals = np.concatenate([amps, amps])
+
+                # ========================================================
+                # REAL / IMAG MODE
+                # ========================================================
+                elif mode == "real_imag":
+                    real = flat_recovery["real_imag.real"][idx_sig]
+                    imag = flat_recovery["real_imag.imag"][idx_sig]
+
+                    real_abs = np.abs(real)
+                    imag_abs = np.abs(imag)
+
+                    # recovered (expected bins)
+                    rec_real = real_abs[rec_bins]
+                    rec_imag = imag_abs[rec_bins]
+
+                    rec_final = np.concatenate([
+                        rec_real[rec_real > recovery_mag_threshold],
+                        rec_imag[rec_imag > recovery_mag_threshold],
+                    ])
+
+                    # spurs (unexpected bins)
+                    spur_real = real_abs[non_rec_bins]
+                    spur_imag = imag_abs[non_rec_bins]
+
+                    spur_final = np.concatenate([
+                        spur_real[spur_real > recovery_mag_threshold],
+                        spur_imag[spur_imag > recovery_mag_threshold],
+                    ])
+
+                    ref_vals = np.concatenate([np.abs(reals), np.abs(imags),
+                                            np.abs(reals), np.abs(imags)])
+
+                else:
+                    raise ValueError(f"Unsupported frequency mode: {mode}")
+
+                # ---- compute stats ----
+                stats = compute_recovery_stats(
+                    rec_final,
+                    spur_final,
+                    ref_vals,
+                    min_threshold=recovery_mag_threshold
+                )
+
+                # ---- write per-signal columns ----
+                meta = create_meta_data_dictionary(idx_sig)
+                (
+                    meta["num_rec_freq"]["value"],
+                    meta["num_spur_freq"]["value"],
+                    meta["ave_rec_mag_err"]["value"],
+                    meta["ave_rec_mag"]["value"],
+                    meta["max_rec_mag"]["value"],
+                    meta["min_rec_mag"]["value"],
+                    meta["ave_spur_mag"]["value"],
+                    meta["max_spur_mag"]["value"],
+                    meta["min_spur_mag"]["value"],
+                ) = stats
+
+                row.update({v["col_name"]: v["value"] for v in meta.values()})
+
+            # ============================================================
+            # AGGREGATES
+            # ============================================================
+            num_rec_vals  = [row[f"num_rec_freq_{i}"] for i in range(num_recovery_sigs)]
+            num_spur_vals = [row[f"num_spur_freq_{i}"] for i in range(num_recovery_sigs)]
+
+            row["ave_num_rec"]  = safe_mean(num_rec_vals)
+            row["ave_num_spur"] = safe_mean(num_spur_vals)
+
+            denom = 2 if mode == "mag" else 4
+            row["recovery_rate"] = (
+                row["ave_num_rec"] / (denom * row["total_input_tones"])
+                if row["ave_num_rec"] != -1 else -1
+            )
+
+            row["ave_rec_mag_err"] = safe_mean([row[f"ave_rec_mag_err_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_rec_mag"]     = safe_mean([row[f"ave_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+            row["max_rec_mag"]     = safe_max([row[f"max_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+            row["min_rec_mag"]     = safe_min([row[f"min_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_spur_mag"]    = safe_mean([row[f"ave_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+            row["max_spur_mag"]    = safe_max([row[f"max_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+            row["min_spur_mag"]    = safe_min([row[f"min_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+
+            rows.append(row)
+
+        return rows
+
 
     # -------------------------------
     # Getters
@@ -538,6 +518,14 @@ class Recovery:
     
     def get_recovered_coefs(self):
         return self.recovered_coefs
+    
+    
+    def get_freq_modes(self):
+        return self.freq_modes
+    
+    
+    def get_dataframe_params(self):
+        return self.dataframe_params
 
     
     def get_recovery_params(self):
@@ -555,7 +543,9 @@ class Recovery:
     def get_all_params(self):
         all_params ={
             "config_name": self.config_name,
+            "freq_modes": self.freq_modes,
             "recovery_params": self.recovery_params,
+            "dataframe_params": self.dataframe_params,
             "log_params": self.log_params
         }
         return all_params

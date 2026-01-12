@@ -9,8 +9,6 @@ from .utils import (
     update_npz,
     get_prefix_before_recovery,
     numeric_key,
-    process_signal_file,
-    VALID_SAVED_FREQ_MODES,
     REQUIRED_AXIS_KEYS
 )
 import numpy as np
@@ -31,10 +29,6 @@ class DataSet:
     VALID_DUT_TYPES = {
         "nyfr"
     }
-    VALID_RECOVERY_MODE_ANALYSIS = {
-        "mag",
-        "real_imag"
-    }
     def __init__(self,
                  input_config_name=None,
                  DUT_config_name=None,
@@ -42,11 +36,6 @@ class DataSet:
                  ML_config_name=None,
                  dataset_config_name="DataSet_Config_1",
                  seed=None,
-                 freq_modes=None,
-                 dataset_params=None,
-                 inputset_params=None,
-                 outputset_params=None,
-                 premultiply_params=None,
                  log_params=None,
                  filenames=None,
                  directory_params=None,
@@ -61,16 +50,12 @@ class DataSet:
             dataset_params = load_config_from_json(config_file_path)
         elif dataset_params is None:
             dataset_params = {}
-            dataset_params['inputset_params'] = inputset_params
-            dataset_params['outputset_params'] = outputset_params
             dataset_params['filenames'] = filenames
             dataset_params['directory_params'] = directory_params
             dataset_params['config_name'] = dataset_config_name
             dataset_params['log_params'] = log_params
             dataset_params['dataframe_params'] = dataframe_params
             dataframe_params['seed'] = seed
-            dataframe_params['freq_modes'] = freq_modes
-            dataframe_params['premultiply_params'] = premultiply_params
             
         dataset_params['input_config_name'] = input_config_name
         dataset_params['DUT_config_name'] = DUT_config_name
@@ -94,15 +79,10 @@ class DataSet:
         DUT_config_name = dataset_params.get('DUT_config_name', None)
         recovery_config_name = dataset_params.get('recovery_config_name', None)
         ML_config_name = dataset_params.get('ML_config_name', None)
-        inputset_params = dataset_params.get('inputset_params', None)
-        outputset_params = dataset_params.get('outputset_params', None)
         filenames = dataset_params.get('filenames', None)
         directory_params = dataset_params.get('directory_params', None)
         log_params = dataset_params.get('log_params', None)
-        dataframe_params = dataset_params.get('dataframe_params', None)
         self.input_rng = np.random.default_rng(dataset_params.get('seed', None))
-        freq_modes = dataset_params.get('freq_modes', None)
-        premultiply_params = dataset_params.get('premultiply_params', None)
         
         if (filenames is None and
             directory_params is None ):
@@ -118,17 +98,12 @@ class DataSet:
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
             
         self.set_config_name(config_name)
-        self.set_inputset_params(inputset_params)
-        self.set_outputset_params(outputset_params)
         self.set_filenames(filenames)
         self.set_directory_params(directory_params)
         self.set_input_config_name(input_config_name)
         self.set_DUT_config_name(DUT_config_name)
         self.set_recovery_config_name(recovery_config_name)
         self.set_ML_config_name(ML_config_name)
-        self.set_dataframe_params(dataframe_params)
-        self.set_freq_modes(freq_modes)
-        self.set_premultiply_params(premultiply_params)
 
         
     def set_log_params(self, log_params=None):
@@ -144,83 +119,7 @@ class DataSet:
         
     def set_config_name(self, config_name):
         self.config_name = config_name
-        
-        
-    def set_inputset_params(self, inputset_params):
-        if inputset_params is None:
-            inputset_params = {
-                "num_sigs": 1000,
-                "num_recovery_sigs": 100,
-                "tones_per_sig": [1],
-                "wave_precision": None,
-                "normalize": True,
-                "fft_shift": True,
-                "overwrite": True
-            }
-
-        self.inputset_params = inputset_params
-        
-
-    def set_outputset_params(self, outputset_params):
-        if outputset_params is None:
-            outputset_params = {
-                "DUT_type": "NYFR",
-                "decode_to_time": True,
-                "normalize": True,
-                "fft_shift": True,
-                "normalize_wbf": True,
-                "fft_shift_wbf": False,
-                "overwrite": True
-            }
-        
-        DUT_type = outputset_params.get('DUT_type', None)
-        if not self.is_valid_dut_type(DUT_type):
-            self.logger.error(f"DUT type {DUT_type} not currently valid")
-            raise ValueError(f"DUT type {DUT_type} not currently valid")
-                    
-        self.outputset_params = outputset_params
-
-
-    def set_premultiply_params(self, premultiply_params):
-        if premultiply_params is None:
-            premultiply_params = {
-                "scale_dict": 1.0,
-                "normalize": True,
-                "apply_fft": False,
-                "fft_shift": True,
-                "overwrite": True
-            }
-                    
-        self.premultiply_params = premultiply_params
-
-
-    def set_freq_modes(self, freq_modes):
-        if freq_modes is None:
-            freq_modes = {
-                "input": ["mag",
-                        "ang",
-                        "real",
-                        "imag"],
-                "output": ["mag",
-                        "ang",
-                        "real",
-                        "imag"],
-                "wideband": ["mag",
-                            "ang",
-                            "real",
-                            "imag"],
-                "mlp": ["mag"],
-                "recovery": ["mag"] 
-            }
-        
-        for freq_mode, freq_mode_list in freq_modes.items():
-            valid_modes, removed_modes = self.filter_valid_names(freq_mode_list)
-            freq_modes[freq_mode] = valid_modes
-            if removed_modes:
-                self.logger.warning(f"Invalid modes removed from {freq_mode} frequency mode list: {removed_modes}")
-
-        self.freq_modes = freq_modes
-        
+               
 
     def set_input_config_name(self, input_config_name):
         if input_config_name is None:
@@ -352,95 +251,10 @@ class DataSet:
             }
         self.flat_filenames = flatten_files(filenames)
         self.filenames = filenames
-        
-
-    def set_dataframe_params(self, dataframe_params=None):
-        if dataframe_params is None:
-            dataframe_params = {
-                "file_path": None,
-                "save_as_csv": True,
-                "recovery_mag_thresh": 0.5,
-                "meta_column_names": {
-                    "input_time_file_name": "str",
-                    "wideband_filtered_file_name": "str",
-                    "recovery_file_name": "str",
-                    "dataset_config_name": "str",
-                    "input_config_name": "str",
-                    "DUT_config_name": "str",
-                    "recovery_config_name": "str",
-                    "Frequency_mode": "str",
-                    "total_input_tones": "float64",
-                    "rec_tone_thresh": "float64"
-                },
-                "signal_column_names": {
-                    "num_rec_freq_" : "float64",
-                    "num_spur_freq_": "float64",
-                    "ave_rec_mag_err_": "float64",
-                    "ave_rec_mag_": "float64",
-                    "max_rec_mag_": "float64",
-                    "min_rec_mag_": "float64",
-                    "ave_spur_mag_": "float64",
-                    "max_spur_mag_": "float64",
-                    "min_spur_mag_": "float64"
-                },
-                "signal_column_stats": {
-                    "ave_num_rec" : "float64",
-                    "recovery_rate": "float64",
-                    "ave_num_spur": "float64",
-                    "ave_rec_mag_err": "float64",
-                    "ave_rec_mag": "float64",
-                    "max_rec_mag": "float64",
-                    "min_rec_mag": "float64",
-                    "ave_spur_mag": "float64",
-                    "max_spur_mag": "float64",
-                    "min_spur_mag": "float64"
-                }
-            }
-        self.dataframe_params = dataframe_params
 
     # -------------------------------
     # Core functional methods
-    # -------------------------------
-    
-    def filter_valid_names(self, names, valid_set=None):
-        if valid_set is None:
-            valid_set = VALID_SAVED_FREQ_MODES
-
-        # Allow a single string or a list
-        if isinstance(names, str):
-            names = [names]
-
-        valid = []
-        removed = []
-
-        for n in names:
-            if n.lower() in valid_set:
-                valid.append(n)
-            else:
-                removed.append(n)
-
-        return valid, removed
-
-
-    def is_valid_dut_type(self, dut_type) -> bool:
-        """
-        Check if a DUT type or list of DUT types is valid.
-
-        Parameters
-        ----------
-        dut_type : str or list of str
-            DUT type(s) to check.
-
-        Returns
-        -------
-        bool
-            True if all DUT types are valid, False otherwise.
-        """
-        if isinstance(dut_type, str):
-            dut_type = [dut_type]
-        
-        return all(d.lower() in {t.lower() for t in self.VALID_DUT_TYPES} for d in dut_type)
-    
+    # -------------------------------   
         
     def create_input_set(self,
                          input_signal,
@@ -456,21 +270,24 @@ class DataSet:
                        100 → 0.01 Hz steps
         """
         self.logger.info("Starting Input Set Creation...")
+        
         # --- Setup and pre-saves ---
         if input_signal is None:
             self.logger.error("Input Signal Object not set")
             raise ValueError("Input Signal Object Not Set")
         else:
             self.set_input_config_name(input_signal.get_config_name())
+            
+        inputset_params = input_signal.get_inputset_params()
 
         if normalize is None:
-            normalize = self.inputset_params.get('normalize', False)
+            normalize = inputset_params.get('normalize', False)
 
         if overwrite is None:
-            overwrite = self.inputset_params.get('overwrite', False)
+            overwrite = inputset_params.get('overwrite', False)
 
         if fft_shift is None:
-            fft_shift = self.inputset_params.get('fft_shift', False)   
+            fft_shift = inputset_params.get('fft_shift', False)   
             
         input_dirs = self.directories.get('inputs', "Inputs")
         real_time_freq_filename = self.filenames.get("real_time_freq", "real_time_freq.npz")
@@ -479,7 +296,8 @@ class DataSet:
         input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
         input_time_signals_filename = self.filenames.get('time_signals', "time_signals.npy")
         input_freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
-        input_freq_modes = self.freq_modes.get('input', [])
+        
+        input_freq_modes = input_signal.get_freq_modes()
 
         input_dirs.mkdir(parents=True, exist_ok=True)
         real_time_freq_file = input_dirs / real_time_freq_filename
@@ -511,7 +329,7 @@ class DataSet:
         if not inputset_config_file.exists() or overwrite:
             inputset_config = {
                 "config_name": self.config_name,
-                "inputset": self.inputset_params,
+                "inputset": inputset_params,
                 "input": input_signal_params
             }
             save_to_json(inputset_config, inputset_config_file)
@@ -525,10 +343,10 @@ class DataSet:
         amp_range = input_signal_wave_params.get('amp_range', (0.1, 1.0))
         phase_range = input_signal_wave_params.get('phase_range', (0, 1))
 
-        num_input_sigs = self.inputset_params.get('num_sigs', 1000)
-        num_recovery_sigs = self.inputset_params.get('num_recovery_sigs', 100)
-        tones_per_sig = self.inputset_params.get('tones_per_sig', [1])
-        wave_precision = self.inputset_params.get('wave_precision', None)
+        num_input_sigs = inputset_params.get('num_sigs', 1000)
+        num_recovery_sigs = inputset_params.get('num_recovery_sigs', 100)
+        tones_per_sig = inputset_params.get('tones_per_sig', [1])
+        wave_precision = inputset_params.get('wave_precision', None)
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
@@ -640,6 +458,8 @@ class DataSet:
                           overwrite=None):
         self.logger.info(f"Starting Output Set Creation...")
         
+        outputset_params = DUT.get_outputset_params()
+        
         # --- Setup and pre-saves ---
         if input_signal is not None:
             self.set_input_config_name(input_signal.get_config_name())
@@ -658,14 +478,11 @@ class DataSet:
             
         if overwrite is None:
             overwrite = self.outputset_params.get('overwrite', False)
-        
-        outputset_params = self.outputset_params
+
         if DUT is None:
             self.logger.error("DUT Object not set")
             raise ValueError("DUT Object Not Set")
         else:
-            outputset_params['DUT_type'] = type(DUT).__name__
-            self.set_outputset_params(outputset_params)
             self.set_DUT_config_name(DUT.get_config_name())
         
         input_dir = self.directories.get('inputs', "Inputs")
@@ -710,9 +527,10 @@ class DataSet:
             }
             save_to_json(DUT_config, DUT_config_file)
             self.logger.info(f"Saved DUT {DUT_type} configuration to file {DUT_config_file}")
-
-        output_freq_modes = self.freq_modes.get('output', [])
-        wideband_freq_modes = self.freq_modes.get('wideband', [])
+            
+        freq_modes = DUT.get_freq_modes()
+        output_freq_modes = freq_modes.get('output', [])
+        wideband_freq_modes = freq_modes.get('wideband', [])
         
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
@@ -878,7 +696,8 @@ class DataSet:
     def create_nyfr_wave_params(self, nyfr):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")
         
-        DUT_type = self.outputset_params.get('DUT_type', None).lower()
+        outputset_params = nyfr.get_outputset_params()
+        DUT_type = outputset_params.get('DUT_type', None).lower()
         DUT_config_name = self.DUT_config_name
         class_name = nyfr.__class__.__name__.lower()
         config_name = nyfr.get_config_name()
@@ -1175,7 +994,7 @@ class DataSet:
         
         recovery_params = recovery.get_recovery_params()
         recovery_method = recovery_params.get('method').lower()
-        freq_modes = self.freq_modes.get('recovery', [])
+        freq_modes = recovery.get_freq_modes()
         
         if recovery_method != "mlp":
             for file_path in output_dir.iterdir():
@@ -1345,7 +1164,11 @@ class DataSet:
                 self.logger.info(f"Saved time-domain signal: {recovery_time_file}")
 
         
-    def create_recovery_dataframe(self):
+    def create_recovery_dataframe(self, recovery=None):
+        if recovery is None:
+            self.logger.error("No recovery object provided")
+            raise ValueError("No recovery object provided")
+        
         self.logger.info("Creating Dataframe for recovery signals")
         # --- Config file ---
         input_dirs = self.directories.get('inputs', "Inputs")
@@ -1362,41 +1185,18 @@ class DataSet:
         if not inputset_config_file.exists():
             self.logger.error(f"{inputset_config_file} does not exist")
             raise ValueError(f"{inputset_config_file} does not exist")
-        else:
-            inputset_config = load_config_from_json(inputset_config_file)
-                        
-        meta_column_names = self.dataframe_params.get('meta_column_names')
-        signal_column_names = self.dataframe_params.get('signal_column_names')
-        signal_column_stats = self.dataframe_params.get('signal_column_stats')
-        input_config = inputset_config.get('inputset')
-        num_recovery_sigs = input_config.get('num_recovery_sigs')
         
-        # Build the master column dictionary
-        full_column_dict = dict(meta_column_names)   # start with static columns
-
-        for sig in range(num_recovery_sigs):
-            for prefix, dtype in signal_column_names.items():
-                full_column_dict[f"{prefix}{sig}"] = dtype
-
-        for prefix, dtype in signal_column_stats.items():
-            full_column_dict[f"{prefix}"] = dtype
-
-        # Create empty DataFrame
-        recovery_df = pd.DataFrame({
-            col: pd.Series(dtype=dtype) for col, dtype in full_column_dict.items()
-        })
-
-        recovery_df.to_pickle(recovery_df_file_path)
-        self.logger.info(f"Saved Dataframe to {recovery_df}")
-        
-        save_as_csv = self.dataframe_params.get('save_as_csv', True)
-        if save_as_csv:
-            recovery_df_file_path_csv = recovery_df_file_path.with_suffix(".csv")
-            recovery_df.to_csv(recovery_df_file_path_csv, index=False)
-            self.logger.info(f"Saved CSV Dataframe to {recovery_df_file_path_csv}")
+        recovery.create_rec_df(inputset_config_file,
+                               recovery_df_file_path)
             
             
-    def set_recovery_dataframe(self, freq_modes=None):        
+    def set_recovery_dataframe(self, recovery=None):
+        if recovery is None:
+            self.logger.error("No recovery object provided")
+            raise ValueError("No recovery object provided")
+
+        dataframe_params = recovery.get_dataframe_params()
+           
         input_dir = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
@@ -1425,9 +1225,8 @@ class DataSet:
         recovery_config_filename = self.filenames.get('recovery_config', "recovery_config.json")
         recovery_config_file = recovery_dir.parent / recovery_config_filename
 
-        recovery_df_filename = self.dataframe_params.get('file_path', "recovery_df.pkl")
+        recovery_df_filename = dataframe_params.get('file_path', "recovery_df.pkl")
         recovery_df_file_path = recovery_dir / recovery_df_filename
-        recovery_df = pd.read_pickle(recovery_df_file_path)
 
         if not recovery_df_file_path.exists():
             self.logger.error(f"{recovery_df_file_path} does not exist.")
@@ -1470,21 +1269,8 @@ class DataSet:
         
         DUT_output = DUT_config.get('output')
         DUT_config_name = DUT_output.get('config_name')
-        
-        recovery_mag_threshold = self.dataframe_params.get('recovery_mag_thresh', 0.5)
-        
-        if freq_modes is None:
-            freq_modes = self.freq_modes.get('recovery', [])
 
-            #Need to add support for real and imag modes in the future
-            unsupported = set(freq_modes) - set(self.VALID_RECOVERY_MODE_ANALYSIS)
 
-            if unsupported:
-                self.logger.warning(f"Unsupported frequency modes {unsupported} found. Removing")
-                freq_modes = [
-                    m for m in freq_modes
-                    if m not in unsupported
-                ]
             
         input_dict = {
             get_prefix_before_recovery(p.name): p
@@ -1534,12 +1320,10 @@ class DataSet:
         all_rows = []
 
         for idx_file, recovery_file in enumerate(matched_recovery_files):
-            rows = process_signal_file(
+            rows = recovery.process_signal_file(
                 recovery_file=recovery_file,
                 wbf_wave_file=matched_wave_files[idx_file],
                 input_file=input_files[idx_file],
-                freq_modes=freq_modes,
-                recovery_mag_threshold=recovery_mag_threshold,
                 num_recovery_sigs=num_recovery_sigs,
                 dataset_config_name=dataset_config_name,
                 inputset_config_name=inputset_config_name,
@@ -1549,7 +1333,7 @@ class DataSet:
             )
             all_rows.extend(rows)
 
-        signal_column_stats = self.dataframe_params.get('signal_column_stats')
+        signal_column_stats = dataframe_params.get('signal_column_stats')
 
         # --- Build final dataframe ---
         recovery_df = pd.DataFrame(all_rows)
@@ -1565,7 +1349,7 @@ class DataSet:
                     if pd.notnull(x) else x
                 )
 
-        if self.dataframe_params.get('save_as_csv', True):
+        if dataframe_params.get('save_as_csv', True):
             recovery_df.to_csv(recovery_df_file_path.with_suffix(".csv"), index=False)
 
         
@@ -1617,18 +1401,6 @@ class DataSet:
         return self.directory_params
     
     
-    def get_inputset_params(self):
-        return self.inputset_params
-    
-    
-    def get_outputset_params(self):
-        return self.outputset_params
-    
-    
-    def get_valid_saved_freq_modes(cls):
-        return VALID_SAVED_FREQ_MODES
-    
-    
     def get_valid_dut_types(cls):
         return cls.VALID_DUT_TYPES
     
@@ -1640,14 +1412,9 @@ class DataSet:
             "input_config_name": self.input_config_name,
             "recovery_config_name": self.recovery_config_name,
             "ML_config_name": self.ML_config_name,
-            "inputset_params": self.inputset_params,
-            "outputset_params": self.outputset_params,
-            "premultiply_params": self.premultiply_params,
             "directory_params": self.directory_params,
             "log_params": self.log_params,
             "directories": self.directories,
             "filenames": self.filenames,
-            "freq_modes": self.freq_modes,
-            "dataframe_params": self.dataframe_params
         }
         return dataset_params

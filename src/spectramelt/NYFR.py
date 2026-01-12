@@ -1,5 +1,9 @@
 import numpy as np
-from .utils import load_config_from_json, get_logger
+from .utils import (
+    load_config_from_json,
+    get_logger,
+    filter_valid_names
+)
 from scipy.linalg import dft
 from .LowPassFilter import LowPassFilter
 from .PulseGenerator import PulseGenerator
@@ -14,6 +18,8 @@ class NYFR:
                  input_signal=None,
                  real_time=None,
                  nyfr_params=None,
+                 freq_modes=None,
+                 outputset_params=None,
                  lo_params=None,
                  pulse_params=None,
                  mixer_params=None,
@@ -35,6 +41,8 @@ class NYFR:
             nyfr_params = load_config_from_json(config_file_path)
         elif nyfr_params is None:
             nyfr_params = {}
+            nyfr_params['freq_modes'] = freq_modes
+            nyfr_params['outputset_params'] = outputset_params
             nyfr_params['lo_params'] = lo_params
             nyfr_params['adc_params'] = adc_params
             nyfr_params['pulse_params'] = pulse_params
@@ -80,6 +88,8 @@ class NYFR:
         if nyfr_params is None:
             nyfr_params = {}
         store_internal_sigs = nyfr_params.get('store_internal_sigs', True)
+        freq_modes = nyfr_params.get('freq_modes', None)
+        outputset_params = nyfr_params.get('outputset_params', None)
         lo_params = nyfr_params.get('lo_params', None)
         adc_params = nyfr_params.get('adc_params', None)
         pulse_params = nyfr_params.get('pulse_params', None)
@@ -109,6 +119,8 @@ class NYFR:
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
             
         self.set_store_internal_sigs(store_internal_sigs)
+        self.set_freq_modes(freq_modes)
+        self.set_outputset_params(outputset_params)
         self.set_lo_params(lo_params)
         self.set_pulse_params(pulse_params)
         self.set_dict_type(dict_type)
@@ -119,11 +131,13 @@ class NYFR:
         self.set_mixer_params(mixer_params)
         self.set_create_dict(create_dict)
         
+    
     def set_config_name(self, config_name):
         if config_name is None:
             config_name = "NYFR_Config_1"
         self.config_name = config_name
         
+    
     def set_log_params(self, log_params=None):
         if log_params is None:
             log_params = {
@@ -134,6 +148,7 @@ class NYFR:
             }
         self.log_params = log_params
         
+    
     def set_dict_type(self, dict_type):
         # Set Dictionary Type: Real or Complex
         dict_type = dict_type.lower()
@@ -143,16 +158,62 @@ class NYFR:
             dict_type = "real"
 
         self.dict_type = dict_type
+ 
+
+    def set_freq_modes(self, freq_modes=None):
+        if freq_modes is None:
+            freq_modes = {
+                "output": [
+                    "mag",
+                    "ang",
+                    "real",
+                    "imag"
+                ],
+                "wideband": [
+                    "mag",
+                    "ang",
+                    "real",
+                    "imag",
+                    "real_imag",
+                    "mag_ang_sincos"
+                ]
+            }
+        
+        for freq_mode, freq_mode_list in freq_modes.items():
+            valid_modes, removed_modes = filter_valid_names(freq_mode_list)
+            freq_modes[freq_mode] = valid_modes
+            if removed_modes:
+                self.logger.warning(f"Invalid modes removed from {freq_mode} frequency mode list: {removed_modes}")
+        self.freq_modes = freq_modes
+        
+        
+    def set_outputset_params(self, outputset_params=None):
+        if outputset_params is None:
+            outputset_params = {
+                "DUT_type": "NYFR",
+                "decode_to_time": True,
+                "normalize": True,
+                "fft_shift": True,
+                "normalize_wbf": True,
+                "fft_shift_wbf": False,
+                "overwrite": False
+            }
+            
+        self.outputset_params = outputset_params
+        
         
     def set_store_internal_sigs(self, store_internal_sigs):
         self.store_internal_sigs = store_internal_sigs
         
+    
     def set_lo_params(self, lo_params):         
         self.lo_params = lo_params
         
+    
     def set_create_dict(self, create_dict):
         self.create_dict = create_dict
         
+    
     def set_adc_params(self, adc_params):
         if adc_params is not None:
             adc_params['store_conditioned_sigs'] = True
@@ -160,15 +221,19 @@ class NYFR:
                 adc_params['store_sh_sigs'] = True           
         self.adc_params = adc_params
 
+    
     def set_pulse_params(self, pulse_params):
         self.pulse_params = pulse_params
 
+    
     def set_lpf_params(self, lpf_params):
         self.lpf_params = lpf_params
+    
     
     def set_wbf_params(self, wbf_params):
         self.wbf_params = wbf_params
  
+    
     def set_mixer_params(self, mixer_params):  
         self.mixer_params = mixer_params
               
@@ -361,6 +426,8 @@ class NYFR:
     def get_all_params(self):
         nyfr_params = {
             "config_name": self.config_name,
+            "freq_modes": self.freq_modes,
+            "outputset_params": self.outputset_params,
             "lo_params": self.lo_params,
             "mixer_params": self.mixer_params,
             "wbf_params": self.wbf_params,
@@ -372,77 +439,110 @@ class NYFR:
         }
         return nyfr_params
     
+    
+    def get_freq_modes(self):
+        return self.freq_modes
+    
+    
+    def get_outputset_params(self):
+        return self.outputset_params
+    
+    
     def get_lo_params(self):
         return self.lo_params
+    
     
     def get_pulse_params(self):
         return self.pulse_params
     
+    
     def get_adc_params(self):
         return self.adc_params
      
+    
     def get_mixer_params(self):
         return self.mixer_params
+    
     
     def get_lpf_params(self):
         return self.lpf_params
     
+    
     def get_wbf_params(self):
         return self.wbf_params
+    
     
     def get_wbf_signal(self):
         return self.wbf_signal.copy()
     
+    
     def get_lo_signal(self):
         return self.lo_signal.copy()
+    
     
     def get_pulse_signal(self):
         return self.pulse_signal.copy()
     
+    
     def get_mixed_signal(self):
         return self.mixed_signal.copy()
+    
     
     def get_lpf_signal(self):
         return self.lpf_signal.copy()
     
+    
     def get_conditioned_signals(self):
         return self.conditioned_signals.copy()
+    
     
     def get_sh_signals(self):
         return self.sh_signals.copy()
     
+    
     def get_lo_phase_mod_mid(self):
         return self.lo_phase_mod_mid.copy()
+    
     
     def get_wbf_signal_sub(self):
         return self.wbf_signal_sub.copy()
     
+    
     def get_wbf_time(self):
         return self.wbf_time.copy()
+    
     
     def get_wbf_freq(self):
         return self.wbf_freq.copy()
     
+    
     def get_nyfr_dict(self):
         return self.nyfr_dict.copy()
+    
     
     def get_nyfr_zones(self):
         return self.Zones
     
+    
     def get_nyfr_k_bands(self):
         return self.K_band
+    
     
     def get_output_signals(self):
         return self.output_signals.copy()
     
+    
     def get_dict_type(self):
         return self.dict_type
+    
     
     def get_config_name(self):
         return self.config_name
     
+    
     def get_store_internal_sigs(self):
         return self.store_internal_sigs
+    
     
     def get_log_params(self):
         return self.log_params

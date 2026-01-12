@@ -4,7 +4,8 @@ import numpy as np
 from pathlib import Path
 from spectramelt.utils import (
     load_config_from_json,
-    get_logger
+    get_logger,
+    filter_valid_names
 )
 import tensorflow as tf
 import h5py
@@ -52,7 +53,9 @@ class MLP:
     
     def __init__(self,
                  mlp_params=None,
+                 freq_modes=None,
                  model_params=None,
+                 premultiply_params=None,
                  training_params=None,
                  log_params=None,
                  config_name=None,
@@ -67,6 +70,8 @@ class MLP:
         elif mlp_params is None:
             mlp_params = {}
             mlp_params['model_params'] = model_params
+            mlp_params['freq_modes'] = freq_modes
+            mlp_params['premultiply_params'] = premultiply_params
             mlp_params['training_params'] = training_params
             mlp_params['config_name'] = config_name
             mlp_params['log_params'] = log_params
@@ -85,6 +90,8 @@ class MLP:
         if mlp_params is None:
             mlp_params = {}
         model_params = mlp_params.get('model_params', None)
+        premultiply_params = mlp_params.get('premultiply_params', None)
+        freq_modes = mlp_params.get('freq_modes', None)
         training_params = mlp_params.get('training_params', None)
         config_name = mlp_params.get('config_name', None)
         log_params = mlp_params.get('log_params', None)
@@ -101,7 +108,9 @@ class MLP:
             level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-        
+            
+        self.set_freq_modes(freq_modes)
+        self.set_premultiply_params(premultiply_params)
         self.set_model_params(model_params)
         self.set_training_params(training_params)
         self.set_config_name(config_name)
@@ -111,6 +120,31 @@ class MLP:
         if config_name is None:
             config_name = "MLP_Config_1"
         self.config_name = config_name
+        
+    
+    def set_freq_modes(self, freq_modes=None):
+        if freq_modes is None:
+            freq_modes = [
+                "mag",
+                "real_imag"
+            ]
+            
+        valid_modes, removed_modes = filter_valid_names(freq_modes)
+        if removed_modes:
+            self.logger.warning(f"Invalid modes removed from frequency mode list: {removed_modes}")
+        self.freq_modes = valid_modes
+                        
+    def set_premultiplty_params(self, premultiply_params=None):
+        if premultiply_params is None:
+            premultiply_params = {
+                "scale_dict": 0.5,
+                "normalize": True,
+                "apply_fft": False,
+                "fft_shift": False,
+                "overwrite": True
+            }
+            
+        self.premultiply_params = premultiply_params
         
 
     def set_model_params(self, model_params):
@@ -1054,6 +1088,14 @@ class MLP:
         return self.log_params
     
     
+    def get_freq_modes(self):
+        return self.freq_modes
+    
+    
+    def get_premultiply_params(self):
+        return self.premultiply_params
+    
+    
     def get_training_params(self):
         return self.training_params
     
@@ -1061,13 +1103,35 @@ class MLP:
     def get_model_params(self):
         return self.model_params
     
+    
+    def get_input_recovery_stats(self):
+        input_recovery_stats = {
+            "norm_type": self.input_norm_type,
+            "norm_scope": self.input_norm_scope,
+            "mean": self.input_mean,
+            "scale": self.input_scale,
+            "min_val": self.input_min,
+            "max_val": self.input_max
+        }
+        return input_recovery_stats        
+    
+    
+    def get_output_recovery_stats(self):
+        output_recovery_stats = {
+            "norm_type": self.output_norm_type,
+            "norm_scope": self.output_norm_scope,
+            "mean": self.output_mean,
+            "scale": self.output_scale,
+            "min_val": self.output_min,
+            "max_val": self.output_max
+        }
+        return output_recovery_stats
+    
 
     def get_recovery_stats(self):
         recovery_stats = {
-            "input_mean": self.input_mean,
-            "input_std": self.input_std,
-            "output_mean": self.output_mean,
-            "output_std": self.output_std
+            "input": self.get_input_recovery_stats(),
+            "output": self.get_output_recovery_stats()
         }
         return recovery_stats
 
@@ -1076,11 +1140,13 @@ class MLP:
         return self.config_name
         
     
-    def get_mlp_params(self):
-        mlp_params ={
+    def get_all_params(self):
+        all_params ={
             "log_params": self.log_params,
+            "freq_modes": self.freq_modes,
+            "premultiply_params": self.premultiply_params,
             "training_params": self.training_params,
             "model_params": self.model_params,
             "config_name": self.config_name
         }
-        return mlp_params
+        return all_params
