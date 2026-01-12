@@ -300,9 +300,10 @@ def get_prefix_before_recovery(filename: str) -> str:
     return filename[:idx] if idx != -1 else filename
 
 
-def compute_recovery_stats(rec_vals, spur_vals, ref_vals):
+def compute_recovery_stats(rec_vals, spur_vals, ref_vals, min_threshold=-1):
     """
     Compute recovered and spur statistics using a reference array for deviation.
+    Always uses absolute values for rec/spur stats. Enforces min_threshold if provided.
 
     Parameters
     ----------
@@ -312,6 +313,8 @@ def compute_recovery_stats(rec_vals, spur_vals, ref_vals):
         Spurious values (magnitudes or real/imag concatenated).
     ref_vals : np.ndarray
         Reference array to compute average deviation (same length as rec_vals for recovered tones).
+    min_threshold : float
+        Minimum allowed value for min_rec and min_spur.
 
     Returns
     -------
@@ -319,25 +322,31 @@ def compute_recovery_stats(rec_vals, spur_vals, ref_vals):
         rec_size, spur_size, ave_rec_err, ave_rec, max_rec, min_rec,
         ave_spur, max_spur, min_spur
     """
-    rec_size  = len(rec_vals)
+    rec_vals = np.abs(rec_vals)
+    spur_vals = np.abs(spur_vals)
+    ref_vals = np.abs(ref_vals)
+
+    rec_size = len(rec_vals)
     spur_size = len(spur_vals)
 
     # --- Recovered stats ---
     if rec_size > 0:
         ave_rec_err = np.mean(ref_vals) - np.mean(rec_vals)
-        rec_abs = np.abs(rec_vals)
-        ave_rec = np.mean(rec_abs)
-        max_rec = np.max(rec_abs)
-        min_rec = np.min(rec_abs)
+        ave_rec = np.mean(rec_vals)
+        max_rec = np.max(rec_vals)
+        min_rec = np.min(rec_vals)
+        if min_threshold > 0:
+            min_rec = max(min_rec, min_threshold)
     else:
         ave_rec_err = ave_rec = max_rec = min_rec = -1
 
     # --- Spur stats ---
     if spur_size > 0:
-        spur_abs = np.abs(spur_vals)
-        ave_spur = np.mean(spur_abs)
-        max_spur = np.max(spur_abs)
-        min_spur = np.min(spur_abs)
+        ave_spur = np.mean(spur_vals)
+        max_spur = np.max(spur_vals)
+        min_spur = np.min(spur_vals)
+        if min_threshold > 0:
+            min_spur = max(min_spur, min_threshold)
     else:
         ave_spur = max_spur = min_spur = -1
 
@@ -466,26 +475,23 @@ def process_signal_file(
     # Split real_imag if present
     if "real_imag" in recovery:
         arr = recovery["real_imag"]
-        split_arr = np.array_split(arr, 2, axis=1)
-        recovery["real_imag"] = {
-            "real": split_arr[0],
-            "imag": split_arr[1],
-        }
+        real, imag = np.array_split(arr, 2, axis=1)
+        recovery["real_imag"] = {"real": real, "imag": imag}
 
-    # FFT shift all arrays
+    # FFT shift
     for mode, data in recovery.items():
         if isinstance(data, dict):
-            for subk, arr in data.items():
-                recovery[mode][subk] = np.fft.fftshift(arr, axes=-1)
+            for k in data:
+                data[k] = np.fft.fftshift(data[k], axes=-1)
         else:
             recovery[mode] = np.fft.fftshift(data, axes=-1)
 
     flat_recovery = flatten_dict(recovery)
 
     # ---------- Sanity check ----------
-    offending = [k for k, arr in flat_recovery.items() if arr.shape[0] != num_recovery_sigs]
-    if offending:
-        raise ValueError(f"Recovered signal size mismatch: {offending}")
+    for k, arr in flat_recovery.items():
+        if arr.shape[0] != num_recovery_sigs:
+            raise ValueError(f"Recovered signal size mismatch: {k}")
 
     # ---------- Load WBF waves ----------
     with open(wbf_wave_file, "rb") as f:
@@ -510,7 +516,7 @@ def process_signal_file(
         }
 
         # ============================================================
-        # PER-SIGNAL STATS → COLUMNS
+        # PER-SIGNAL STATS
         # ============================================================
         for idx_sig, wbf_wave in enumerate(wbf_waves):
 
@@ -518,7 +524,7 @@ def process_signal_file(
                 row["total_input_tones"] = len(wbf_wave)
                 row["rec_tone_thresh"] = recovery_mag_threshold
 
-            # ---- build reference arrays ----
+            # ---- reference data ----
             amps  = np.array([w["amp"]  for w in wbf_wave])
             freqs = np.array([w["freq"] for w in wbf_wave])
             reals = np.array([w["real"] for w in wbf_wave])
@@ -526,56 +532,67 @@ def process_signal_file(
 
             pos_idx = np.array([np.argmin(np.abs(wbf_freq - f)) for f in freqs])
             neg_idx = np.array([np.argmin(np.abs(wbf_freq + f)) for f in freqs])
-            wbf_unsorted = np.concatenate([neg_idx, pos_idx])
+            rec_bins = np.concatenate([neg_idx, pos_idx])
 
-            amps_combined  = np.concatenate([amps, amps])
-            reals_combined = np.concatenate([reals, reals])
-            imags_combined = np.concatenate([-imags, imags])
+            all_bins = np.arange(wbf_freq.size)
+            non_rec_bins = np.setdiff1d(all_bins, rec_bins)
 
-            # ---- recovered / spurious ----
+            # ========================================================
+            # MAG MODE
+            # ========================================================
             if mode == "mag":
-                rec_mag = flat_recovery["mag"][idx_sig]
-                mask = np.abs(rec_mag[wbf_unsorted]) > recovery_mag_threshold
-                rec_idx  = wbf_unsorted[mask]
-                spur_idx = np.setdiff1d(wbf_unsorted, rec_idx)
+                mag = flat_recovery["mag"][idx_sig]
+                mag_abs = np.abs(mag)
 
-                rec_final  = rec_mag[rec_idx]
-                spur_final = rec_mag[spur_idx]
-                ref_vals   = amps_combined
+                rec_vals = mag_abs[rec_bins]
+                rec_final = rec_vals[rec_vals > recovery_mag_threshold]
 
+                spur_vals = mag_abs[non_rec_bins]
+                spur_final = spur_vals[spur_vals > recovery_mag_threshold]
+
+                ref_vals = np.concatenate([amps, amps])
+
+            # ========================================================
+            # REAL / IMAG MODE
+            # ========================================================
             elif mode == "real_imag":
-                real_arr = flat_recovery["real_imag.real"][idx_sig]
-                imag_arr = flat_recovery["real_imag.imag"][idx_sig]
+                real = flat_recovery["real_imag.real"][idx_sig]
+                imag = flat_recovery["real_imag.imag"][idx_sig]
 
-                real_vals = real_arr[wbf_unsorted]
-                imag_vals = imag_arr[wbf_unsorted]
+                real_abs = np.abs(real)
+                imag_abs = np.abs(imag)
 
-                # Compute mask per component
-                rec_mask_real = np.abs(real_vals) > recovery_mag_threshold
-                rec_mask_imag = np.abs(imag_vals) > recovery_mag_threshold
+                # recovered (expected bins)
+                rec_real = real_abs[rec_bins]
+                rec_imag = imag_abs[rec_bins]
 
-                # Only keep indices where the corresponding component passes threshold
-                rec_idx_real = wbf_unsorted[rec_mask_real]
-                rec_idx_imag = wbf_unsorted[rec_mask_imag]
-                spur_idx_real = np.setdiff1d(wbf_unsorted, rec_idx_real)
-                spur_idx_imag = np.setdiff1d(wbf_unsorted, rec_idx_imag)
+                rec_final = np.concatenate([
+                    rec_real[rec_real > recovery_mag_threshold],
+                    rec_imag[rec_imag > recovery_mag_threshold],
+                ])
 
-                # Concatenate separately
-                rec_final  = np.concatenate([real_arr[rec_idx_real], imag_arr[rec_idx_imag]])
-                spur_final = np.concatenate([real_arr[spur_idx_real], imag_arr[spur_idx_imag]])
+                # spurs (unexpected bins)
+                spur_real = real_abs[non_rec_bins]
+                spur_imag = imag_abs[non_rec_bins]
 
-                # Take absolute values
-                rec_final  = np.abs(rec_final)
-                spur_final = np.abs(spur_final)
+                spur_final = np.concatenate([
+                    spur_real[spur_real > recovery_mag_threshold],
+                    spur_imag[spur_imag > recovery_mag_threshold],
+                ])
 
-                # Reference for ave_rec_err
-                ref_vals = np.concatenate([np.abs(reals_combined), np.abs(imags_combined)])
+                ref_vals = np.concatenate([np.abs(reals), np.abs(imags),
+                                           np.abs(reals), np.abs(imags)])
 
             else:
                 raise ValueError(f"Unsupported frequency mode: {mode}")
 
             # ---- compute stats ----
-            stats = compute_recovery_stats(rec_final, spur_final, ref_vals)
+            stats = compute_recovery_stats(
+                rec_final,
+                spur_final,
+                ref_vals,
+                min_threshold=recovery_mag_threshold
+            )
 
             # ---- write per-signal columns ----
             meta = create_meta_data_dictionary(idx_sig)
@@ -588,41 +605,34 @@ def process_signal_file(
                 meta["min_rec_mag"]["value"],
                 meta["ave_spur_mag"]["value"],
                 meta["max_spur_mag"]["value"],
-                meta["min_spur_mag"]["value"]
+                meta["min_spur_mag"]["value"],
             ) = stats
 
             row.update({v["col_name"]: v["value"] for v in meta.values()})
 
-        # ---- collect per-signal values ----
-        num_rec_vals      = [row[f"num_rec_freq_{i}"]      for i in range(num_recovery_sigs)]
-        num_spur_vals     = [row[f"num_spur_freq_{i}"]     for i in range(num_recovery_sigs)]
-        ave_rec_err_vals  = [row[f"ave_rec_mag_err_{i}"]   for i in range(num_recovery_sigs)]
-        ave_rec_vals      = [row[f"ave_rec_mag_{i}"]       for i in range(num_recovery_sigs)]
-        max_rec_vals      = [row[f"max_rec_mag_{i}"]       for i in range(num_recovery_sigs)]
-        min_rec_vals      = [row[f"min_rec_mag_{i}"]       for i in range(num_recovery_sigs)]
-        ave_spur_vals     = [row[f"ave_spur_mag_{i}"]      for i in range(num_recovery_sigs)]
-        max_spur_vals     = [row[f"max_spur_mag_{i}"]      for i in range(num_recovery_sigs)]
-        min_spur_vals     = [row[f"min_spur_mag_{i}"]      for i in range(num_recovery_sigs)]
+        # ============================================================
+        # AGGREGATES
+        # ============================================================
+        num_rec_vals  = [row[f"num_rec_freq_{i}"] for i in range(num_recovery_sigs)]
+        num_spur_vals = [row[f"num_spur_freq_{i}"] for i in range(num_recovery_sigs)]
 
-        # ---- aggregate per recovery set using safe_ functions ----
-        row["ave_num_rec"]     = safe_mean(num_rec_vals)
-        if mode == "mag":
-            row["recovery_rate"] = (row["ave_num_rec"] / (2 * row["total_input_tones"])
-                                    if row["ave_num_rec"] != -1 else -1)
-        elif mode == "real_imag":
-            row["recovery_rate"] = (row["ave_num_rec"] / (4 * row["total_input_tones"])
-                                    if row["ave_num_rec"] != -1 else -1)
+        row["ave_num_rec"]  = safe_mean(num_rec_vals)
+        row["ave_num_spur"] = safe_mean(num_spur_vals)
 
-        row["ave_num_spur"]    = safe_mean(num_spur_vals)
-        row["ave_rec_mag_err"]  = safe_mean(ave_rec_err_vals)
-        row["ave_rec_mag"]      = safe_mean(ave_rec_vals)
-        row["max_rec_mag"]      = safe_max(max_rec_vals)
-        row["min_rec_mag"]      = safe_min(min_rec_vals)
-        row["ave_spur_mag"]     = safe_mean(ave_spur_vals)
-        row["max_spur_mag"]     = safe_max(max_spur_vals)
-        row["min_spur_mag"]     = safe_min(min_spur_vals)
+        denom = 2 if mode == "mag" else 4
+        row["recovery_rate"] = (
+            row["ave_num_rec"] / (denom * row["total_input_tones"])
+            if row["ave_num_rec"] != -1 else -1
+        )
 
-        # append once per mode
+        row["ave_rec_mag_err"] = safe_mean([row[f"ave_rec_mag_err_{i}"] for i in range(num_recovery_sigs)])
+        row["ave_rec_mag"]     = safe_mean([row[f"ave_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+        row["max_rec_mag"]     = safe_max([row[f"max_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+        row["min_rec_mag"]     = safe_min([row[f"min_rec_mag_{i}"] for i in range(num_recovery_sigs)])
+        row["ave_spur_mag"]    = safe_mean([row[f"ave_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+        row["max_spur_mag"]    = safe_max([row[f"max_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+        row["min_spur_mag"]    = safe_min([row[f"min_spur_mag_{i}"] for i in range(num_recovery_sigs)])
+
         rows.append(row)
 
     return rows
