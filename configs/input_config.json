@@ -20,6 +20,7 @@
     },
     "time_params": {
         "time_range": [-0.006, 0.006],
+        "adc_samp_freq": null,
         "sim_freq": 10000000
     },
     "log_params": {
@@ -28,13 +29,7 @@
         "level": "INFO",
         "console": true
     },
-    "adc_params": {
-        "adc_samp_freq": 100000,
-        "v_ref_range": [-10, 10],
-        "allow_clipping": true
-    },
     "env_params": {
-        "store_internal_sigs": false,
         "noise_level": 0.0,
         "attenuation": 1.0,
         "doppler": 0.0,
@@ -50,6 +45,8 @@
         "freq_range": [1, 200000],
         "amp_range": [0.7, 1.0],
         "phase_range": [0.25,0.75],
+        "v_ref_range": [0, 1],
+        "allow_clipping": true,
         "waves": [
             {"amp": 0.25,
             "freq": 5000,

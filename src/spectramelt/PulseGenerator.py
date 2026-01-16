@@ -115,74 +115,95 @@ class PulseGenerator:
       
     def generate(self, signal, real_time, pre_start_val=None) -> np.ndarray:
         """
-        Generate a realistic pulse train
+        Generate a realistic pulse train with precise pulse area and no DC bias from sampling artifacts.
+
+        Parameters
+        ----------
+        signal : np.ndarray
+            Analog waveform (e.g., LO signal) to extract zero-crossings from.
+        real_time : np.ndarray
+            Time vector.
+        pre_start_val : float, optional
+            Value before the start of the time array for edge-case detection.
 
         Returns
         -------
         pulses : np.ndarray
-            Generated pulse train with realistic imperfections.
+            Generated pulse train with rise/fall times, amplitude noise, droop, and baseline.
         """
-        # --- Set Pulse Generator Parameters ---
+        # --- Pulse Generator Parameters ---
         pulse_width = self.pulse_params.get('pulse_width', None)
         amplitude = self.pulse_params.get('amplitude', 1.0)
         rise_time = self.pulse_params.get('rise_time', 0.0)
         fall_time = self.pulse_params.get('fall_time', 0.0)
         baseline_offset = self.pulse_params.get('baseline_offset', 0.0)
         
-        # --- Set Pulse Generator Nonidealities
+        if pulse_width is None:
+            pulse_width = real_time[1] - real_time[0]
+
+        # --- Nonidealities ---
         jitter_std = self.pulse_params.get('jitter_std', 0.0)
         amp_noise_std = self.pulse_params.get('amp_noise_std', 0.0)
         droop_coeff = self.pulse_params.get('droop_coeff', 0.0)
 
-        if pulse_width is None:
-            pulse_width = real_time[1] - real_time[0]
-            
+        # --- Detect rising zero crossings ---
         ideal_pulses = self._rising_zero_crossings(signal, pre_start_val)
-        ideal_pulse_times = real_time[ideal_pulses != 0]
-        num_pulses = len(ideal_pulse_times)
+        pulse_times = real_time[ideal_pulses != 0]
+        num_pulses = len(pulse_times)
 
         # --- Apply timing jitter ---
         if jitter_std > 0:
-            jitter = self.rng.normal(0, jitter_std, num_pulses)
-            pulse_times = ideal_pulse_times + jitter
-        else:
-            pulse_times = ideal_pulse_times
+            pulse_times = pulse_times + self.rng.normal(0, jitter_std, num_pulses)
 
+        # --- Initialize output ---
         pulses = np.zeros_like(real_time)
 
-        # --- Generate each pulse individually ---
         for t0 in pulse_times:
-            # Skip pulses outside the time window
-            if t0 > real_time[-1] + pulse_width:
-                continue
-
-            # Amplitude noise and droop
-            amp = amplitude * (1 + self.rng.normal(0, amp_noise_std))
-            amp *= np.exp(-droop_coeff * t0)
-
-            # Generate trapezoidal pulse (finite rise/fall)
-            pulse = np.zeros_like(real_time)
             start = t0
             end = t0 + pulse_width
 
-            rise_mask = (real_time >= start) & (real_time < start + rise_time)
-            flat_mask = (real_time >= start + rise_time) & (real_time < end - fall_time)
-            fall_mask = (real_time >= end - fall_time) & (real_time < end)
+            # Skip pulses completely outside the time window
+            if end <= real_time[0] or start >= real_time[-1]:
+                continue
 
-            # Linear rise/fall edges
+            # Clip start/end to time vector
+            start_idx = np.searchsorted(real_time, start, side='left')
+            end_idx = np.searchsorted(real_time, end, side='right')
+
+            # Optional amplitude noise and droop
+            amp = amplitude
+            if amp_noise_std > 0:
+                amp *= 1 + self.rng.normal(0, amp_noise_std)
+            if droop_coeff > 0:
+                amp *= np.exp(-droop_coeff * t0)
+
+            # --- Generate pulse samples ---
             if rise_time > 0:
-                pulse[rise_mask] = amp * (real_time[rise_mask] - start) / rise_time
-            if fall_time > 0:
-                pulse[fall_mask] = amp * (1 - (real_time[fall_mask] - (end - fall_time)) / fall_time)
-            pulse[flat_mask] = amp
+                rise_end_idx = np.searchsorted(real_time, start + rise_time, side='right')
+                rise_mask = slice(start_idx, rise_end_idx)
+                pulses[rise_mask] += amp * (real_time[rise_mask] - start) / rise_time
+            else:
+                rise_mask = slice(0, 0)  # empty
 
-            pulses += pulse
+            if fall_time > 0:
+                fall_start_idx = np.searchsorted(real_time, end - fall_time, side='left')
+                fall_mask = slice(fall_start_idx, end_idx)
+                pulses[fall_mask] += amp * (1 - (real_time[fall_mask] - (end - fall_time)) / fall_time)
+            else:
+                fall_mask = slice(0, 0)  # empty
+
+            # Flat part
+            flat_start_idx = rise_mask.stop if rise_time > 0 else start_idx
+            flat_end_idx = fall_mask.start if fall_time > 0 else end_idx
+            if flat_end_idx > flat_start_idx:
+                pulses[flat_start_idx:flat_end_idx] += amp
 
         # --- Add baseline offset ---
         pulses += baseline_offset
 
         return pulses
-
+    
+    
     def _rising_zero_crossings(self, signal, pre_start_val=None):
         """
         Generate a pulse train from the rising zero crossings of a signal.

@@ -9,9 +9,9 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     load_dotenv()
     from pathlib import Path
-    from InputSignal import InputSignal
-    from LocalOscillator import LocalOscillator
-    from PulseGenerator import PulseGenerator
+    from spectramelt.InputSignal import InputSignal
+    from spectramelt.LocalOscillator import LocalOscillator
+    from spectramelt.PulseGenerator import PulseGenerator
     import matplotlib.pyplot as plt
     from scipy.fftpack import fft
     import numpy as np

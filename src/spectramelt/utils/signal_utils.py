@@ -16,7 +16,7 @@ VALID_SAVED_FREQ_MODES = {
 }
 
 
-def filter_valid_names(self, names, valid_set=None):
+def filter_valid_names(names, valid_set=None):
     if valid_set is None:
         valid_set = VALID_SAVED_FREQ_MODES
 

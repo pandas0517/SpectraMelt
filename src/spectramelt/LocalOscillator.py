@@ -1,5 +1,16 @@
 import numpy as np
+from dataclasses import dataclass
+from typing import Tuple, Union
 from .utils import load_config_from_json, get_logger
+
+
+@dataclass(frozen=True)
+class LOEffects:
+    phase_noise: np.ndarray | None = None
+    pre_phase_noise: np.ndarray | None = None
+    amp_noise: np.ndarray | None = None
+    pre_amp_noise: np.ndarray | None = None
+    
 
 class LocalOscillator:
     """
@@ -8,7 +19,6 @@ class LocalOscillator:
     """
 
     def __init__(self,
-                 real_time=None,
                  lo_params=None,
                  log_params=None,
                  config_name=None,
@@ -55,9 +65,6 @@ class LocalOscillator:
 
         self.pre_start_lo = None
         self.phase_mod = None 
-        self.signal = None
-        if real_time is not None:
-            self.signal = self.generate_signal(real_time)
  
     # -------------------------------
     # Setters
@@ -112,7 +119,14 @@ class LocalOscillator:
     # Core functional methods
     # -------------------------------
 
-    def generate_signal(self, real_time) -> np.ndarray:
+    def generate_signal(self, real_time,
+                        return_phase_mod=False,
+                        return_pre_start=False,
+                        return_effects=False
+                        ) -> Union[np.ndarray,
+                                   Tuple[np.ndarray, np.ndarray],
+                                   Tuple[np.ndarray, np.ndarray, np.ndarray],
+                                   Tuple[np.ndarray, np.ndarray, np.ndarray, LOEffects]]:
         # --- Local Oscillator Base Signal ---
         f0 = self.lo_params.get('freq', 100)
         A = self.lo_params.get('amp', 1)
@@ -174,14 +188,21 @@ class LocalOscillator:
         if harmonic_amp != 0:
             lo += harmonic_amp * np.sin(2 * phase)
             pre_start_lo += harmonic_amp * np.sin(2 * pre_phase)
+            
+        results = [lo]
 
-        # --- Store pre-start LO value for later use (e.g., zero-cross detection) ---
-        self.pre_start_lo = pre_start_lo
-        
-        # --- Store phase modulation for NYFR dictionary
-        self.phase_mod = phase_mod
-        
-        return lo
+        if return_phase_mod:
+            results.append(phase_mod)
+        if return_pre_start:
+            results.append(pre_start_lo)
+        if return_effects:
+            effects = LOEffects(phase_noise=phase_noise,
+                                pre_phase_noise=pre_phase_noise,
+                                amp_noise=amp_noise,
+                                pre_amp_noise=pre_amp_noise)
+            results.append(effects)
+
+        return tuple(results)
 
     # -------------------------------
     # Getters
@@ -190,17 +211,10 @@ class LocalOscillator:
     def get_config_name(self):
         return self.config_name
     
-    def get_lo_signal(self):
-        return self.signal
     
     def get_lo_params(self):
         return self.lo_params
     
-    def get_phase_mod(self):
-        return self.phase_mod
-    
-    def get_pre_start_lo(self):
-        return self.pre_start_lo
     
     def get_log_params(self):
         return self.log_params

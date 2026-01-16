@@ -3,65 +3,65 @@ from .utils import (
     get_logger,
     filter_valid_names
 )
+from dataclasses import dataclass
 import numpy as np
+
+
+@dataclass(frozen=True)
+class InputSignalData:
+    noise: float  | None = None
+    delay: list[float] | None = None
+    echo_att: list[float] | None = None
+    local_doppler: list[float] | None = None
+    phase_inversion: list[float] | None = None
+    
 
 class InputSignal:
     def __init__(self,
-                 input_params=None,
+                 all_params=None,
                  freq_modes=None,
                  inputset_params=None,
-                 time_params=None,
-                 adc_params=None,
                  env_params=None,
                  wave_params=None,
                  log_params=None,
                  config_name=None,
                  config_file_path=None) -> None:
         if config_file_path is not None:
-            input_params = load_config_from_json(config_file_path)
-        elif input_params is None:
-            input_params = {}
-            input_params['freq_modes'] = freq_modes
-            input_params['inputset_params'] = inputset_params
-            input_params['time_params'] = time_params
-            input_params['adc_params'] = adc_params
-            input_params['env_params'] =env_params
-            input_params['wave_params'] = wave_params
-            input_params['config_name'] = config_name
-            input_params['log_params'] = log_params
+            all_params = load_config_from_json(config_file_path)
+        elif all_params is None:
+            all_params = {
+                "freq_modes": freq_modes,
+                "inputset_params": inputset_params,
+                "env_params": env_params,
+                "wave_params": wave_params,
+                "config_name": config_name,
+                "log_params": log_params
+            }
         
-        self.set_input_params(input_params)
+        self.set_all_params(all_params)
         
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-                
-        self.effects = None
-        self.create_analog()
-        self.create_input_signal()
 
     # -------------------------------
     # Setters
     # -------------------------------
     
-    def set_input_params(self, input_params=None):
-        if input_params is None:
-            input_params = {}
+    def set_all_params(self, all_params=None):
+        if all_params is None:
+            all_params = {}
         
-        freq_modes = input_params.get('freq_modes', None)
-        inputset_params = input_params.get('inputset_params', None)
-        time_params = input_params.get('time_params', None)
-        adc_params = input_params.get('adc_params', None)
-        env_params = input_params.get('env_params', None)
-        wave_params = input_params.get('wave_params', None)
-        log_params = input_params.get('log_params', None)
-        config_name = input_params.get('config_name', None)
-        if ( time_params is None and
-                adc_params is None and
-                env_params is None and
-                wave_params is None ):
+        freq_modes = all_params.get('freq_modes', None)
+        inputset_params = all_params.get('inputset_params', None)
+        env_params = all_params.get('env_params', None)
+        wave_params = all_params.get('wave_params', None)
+        log_params = all_params.get('log_params', None)
+        config_name = all_params.get('config_name', None)
+        if ( env_params is None and
+            wave_params is None ):
             config_name = "Default_Input_Config"
         else:
-            config_name = input_params.get('config_name', "Input_Config_1")
+            config_name = all_params.get('config_name', "Input_Config_1")
         
         self.set_log_params(log_params)    
         self.logger = None
@@ -74,8 +74,6 @@ class InputSignal:
         
         self.set_freq_modes(freq_modes)    
         self.set_inputset_params(inputset_params)        
-        self.set_time_params(time_params)
-        self.set_adc_params(adc_params)
         self.set_env_params(env_params)
         self.set_wave_params(wave_params)
         self.set_config_name(config_name)
@@ -127,31 +125,11 @@ class InputSignal:
             }
             
         self.inputset_params = inputset_params
-
-
-    def set_time_params(self, time_params=None):
-        if time_params is None:
-            time_params = {
-                'time_range': (0, 1),
-                'sim_freq': 1000000
-            }
-        self.time_params = time_params
-
-    
-    def set_adc_params(self, adc_params=None):
-        if adc_params is None:
-            adc_params = {
-                "adc_samp_freq": None,
-                "v_ref_range": (0, 1),
-                "allow_clipping": False
-            }           
-        self.adc_params = adc_params
         
     
     def set_env_params(self, env_params=None):
         if env_params is None:
             env_params = {
-                "store_internal_sigs": True,
                 "noise_level": 0.0,
                 "attenuation": 1.0,
                 "doppler": 0.0,
@@ -172,6 +150,8 @@ class InputSignal:
                 "freq_range": [100, 1000],
                 "amp_range": [0.1, 1.0],
                 "phase_range": [0, 1],
+                "v_ref_range": [0, 1],
+                "allow_clipping": False,
                 "waves": [
                     {"amp": 1,
                     "freq": 50,
@@ -187,46 +167,14 @@ class InputSignal:
         wave_params['phase_range'] = tuple(wave_params['phase_range'])
         wave_params["freq_range"] = tuple(wave_params["freq_range"])
         wave_params["amp_range"] = tuple(wave_params["amp_range"])
+        wave_params["v_ref_range"] = tuple(wave_params["v_ref_range"])
         self.wave_params = wave_params
         
     # -------------------------------
     # Core functional methods
     # -------------------------------
     
-    def create_analog(self):
-        analog = {}
-        sim_freq = self.time_params.get('sim_freq', 1000000)
-        adc_samp_freq = self.adc_params.get('adc_samp_freq', None)
-        time_range = tuple(self.time_params.get('time_range', (0, 1)))
-        
-        points_per_second = round(sim_freq)
-        
-        # Adjust to be evenly divisible by adc_clock_freq
-        if adc_samp_freq is not None:
-            band = int(points_per_second / adc_samp_freq)
-            band_remainder = int(points_per_second % adc_samp_freq)
-            if band_remainder != 0:
-                points_per_second -= band_remainder
-            # K_band must be even
-            if band % 2 != 0:
-                points_per_second += int(adc_samp_freq)
-                
-        analog['sim_freq'] = points_per_second
-        analog['adj_spacing'] = 1 / points_per_second
-        analog['total_time'] = abs(time_range[1] - time_range[0])
-        analog['num_points'] = int(round(analog['total_time'] * points_per_second))
-        analog['time'] = np.linspace(time_range[0],
-                                  time_range[1],
-                                  analog['num_points'],
-                                  endpoint=False)
-        analog['frequency'] = np.linspace(-points_per_second / 2,
-                                   points_per_second / 2,
-                                   int(analog['time'].size),
-                                   endpoint=False)
-        self.analog = analog
-
-    
-    def create_input_signal(self):
+    def create_input_signal(self, return_effects=False):
         """
         Generate composite signal with environmental effects and random wave generation.
         """
@@ -237,8 +185,8 @@ class InputSignal:
         freq_range = self.wave_params.get('freq_range', (100, 1000))
         amp_range = self.wave_params.get('amp_range', (0.1, 1.0))
         phase_range = self.wave_params.get('phase_range', (0, 1))
-        allow_clipping = self.adc_params.get('allow_clipping', False)
-        v_ref_range = tuple(self.adc_params.get('v_ref_range', (0, 1)))
+        allow_clipping = self.wave_params.get('allow_clipping', False)
+        v_ref_range = tuple(self.wave_params.get('v_ref_range', (0, 1)))
 
         # === Wave parameter setup ===
         if not waves:
@@ -257,7 +205,7 @@ class InputSignal:
         else:
             self.wave_params['num_waves'] = len(self.wave_params['waves'])
 
-        input_signal = self._generate_signal(self.wave_params['waves'])
+        input_signal, env_effects = self._generate_signal(self.wave_params['waves'])
             # --- Adjust to midpoint ---
         midpoint = (v_ref_range[1] + v_ref_range[0]) / 2
         input_signal = input_signal + midpoint  # shift signal to midpoint
@@ -271,18 +219,13 @@ class InputSignal:
                 scale = max_allowed_amp / max_abs_val
                 input_signal = (input_signal - midpoint) * scale + midpoint
                 
-        self.input_signal = input_signal
+        if return_effects:
+            return input_signal, env_effects
+        else:
+            return input_signal
 
     
     def _generate_signal(self, waves):
-        store_internal_sigs = self.env_params.get('store_internal_sigs', True)
-        effects = {
-            "noise": 0.0,
-            "delay": [],
-            "echo_att": [],
-            "local_doppler": [],
-            "phase_inversion": []
-        }
         amps = np.array([wave['amp'] for wave in waves])
         freqs = np.array([wave['freq'] for wave in waves])
         phases = np.array([wave['phase'] for wave in waves])
@@ -311,8 +254,13 @@ class InputSignal:
 
         # === Add Gaussian noise ===
         if noise_level > 0:
-            effects['noise'] = self.rng.normal(0, noise_level, signal.shape)
-            signal += effects['noise']
+            noise = self.rng.normal(0, noise_level, signal.shape)
+            signal += noise
+
+        delay = []
+        echo_att = []
+        local_doppler = []
+        phase_inversion = []
 
         # === Multipath reflections (with Doppler + phase inversion) ===
         if num_echoes > 0:
@@ -342,45 +290,32 @@ class InputSignal:
                 echo = np.roll(echo, shift)
                 echo[:shift] = 0
                 signal += echo
-                effects['delay'].append(delay)
-                effects['echo_att'].append(echo_att)
-                effects['local_doppler'].append(local_doppler)
-                effects['phase_inversion'].append(phase_inversion)
+                delay.append(delay)
+                echo_att.append(echo_att)
+                local_doppler.append(local_doppler)
+                phase_inversion.append(phase_inversion)
                 
-        if store_internal_sigs:
-            self.logger.debug("Storing Environmental Effects")
-            self.effects = effects
-            
-        return signal
+        effects = InputSignalData(
+            noise=noise,
+            delay=delay,
+            echo_att=echo_att,
+            local_doppler=local_doppler,
+            phase_inversion=phase_inversion
+        )
+        return signal, effects
 
     # -------------------------------
     # Getters
     # -------------------------------
-
-    def get_input_signal(self):
-        return self.input_signal.copy()
-    
     
     def get_config_name(self):
         return self.config_name
-    
-    
-    def get_analog_signals(self):
-        return self.analog
     
     
     def get_analog_signal_params(self):
         exclude = ["time", "frequency"]
         analog_signal_params = {k: v for k, v in self.analog.items() if k not in exclude}
         return analog_signal_params
-    
-    
-    def get_analog_time(self):
-        return self.analog['time']
-    
-    
-    def get_analog_frequency(self):
-        return self.analog['frequency']
     
     
     def get_all_params(self):
@@ -423,7 +358,3 @@ class InputSignal:
     
     def get_log_params(self):
         return self.log_params
-    
-    
-    def get_effects(self):
-        return self.effects

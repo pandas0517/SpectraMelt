@@ -9,8 +9,8 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     load_dotenv()
     from pathlib import Path
-    from InputSignal import InputSignal
-    from LocalOscillator import LocalOscillator
+    from spectramelt.InputSignal import InputSignal
+    from spectramelt.LocalOscillator import LocalOscillator
     import matplotlib.pyplot as plt
     from scipy.fftpack import fft
     import numpy as np
@@ -49,8 +49,11 @@ if __name__ == '__main__':
     lo_1 = LocalOscillator(real_time_1, config_file_path=Path(os.getenv('NYFR_CONF')))
     lo_signal_1 = lo_1.get_lo_signal()
     lo_freq_1 = np.fft.fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
-    lo_2 = LocalOscillator(real_time_2)
-    lo_signal_2 = lo_2.get_lo_signal()
+    lo_2 = LocalOscillator()
+    lo_params_2 = lo_2.get_lo_params()
+    lo_params_2["freq"] = 0.1
+    lo_2.set_lo_params(lo_params_2)
+    lo_signal_2 = lo_2.generate_signal(real_time_2)
     lo_freq_2 = np.fft.fftshift(np.abs(fft(lo_signal_2))) / (sim_freq_2*total_time_2)
     
     fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
@@ -62,7 +65,7 @@ if __name__ == '__main__':
     axes[0,1].set_xlim(-120, 120)
     axes[1,0].plot(real_time_2, lo_signal_2)
     axes[1,0].set_title("Time (Default)")
-    axes[1,0].set_xlim(0, 0.05)
+    # axes[1,0].set_xlim(0, 0.05)
     axes[1,1].plot(real_freq_2, lo_freq_2)
     axes[1,1].set_title("Frequency (Default)")
     axes[1,1].set_xlim(-120, 120)
