@@ -1,73 +1,61 @@
 import numpy as np
+from dataclasses import dataclass
 from .utils import load_config_from_json, get_logger
+
+
+@dataclass(frozen=True)
+class MixerResult:
+    mixed: np.ndarray
+    noise: np.ndarray | None = None
+
 
 class Mixer:
     def __init__(self,
-                 rf_signal=None,
-                 lo_signal=None,
+                 all_params=None,
                  mixer_params=None,
                  log_params=None,
                  config_name=None,
                  config_file_path=None) -> None:
-        """
-        Simulates a realistic RF/baseband mixer.
-
-        Parameters
-        ----------
-        conversion_gain : float
-            Mixer conversion gain (typ. < 1).
-        lo_leakage : float
-            Fraction of LO leaking to output.
-        rf_leakage : float
-            Fraction of RF leaking to output.
-        nonlinearity_coeff : float
-            Coefficient for cubic nonlinearity.
-        noise_std : float
-            Std. dev. of Gaussian noise added to output.
-        """
         if config_file_path is not None:
-            self.set_config_from_file(config_file_path)
-        else:
-            self.set_mixer_params(mixer_params)
-            if mixer_params is None:
-                config_name = "Default_Mixer_Config"
-            self.set_config_name(config_name)
-            self.set_log_params(log_params)
-        
-        self.logger = None
-        logging_enabled = self.log_params.get('enabled', True)
-        if logging_enabled:
-            log_file = self.log_params.get('log_file', None)
-            level = self.log_params.get('level', "INFO")
-            console = self.log_params.get('console', True)
-            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-            if config_file_path is not None:
-                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-        
-        self.mixed_signal = None
-        if rf_signal is not None and lo_signal is not None:
-            self.mixed_signal = self.mix(rf_signal, lo_signal)
-            
+            all_params = load_config_from_json(config_file_path)
+        elif all_params is None:
+            all_params = {
+                "mixer_params": mixer_params,
+                "config_name": config_name,
+                "log_params": log_params
+            }
+
+        self.set_all_params(all_params)
+
     # -------------------------------
     # Setters
     # -------------------------------
-       
-    def set_config_from_file(self, config_file_path):
-        mixer_config = load_config_from_json(config_file_path)
-        mixer_params = mixer_config.get('mixer_params', None)
-        config_name = mixer_config.get('config_name', "Mixer_Config_1")
-        log_params = mixer_config.get('log_params', None)
-        
-        if mixer_params is None:
-            config_name = "Default_Mixer_Config"
+
+    def set_all_params(self, all_params=None):
+        if all_params is None:
+            all_params = {}
+
+        mixer_params = all_params.get('mixer_params', None)
+        log_params = all_params.get('log_params', None)
+        config_name = all_params.get('config_name', "Mixer_Config_1")
 
         self.set_log_params(log_params)
+
+        self.logger = None
+        if self.log_params.get('enabled', True):
+            self.logger = get_logger(
+                self.__class__.__name__,
+                self.log_params.get('log_file', None),
+                self.log_params.get('level', "INFO"),
+                self.log_params.get('console', True)
+            )
+
         self.set_mixer_params(mixer_params)
         self.set_config_name(config_name)
-        
+
     def set_config_name(self, config_name):
         self.config_name = config_name
-        
+
     def set_log_params(self, log_params=None):
         if log_params is None:
             log_params = {
@@ -76,8 +64,8 @@ class Mixer:
                 "level": "INFO",
                 "console": True
             }
-        self.log_params = log_params        
-        
+        self.log_params = log_params
+
     def set_mixer_params(self, mixer_params=None):
         if mixer_params is None:
             mixer_params = {
@@ -88,48 +76,51 @@ class Mixer:
                 "noise_std": 0.0,
                 "seed": None
             }
-        self.rng = np.random.default_rng(mixer_params.get('seed', None))         
+        self.rng = np.random.default_rng(mixer_params.get('seed', None))
         self.mixer_params = mixer_params
-        
+
     # -------------------------------
     # Core functional methods
     # -------------------------------
-    
-    def mix(self, rf_signal: np.ndarray, lo_signal: np.ndarray) -> np.ndarray:
-        """Mix RF input with LO, including imperfections."""
-        # --- Mixer Nonidealities ---
+
+    def mix(self, rf_signal: np.ndarray, lo_signal: np.ndarray, return_effects=False) -> MixerResult:
         conversion_gain = self.mixer_params.get('conversion_gain', 1.0)
         lo_leakage = self.mixer_params.get('lo_leakage', 0.0)
         rf_leakage = self.mixer_params.get('rf_leakage', 0.0)
         nonlinearity_coeff = self.mixer_params.get('nonlinearity_coeff', 0.0)
         noise_std = self.mixer_params.get('noise_std', 0.0)
-        
-        # Ideal mixing
-        mixed = conversion_gain * rf_signal * lo_signal
 
-        # Add imperfections
+        mixed = conversion_gain * rf_signal * lo_signal
         mixed += lo_leakage * lo_signal
         mixed += rf_leakage * rf_signal
         mixed += nonlinearity_coeff * (rf_signal ** 3)
 
-        # Add random noise
+        noise = None
         if noise_std > 0:
-            mixed += self.rng.normal(0, noise_std, size=mixed.shape)
+            noise = self.rng.normal(0, noise_std, size=mixed.shape)
+            mixed += noise
 
-        return mixed
+        return MixerResult(
+            mixed=mixed,
+            noise=noise if return_effects else None
+        )
 
     # -------------------------------
     # Getters
     # -------------------------------
-    
+
     def get_config_name(self):
         return self.config_name
-    
-    def get_mixed_signal(self):
-        return self.mixed_signal
-    
+
     def get_mixer_params(self):
         return self.mixer_params
-    
+
     def get_log_params(self):
         return self.log_params
+
+    def get_all_params(self):
+        return {
+            "mixer_params": self.mixer_params,
+            "log_params": self.log_params,
+            "config_name": self.config_name
+        }

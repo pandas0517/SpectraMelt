@@ -1,463 +1,320 @@
 import numpy as np
+from dataclasses import dataclass
+from typing import Optional, List, Tuple
 from .utils import load_config_from_json, get_logger
 
+
+# ============================================================
+# === Signal & Result Containers
+# ============================================================
+
+@dataclass(frozen=True)
+class ConditionedSignal:
+    signal: np.ndarray
+    time: np.ndarray
+    freq: np.ndarray
+    total_time: float
+
+
+@dataclass(frozen=True)
+class SampleHoldSignal:
+    output_signal: np.ndarray
+    indices: np.ndarray
+    sampled_values: np.ndarray
+
+
+@dataclass(frozen=True)
+class QuantizedSignal:
+    quantized_values: np.ndarray
+    mid_times: np.ndarray
+    adc_indices: np.ndarray
+    sampled_frequency: np.ndarray
+
+
+@dataclass(frozen=True)
+class ADCEffects:
+    jitter_indices: Optional[np.ndarray] = None
+    hold_noise: Optional[List[float]] = None
+    thermal_noise: Optional[List[float]] = None
+
+
+@dataclass(frozen=True)
+class ADCResult:
+    quantized: QuantizedSignal
+    conditioned: Optional[ConditionedSignal] = None
+    sample_hold: Optional[SampleHoldSignal] = None
+    effects: Optional[ADCEffects] = None
+
+
+# ============================================================
+# === ADC Core
+# ============================================================
+
 class ADC:
-    def __init__(self,
-                 input_signal=None,
-                 real_time=None,
-                 adc_params=None,
-                 log_params=None,
-                 config_name=None,
-                 config_file_path=None) -> None:
+    def __init__(
+        self,
+        all_params=None,
+        adc_params=None,
+        log_params=None,
+        config_name=None,
+        config_file_path=None
+    ) -> None:
+
         if config_file_path is not None:
-            self.set_config_from_file(config_file_path)
-        else:
-            self.set_adc_params(adc_params)
-            if adc_params is None:
-                config_name = "Default_ADC_Config"
-            self.set_config_name(config_name)
-            
-            self.set_log_params(log_params)
-        
-        self.logger = None
-        logging_enabled = self.log_params.get('enabled', True)
-        if logging_enabled:
-            log_file = self.log_params.get('log_file', None)
-            level = self.log_params.get('level', "INFO")
-            console = self.log_params.get('console', True)
-            self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-            if config_file_path is not None:
-                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-
-        self.conditioned_signals = None
-        self.sh_signals = None
-        self.quantizer_signals = None
-        
-        if input_signal is not None and real_time is not None:
-            self.quantizer_signals = self.analog_to_digital(input_signal, real_time)
-            
-    # -------------------------------
-    # Setters
-    # -------------------------------
-    
-    def set_config_from_file(self, config_file_path):
-        adc_config = load_config_from_json(config_file_path)
-        adc_params = adc_config.get('adc_params', None)
-        config_name = adc_config.get('config_name', "ADC_Config_1")
-        log_params = adc_config.get('log_params', None) 
-
-        if adc_params is None:
-            config_name = "Default_ADC_Config"
-            
-        self.set_adc_params(adc_params)
-        self.set_config_name(config_name)
-        self.set_log_params(log_params)
-        
-    def set_config_name(self, config_name):
-        self.config_name = config_name
-        
-    def set_log_params(self, log_params=None):
-        if log_params is None:
-            log_params = {
-                "enabled": True,
-                "log_file": None,
-                "level": "INFO",
-                "console": True
+            all_params = load_config_from_json(config_file_path)
+        elif all_params is None:
+            all_params = {
+                "adc_params": adc_params,
+                "config_name": config_name,
+                "log_params": log_params
             }
-        self.log_params = log_params 
+
+        self.set_all_params(all_params)
+
+    # ------------------------------------------------------------
+    # Configuration
+    # ------------------------------------------------------------
+
+    def set_all_params(self, all_params):
+        if all_params is None:
+            all_params = {}
+
+        adc_params = all_params.get("adc_params")
+        log_params = all_params.get("log_params")
+        config_name = all_params.get("config_name", "ADC_Config_1")
+
+        self.set_log_params(log_params)
+        self._init_logger()
+        self.set_adc_params(adc_params)
+        self.config_name = config_name
+
+    def set_log_params(self, log_params=None):
+        self.log_params = log_params or {
+            "enabled": True,
+            "log_file": None,
+            "level": "INFO",
+            "console": True
+        }
+
+    def _init_logger(self):
+        self.logger = None
+        if self.log_params.get("enabled", True):
+            self.logger = get_logger(
+                self.__class__.__name__,
+                self.log_params.get("log_file"),
+                self.log_params.get("level", "INFO"),
+                self.log_params.get("console", True)
+            )
 
     def set_adc_params(self, adc_params=None):
-        if adc_params is None:
-            adc_params = {
-                "store_conditioned_sigs": True,
-                "store_sh_sigs": True,
-                "adc_samp_freq": 100,
-                "allow_clipping": True,
-                "v_ref_range": (0, 1),
-                "num_bits": 8,
-                "thermal_noise_std_dev": 0.0,
-                "non_linearity_mode": None,
-                "alpha": 0.0,
-                "threshold": 1.0,
-                "jitter_std": 0.0,
-                "acquisition_time_constant": 0.0,
-                "hold_noise_std": 0.0,
-                "transient_mode": "fixed",
-                "truncate_transients": True,
-                "transient_fraction": 0.05,
-                "detection_window": 0.05,
-                "stability_threshold": 0.01,
-                "seed": None
-            }
-        self.rng = np.random.default_rng(adc_params.get('seed', None))          
-        self.adc_params = adc_params
-
-    # -------------------------------
-    # Core functional methods
-    # -------------------------------
-
-    def _condition_adc_input(self, filtered_signal: np.ndarray, real_time: np.ndarray) -> np.ndarray:
-        """
-        Simulated Front-End Conditioning Stage
-
-        Centers and scales the filtered signal for ADC input, with optional
-        transient suppression (auto or fixed).
-
-        ADC config parameters:
-        ----------------------
-        v_ref_range : (float, float)  → (v_min, v_max)
-        transient_mode : "auto" | "fixed" | "none"
-        transient_fraction : float    → used if mode="fixed"
-        detection_window : float      → used if mode="auto"
-        stability_threshold : float   → used if mode="auto"
-        truncate_transients : bool
-
-        Returns
-        -------
-        np.ndarray:
-            Fully conditioned signal matching input length.
-        """
-
-        if not isinstance(filtered_signal, np.ndarray):
-            raise TypeError("filtered_signal must be a NumPy array")
-
-        n = filtered_signal.size
-        if n == 0:
-            return filtered_signal
-
-        # === ADC Voltage Range & Settings ===
-        v_min, v_max = self.adc_params.get('v_ref_range', (0.0, 1.0))
-        transient_mode = self.adc_params.get('transient_mode', 'none').lower()
-        transient_fraction = self.adc_params.get('transient_fraction', 0.05)
-        detection_window = self.adc_params.get('detection_window', 0.05)
-        stability_threshold = self.adc_params.get('stability_threshold', 0.01)
-        truncate_transients = self.adc_params.get('truncate_transients', False)
-
-        # Make a safe working copy
-        signal = filtered_signal.copy()
-
-        # =================================================================
-        # === Determine Transient Region Based on Selected Mode ===
-        # =================================================================
-        if transient_mode == "none":
-            skip_start = 0
-            skip_end = 0
-
-        elif transient_mode == "fixed":
-            skip = int(n * transient_fraction)
-            skip_start = skip_end = min(skip, n // 2)
-
-        elif transient_mode == "auto":
-            window_len = max(1, int(n * detection_window))
-            num_windows = n // window_len
-
-            variances = np.array([
-                np.var(signal[i*window_len:(i+1)*window_len])
-                for i in range(num_windows)
-            ])
-
-            mean_var = np.mean(variances[-3:])  # assume last windows are steady
-            relative_change = np.abs(np.diff(variances) / (mean_var + 1e-12))
-
-            start_idx = np.argmax(relative_change < stability_threshold)
-            end_idx = num_windows - np.argmax(relative_change[::-1] < stability_threshold) - 1
-
-            skip_start = int(start_idx * window_len)
-            skip_end = int(n - end_idx * window_len)
-
-            skip_start = min(skip_start, n // 2)
-            skip_end = min(skip_end, n // 2)
-
-        else:
-            self.logger.error("transient_mode must be 'auto', 'fixed', or 'none'")
-            raise ValueError("transient_mode must be 'auto', 'fixed', or 'none'")
-
-        # =================================================================
-        # === Conditioning Based Only on Steady-State Region ===
-        # =================================================================
-        steady = signal[skip_start:n - skip_end] if skip_start < n - skip_end else signal
-        if steady.size == 0:
-            steady = signal.copy()
-
-        v_mid = (v_max + v_min) / 2.0
-        centered = steady - np.mean(steady)
-        max_amp = np.max(np.abs(centered))
-
-        if max_amp > 0:
-            scale_factor = ((v_max - v_min) / 2.0) / max_amp
-            scaled_centered = centered * scale_factor
-        else:
-            scaled_centered = centered.copy()
-
-        # =================================================================
-        # === Reconstruct Full Output Signal ===
-        # =================================================================
-        if truncate_transients:
-            conditioned_signal = scaled_centered + v_mid
-            corresponding_time = real_time[skip_start:n - skip_end]
-        else:
-            conditioned_signal = np.full_like(signal, v_mid)
-            conditioned_signal[skip_start:n - skip_end] = scaled_centered + v_mid
-            corresponding_time = real_time
-            
-        # --- Compute corresponding frequency axis (for FFT-based analysis) ---
-        num_samples = len(corresponding_time)
-        time_step = corresponding_time[1] - corresponding_time[0]
-        total_time = corresponding_time[-1] - corresponding_time[0]
-        corresponding_freq = np.linspace(
-            -0.5 / time_step,
-            0.5 / time_step,
-            num_samples,
-            endpoint=False
-        )
-
-        conditioned = {
-            "signal": conditioned_signal,
-            "time": corresponding_time,
-            "freq": corresponding_freq,
-            "total_time": total_time
+        self.adc_params = adc_params or {
+            "adc_samp_freq": 100,
+            "allow_clipping": True,
+            "v_ref_range": (0.0, 1.0),
+            "num_bits": 8,
+            "thermal_noise_std_dev": 0.0,
+            "non_linearity_mode": None,
+            "alpha": 0.0,
+            "threshold": 1.0,
+            "jitter_std": 0.0,
+            "acquisition_time_constant": 0.0,
+            "hold_noise_std": 0.0,
+            "transient_mode": "fixed",
+            "truncate_transients": True,
+            "transient_fraction": 0.05,
+            "detection_window": 0.05,
+            "stability_threshold": 0.01,
+            "seed": None
         }
-        return conditioned
+        self.rng = np.random.default_rng(self.adc_params.get("seed"))
 
-    def _quantizer(self, sh_signals, real_time):
-        """
-        Simulates a realistic ADC quantizer by sampling the S&H output at
-        the midpoint of each hold interval, and returns both quantized values
-        and corresponding n-bit codes with correct ADC precision.
+    # ============================================================
+    # === Processing Stages
+    # ============================================================
 
-        Args:
-            sh_output_signal (np.ndarray): Output from the S&H circuit.
-            sh_indices (np.ndarray): Indices where each S&H sample starts.
-            fs_in (float): Original analog signal sampling frequency (Hz).
-            num_bits (int): Number of ADC bits.
-            v_ref_min (float): Minimum ADC reference voltage.
-            v_ref_max (float): Maximum ADC reference voltage.
-            thermal_noise_std_dev (float): Standard deviation of thermal noise.
+    def _condition_adc_input(
+        self,
+        signal: np.ndarray,
+        real_time: np.ndarray
+    ) -> ConditionedSignal:
 
-        Returns:
-            tuple:
-                - quantized_values (np.ndarray): ADC quantized values at midpoints (volts).
-                - mid_times (np.ndarray): Time points corresponding to each quantized value.
-                - adc_indices (np.ndarray): Integer n-bit ADC codes for each sample.
-        """
-        quantizer_signals = {}
-        
-        # --- Get Real Time Sample Frequency ---
-        dt = np.mean(np.diff(real_time))  # average time step
-        sim_freq = 1.0 / dt
-        
-        start_time = real_time[0]
-        
-        # --- Internal Sample and Hold Signals ---
-        output_signal = sh_signals.get('output_signal')
-        indices = sh_signals.get('indices')
-        
-        # --- Quantizer Parameters ---
-        v_ref_range = self.adc_params.get('v_ref_range', (0, 1))
-        num_levels = 2**self.adc_params.get('num_bits', 8)
-        
-        # --- Quantizer Nonidealities ---
-        thermal_noise_std_dev = self.adc_params.get('thermal_noise_std_dev', 0)
-        
-        quantization_step = (v_ref_range[1] - v_ref_range[0]) / num_levels
+        n = signal.size
+        if n == 0:
+            raise ValueError("Empty signal provided to ADC")
 
-        quantized_values = np.zeros(len(indices))
-        mid_times = np.zeros(len(indices))
-        adc_indices = np.zeros(len(indices), dtype=int)
+        v_min, v_max = self.adc_params["v_ref_range"]
+        transient_mode = self.adc_params["transient_mode"].lower()
+        frac = self.adc_params["transient_fraction"]
+        truncate = self.adc_params["truncate_transients"]
 
-        for i in range(len(indices)):
-            start_index = indices[i]
-            end_index = (indices[i+1]
-                         if i <len(indices)-1
-                         else len(output_signal))
-            mid_index = start_index + (end_index - start_index)//2
+        if transient_mode == "fixed":
+            skip = int(n * frac)
+            skip_start = skip_end = min(skip, n // 2)
+        else:
+            skip_start = skip_end = 0
 
-            mid_times[i] = mid_index / sim_freq
-            sample_value = output_signal[mid_index]
+        steady = signal[skip_start:n - skip_end] if skip_start < n - skip_end else signal
+        centered = steady - np.mean(steady)
+        max_amp = np.max(np.abs(centered)) or 1.0
 
-            # Add thermal noise if specified
-            if thermal_noise_std_dev > 0:
-                sample_value += self.rng.normal(0, thermal_noise_std_dev)
+        scale = ((v_max - v_min) / 2.0) / max_amp
+        scaled = centered * scale + (v_max + v_min) / 2.0
 
-            # Clip to ADC range
-            sample_value = np.clip(sample_value, v_ref_range[0], v_ref_range[1])
+        if truncate:
+            out_signal = scaled
+            out_time = real_time[skip_start:n - skip_end]
+        else:
+            out_signal = np.full_like(signal, (v_max + v_min) / 2.0)
+            out_signal[skip_start:n - skip_end] = scaled
+            out_time = real_time
 
-            # Quantize to integer ADC code
-            index = int(np.floor((sample_value - v_ref_range[0]) / quantization_step))
-            index = np.clip(index, 0, num_levels - 1)
-            adc_indices[i] = index
+        dt = out_time[1] - out_time[0]
+        freq = np.linspace(-0.5 / dt, 0.5 / dt, out_time.size, endpoint=False)
 
-            # Convert back to voltage and round to ADC precision
-            quantized_values[i] = v_ref_range[0] + (index + 0.5) * quantization_step
-            # Round voltage to nearest step for exact n-bit precision
-            quantized_values[i] = (np.round((quantized_values[i] - v_ref_range[0]) / quantization_step) 
-                                   * quantization_step + v_ref_range[0])
-        if start_time != 0:
-            mid_times += start_time
-
-        # --- Compute sampled frequency axis (for FFT-based analysis) ---
-        num_samples = len(mid_times)
-        time_step = mid_times[1] - mid_times[0]
-        sampled_freq = np.linspace(
-            -0.5 / time_step,
-             0.5 / time_step,
-             num_samples,
-             endpoint=False
+        return ConditionedSignal(
+            signal=out_signal,
+            time=out_time,
+            freq=freq,
+            total_time=out_time[-1] - out_time[0]
         )
 
-        quantizer_signals['mid_times'] = mid_times
-        quantizer_signals['quantized_values'] = quantized_values
-        quantizer_signals['adc_indices'] = adc_indices
-        quantizer_signals['sampled_frequency'] = sampled_freq
-        
-        return quantizer_signals
+    # ------------------------------------------------------------
 
-    def _sample_and_hold(self, signal, real_time):
-        """
-        Simulates a realistic sample-and-hold circuit with optional voltage-preserving non-linearity.
+    def _sample_and_hold(
+        self,
+        conditioned: ConditionedSignal
+    ) -> Tuple[SampleHoldSignal, np.ndarray, List[float]]:
 
-        Args:
-            signal (np.ndarray): Input analog signal.
-            fs_in (float): Input signal sampling frequency.
-            fs_sh (float): Sample-and-hold frequency.
-            non_linearity_mode (str or None): 'tanh', 'cubic', 'hard_clip', or None.
-            alpha (float): Scaling for tanh or cubic distortion.
-            threshold (float): Threshold for hard clipping.
-            jitter_std (float): Standard deviation of sampling time jitter (seconds).
-            acquisition_time_constant (float): Time constant for finite acquisition time (seconds).
-            hold_noise_std (float): Noise added once per hold interval.
-            v_min (float or None): Minimum voltage for normalization. Defaults to min(signal).
-            v_max (float or None): Maximum voltage for normalization. Defaults to max(signal).
+        signal = conditioned.signal
+        time = conditioned.time
 
-        Returns:
-            tuple: (output_signal, sh_indices, sampled_values)
-        """
-        sh_signals = {}
-        v_min = np.min(signal)
-        v_max = np.max(signal)
-        adc_samp_freq = self.adc_params.get('adc_samp_freq', 100)
-        
-        # --- Get Real Time Sample Frequency ---
-        dt = np.mean(np.diff(real_time))  # average time step
+        dt = np.mean(np.diff(time))
         sim_freq = 1.0 / dt
-                    
-        # --- Sample and Hold Nonidealities ---
-        jitter_std = self.adc_params.get('jitter_std', 0.0)
-        non_linearity_mode = self.adc_params.get('non_linearity_mode', None)
-        alpha = self.adc_params.get('alpha', 0)
-        threshold = self.adc_params.get('threshold', 1.0)
-        acquisition_time_constant = self.adc_params.get('acquisition_time_constant', 0.0)
-        hold_noise_std = self.adc_params.get('hold_noise_std', 0.0)
-        
-        num_samples_sh = int(np.floor(len(signal) * adc_samp_freq / sim_freq))
+        adc_fs = self.adc_params["adc_samp_freq"]
 
-        # Jittered sampling indices
-        ideal_sh_indices = np.arange(num_samples_sh) * (sim_freq / adc_samp_freq)
-        jitter_indices = self.rng.normal(0, jitter_std * sim_freq, num_samples_sh)
-        sh_indices = np.clip(ideal_sh_indices + jitter_indices, 0, len(signal) - 1).astype(int)
+        num_samples = int(len(signal) * adc_fs / sim_freq)
+        ideal_idx = np.arange(num_samples) * (sim_freq / adc_fs)
+        jitter = self.rng.normal(0, self.adc_params["jitter_std"] * sim_freq, num_samples)
 
-        # Sample values at jittered points
-        sampled_values = signal[sh_indices]
+        indices = np.clip(ideal_idx + jitter, 0, len(signal) - 1).astype(int)
+        sampled = signal[indices]
 
-        # Apply non-linearity if requested
-        if non_linearity_mode is not None:
-            if non_linearity_mode == "tanh":
-                # Voltage-preserving normalized tanh
-                signal_norm = 2 * (sampled_values - v_min) / (v_max - v_min) - 1
-                distorted_norm = np.tanh(alpha * signal_norm) / np.tanh(alpha)
-                sampled_values = 0.5 * (distorted_norm + 1) * (v_max - v_min) + v_min
-            elif non_linearity_mode == "cubic":
-                sampled_values = sampled_values - (alpha / 3.0) * (sampled_values**3)
-            elif non_linearity_mode == "hard_clip":
-                sampled_values = np.clip(sampled_values, v_min + threshold, v_max - threshold)
-            else:
-                self.logger.error(f"Unknown non-linearity mode: {non_linearity_mode}")
-                raise ValueError(f"Unknown non-linearity mode: {non_linearity_mode}")
+        output = np.zeros_like(signal)
+        hold_noise = []
 
-        # Initialize output
-        output_signal = np.zeros(len(signal))
-        current_value = 0.0
+        for i in range(num_samples):
+            start = indices[i]
+            end = indices[i + 1] if i < num_samples - 1 else len(signal)
+            output[start:end] = sampled[i]
 
-        for i in range(num_samples_sh):
-            start_index = sh_indices[i]
-            end_index = sh_indices[i + 1] if i < num_samples_sh - 1 else len(signal)
+            if self.adc_params["hold_noise_std"] > 0:
+                n = self.rng.normal(0, self.adc_params["hold_noise_std"])
+                output[start:end] += n
+                hold_noise.append(n)
 
-            # Simulate finite acquisition by ramping
-            if acquisition_time_constant > 0:
-                for j in range(start_index, end_index):
-                    output_signal[j] = current_value + (sampled_values[i] - current_value) * (
-                        1 - np.exp(-(j - start_index) / (sim_freq * acquisition_time_constant))
-                    )
-                current_value = sampled_values[i]
-            else:
-                output_signal[start_index:end_index] = sampled_values[i]
+        return (
+            SampleHoldSignal(output, indices, sampled),
+            jitter,
+            hold_noise
+        )
 
-            # Add hold noise once per hold interval
-            if hold_noise_std > 0:
-                noise = self.rng.normal(0, hold_noise_std)
-                output_signal[start_index:end_index] += noise
-        sh_signals['output_signal'] = output_signal
-        sh_signals['indices'] = sh_indices
-        sh_signals['sampled_values'] = sampled_values
-        
-        return sh_signals
+    # ------------------------------------------------------------
 
-    def analog_to_digital(self, signal, real_time):
-        conditioned_signals = self._condition_adc_input(signal, real_time)
-        conditioned_signal = conditioned_signals.get('signal')
-        conditioned_time = conditioned_signals.get('time')
-        sh_signals = self._sample_and_hold(conditioned_signal, conditioned_time)
-        
-        store_conditioned_sigs = self.adc_params.get('store_conditioned_sigs', True)
-        if store_conditioned_sigs:
-            self.conditioned_signals = conditioned_signals
-            
-        store_sh_sigs = self.adc_params.get('store_sh_sigs', True)
-        if store_sh_sigs:
-            self.logger.debug("Storing Sample and Hold Signals")
-            self.sh_signals = sh_signals
-            
-        return self._quantizer(sh_signals, conditioned_time)   
- 
-    # -------------------------------
-    # Getters
-    # -------------------------------
-    
+    def _quantizer(
+        self,
+        sh: SampleHoldSignal,
+        time: np.ndarray
+    ) -> Tuple[QuantizedSignal, List[float]]:
+
+        vmin, vmax = self.adc_params["v_ref_range"]
+        bits = self.adc_params["num_bits"]
+        levels = 2 ** bits
+        q_step = (vmax - vmin) / levels
+
+        mid_times = []
+        values = []
+        indices = []
+        noise = []
+
+        for i, start in enumerate(sh.indices):
+            end = sh.indices[i + 1] if i < len(sh.indices) - 1 else len(sh.output_signal)
+            mid = start + (end - start) // 2
+            val = sh.output_signal[mid]
+
+            if self.adc_params["thermal_noise_std_dev"] > 0:
+                n = self.rng.normal(0, self.adc_params["thermal_noise_std_dev"])
+                val += n
+                noise.append(n)
+
+            val = np.clip(val, vmin, vmax)
+            idx = int((val - vmin) // q_step)
+            idx = np.clip(idx, 0, levels - 1)
+
+            values.append(vmin + (idx + 0.5) * q_step)
+            indices.append(idx)
+            mid_times.append(time[mid])
+
+        dt = mid_times[1] - mid_times[0]
+        freq = np.linspace(-0.5 / dt, 0.5 / dt, len(mid_times), endpoint=False)
+
+        return (
+            QuantizedSignal(
+                quantized_values=np.array(values),
+                mid_times=np.array(mid_times),
+                adc_indices=np.array(indices),
+                sampled_frequency=freq
+            ),
+            noise
+        )
+
+    # ============================================================
+    # === Public API
+    # ============================================================
+
+    def analog_to_digital(
+        self,
+        signal: np.ndarray,
+        real_time: np.ndarray,
+        return_conditioned=False,
+        return_sample_hold=False,
+        return_effects=False
+    ) -> ADCResult:
+
+        conditioned = self._condition_adc_input(signal, real_time)
+        sh, jitter, hold_noise = self._sample_and_hold(conditioned)
+        quantized, thermal_noise = self._quantizer(sh, conditioned.time)
+
+        effects = None
+        if return_effects:
+            effects = ADCEffects(jitter, hold_noise, thermal_noise)
+
+        return ADCResult(
+            quantized=quantized,
+            conditioned=conditioned if return_conditioned else None,
+            sample_hold=sh if return_sample_hold else None,
+            effects=effects
+        )
+
+    # ============================================================
+    # === Getters
+    # ============================================================
+
     def get_adc_params(self):
         return self.adc_params
-    
-    def get_conditioned_signals(self):
-        return self.conditioned_signals
-     
-    def get_sh_signals(self):
-        return self.sh_signals
-    
-    def get_sh_output_signal(self):
-        return self.sh_signals.get('output_signal') if self.sh_signals else None
-    
-    def get_sh_indicies(self):
-        return self.sh_signals.get('sh_indicies') if self.sh_signals else None
-    
-    def get_sh_sampled_values(self):
-        return self.sh_signals.get('sh_sampled_values') if self.sh_signals else None
-    
-    def get_quantizer_signals(self):
-        return self.quantizer_signals
-    
-    def get_sampled_frequency(self):
-        return self.quantizer_signals.get('sampled_frequency') if self.quantizer_signals else None
-    
-    def get_quantizer_output(self):
-        return self.quantizer_signals.get('quantized_values') if self.quantizer_signals else None
-    
-    def get_quantizer_midtimes(self):
-        return self.quantizer_signals.get('mid_times') if self.quantizer_signals else None
-    
-    def get_adc_indices(self):
-        return self.quantizer_signals.get('adc_indices') if self.quantizer_signals else None
-    
-    def get_config_name(self):
-        return self.config_name
-    
+
+
     def get_log_params(self):
         return self.log_params
+
+
+    def get_config_name(self):
+        return self.config_name
+
+
+    def get_all_params(self):
+        all_params = { 
+            "adc_params": self.adc_params,
+            "config_name": self.config_name,
+            "log_params": self.log_params
+            }
+        return all_params

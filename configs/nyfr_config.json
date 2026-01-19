@@ -35,8 +35,6 @@
         "console": true
     },
     "adc_params": {
-        "store_conditioned_sigs": true,
-        "store_sh_sigs": true,
         "adc_samp_freq": 100000,
         "allow_clipping": true,
         "v_ref_range": [-10, 10],

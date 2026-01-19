@@ -1,5 +1,22 @@
 import numpy as np
+from dataclasses import dataclass
+from typing import Optional
 from .utils import load_config_from_json, get_logger
+
+
+@dataclass(frozen=True)
+class WaveletEffects:
+    amp_noise: np.ndarray | None = None
+    drift: float | None = None
+
+
+@dataclass(frozen=True)
+class WaveletResult:
+    wavelet_train: np.ndarray | None = None
+    components: list[np.ndarray] | None = None
+    effects: Optional[WaveletEffects] | None = None
+    amp: float | None = None
+
 
 class WaveletGenerator:
     """
@@ -8,8 +25,7 @@ class WaveletGenerator:
     """
 
     def __init__(self,
-                 sample_train=None,
-                 t=None,
+                 all_params=None,
                  wavelet_params=None,
                  log_params=None,
                  config_name=None,
@@ -35,15 +51,32 @@ class WaveletGenerator:
         """
         # ---------------- Config ----------------
         if config_file_path is not None:
-            self.set_config_from_file(config_file_path)
-        else:
-            self.set_wavelet_params(wavelet_params)
-            if wavelet_params is None:
-                config_name = "Default_Wavelet_Config"
-            self.set_config_name(config_name)
-            self.set_log_params(log_params)
+            all_params = load_config_from_json(config_file_path)
+        elif all_params is None:
+            all_params = {
+                "wavelet_params": wavelet_params,
+                "config_name": config_name,
+                "log_params": log_params
+            }
 
-        # Logger
+        self.set_all_params(all_params)
+
+    # -------------------------------
+    # Setters
+    # -------------------------------
+
+    def set_all_params(self, all_params):
+        if all_params is None:
+            all_params = {}
+        
+        wavelet_params = all_params.get('wavelet_params', None)
+        log_params = all_params.get('log_params', None)
+        if wavelet_params is None:
+            config_name = "Default_Wavelet_Config"
+        else:
+            config_name = all_params.get('config_name', "Wavelet_Config_1")
+        
+        self.set_log_params(log_params)    
         self.logger = None
         logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
@@ -51,25 +84,9 @@ class WaveletGenerator:
             level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-            if config_file_path is not None:
-                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-
-        # Outputs
-        self.wavelet_train = None
-        self.wavelet_list = []
-
-        if sample_train is not None and t is not None:
-            self.wavelet_train, self.wavelet_list = self.generate_wavelet_train(sample_train, t)
-
-    # -------------------------------
-    # Setters
-    # -------------------------------
-
-    def set_config_from_file(self, config_file_path):
-        config = load_config_from_json(config_file_path)
-        self.set_wavelet_params(config.get('wavelet_params', None))
-        self.set_log_params(config.get('log_params', None))
-        self.set_config_name(config.get('config_name', "Wavelet_Config_1"))
+        
+        self.set_wavelet_params(wavelet_params)
+        self.set_config_name(config_name)
 
 
     def set_config_name(self, config_name):
@@ -105,19 +122,20 @@ class WaveletGenerator:
     # Core functional methods
     # -------------------------------
 
-    def generate_wavelet_train(self, sample_train, t, *, amp_noise_std=None,
-                               freq_drift_ppm=None, harmonic_distortion=None,
-                               threshold=None):
+    def generate_wavelet_train(self, sample_train, t,
+                               return_components=False,
+                               return_scaling_factor=False,
+                               return_effects=False) -> WaveletResult:
         """
         Generate Gabor wavelet train (CPU). Automatically adds negative frequency.
         Scales to unit magnitude in frequency domain and stores required amplifier in self.amp.
         """
         # --- Defaults ---
         center_freq = self.wavelet_params['center_freq']
-        amp_noise_std = amp_noise_std if amp_noise_std is not None else self.wavelet_params.get('amp_noise_std', 0.0)
-        freq_drift_ppm = freq_drift_ppm if freq_drift_ppm is not None else self.wavelet_params.get('freq_drift_ppm', 0.0)
-        harmonic_distortion = harmonic_distortion if harmonic_distortion is not None else self.wavelet_params.get('harmonic_distortion', 0.0)
-        threshold = threshold if threshold is not None else self.wavelet_params.get('threshold', 1e-3)        
+        amp_noise_std = self.wavelet_params.get('amp_noise_std', 0.0)
+        freq_drift_ppm = self.wavelet_params.get('freq_drift_ppm', 0.0)
+        harmonic_distortion = self.wavelet_params.get('harmonic_distortion', 0.0)
+        threshold = self.wavelet_params.get('threshold', 1e-3)        
         
         dt = t[1] - t[0]
         wavelet_train = np.zeros_like(t, dtype=complex)
@@ -164,27 +182,48 @@ class WaveletGenerator:
         f = np.fft.fftfreq(len(t), dt)
         idx = np.argmin(np.abs(f - center_freq))
         mag = np.abs(W_f[idx])
-        self.amp = 1.0 / mag if mag > 0 else 1.0
+        amp = 1.0 / mag if mag > 0 else 1.0
 
         # --- Apply scaling ---
-        wavelet_train *= self.amp
-        components = [c * self.amp for c in components]
+        wavelet_train *= amp
+        components = [c * amp for c in components]
 
         # --- Apply realistic effects AFTER scaling ---
+        amp_noise = None
+        drift = None
+
         if amp_noise_std > 0:
-            wavelet_train *= 1 + amp_noise_std * self.rng.standard_normal(wavelet_train.shape)
+            amp_noise = 1 + amp_noise_std * self.rng.standard_normal(wavelet_train.shape)
+            wavelet_train *= amp_noise
         if freq_drift_ppm != 0 or harmonic_distortion != 0:
             drift = 1 + freq_drift_ppm * 1e-6 * self.rng.standard_normal()
             fc_drifted = center_freq * drift
             harmonic = np.exp(2j * np.pi * 2 * fc_drifted * t)
-            wavelet_train += harmonic_distortion * self.amp * norm * envelope * harmonic
+            wavelet_train += harmonic_distortion * amp * norm * envelope * harmonic
 
-        return wavelet_train, components
+        effects = None
+        if return_effects:
+            effects = WaveletEffects(
+                amp_noise=amp_noise,
+                drift=drift
+                )
+
+        return WaveletResult(
+            wavelet_train=wavelet_train,
+            components=components if return_components else None,
+            amp=amp if return_scaling_factor else None,
+            effects=effects
+        )
     
     
-    def generate_wavelet_train_gpu(self, sample_train, t, *,
-        amp_noise_std=None, freq_drift_ppm=None,
-        harmonic_distortion=None, threshold=None):
+    def generate_wavelet_train_gpu(
+        self,
+        sample_train: np.ndarray,
+        t: np.ndarray,
+        return_components: bool = False,
+        return_scaling_factor: bool = False,
+        return_effects: bool = False
+    ) -> WaveletResult:
         """
         Generate a Gabor wavelet train using GPU acceleration (CuPy).
         Automatically adds negative frequency and scales to unit magnitude.
@@ -204,14 +243,17 @@ class WaveletGenerator:
 
         # --- Defaults ---
         center_freq = self.wavelet_params['center_freq']
-        amp_noise_std = amp_noise_std if amp_noise_std is not None else self.wavelet_params.get('amp_noise_std', 0.0)
-        freq_drift_ppm = freq_drift_ppm if freq_drift_ppm is not None else self.wavelet_params.get('freq_drift_ppm', 0.0)
-        harmonic_distortion = harmonic_distortion if harmonic_distortion is not None else self.wavelet_params.get('harmonic_distortion', 0.0)
-        threshold = threshold if threshold is not None else self.wavelet_params.get('threshold', 1e-3)
+        amp_noise_std = self.wavelet_params.get('amp_noise_std', 0.0)
+        freq_drift_ppm = self.wavelet_params.get('freq_drift_ppm', 0.0)
+        harmonic_distortion = self.wavelet_params.get('harmonic_distortion', 0.0)
+        threshold = self.wavelet_params.get('threshold', 1e-3)
 
         dt = t[1] - t[0]
+
+        # --- Move to GPU ---
         t_gpu = cp.asarray(t)
         sample_gpu = cp.asarray(sample_train, dtype=cp.float64)
+
         wavelet_train = cp.zeros_like(t_gpu, dtype=cp.complex128)
         components = []
 
@@ -220,13 +262,14 @@ class WaveletGenerator:
         edges = cp.diff(active.astype(cp.int32))
         start_idxs = cp.where(edges == 1)[0] + 1
         end_idxs = cp.where(edges == -1)[0] + 1
-        if active[0]:
+
+        if bool(active[0]):
             start_idxs = cp.concatenate([cp.array([0]), start_idxs])
-        if active[-1]:
+        if bool(active[-1]):
             end_idxs = cp.concatenate([end_idxs, cp.array([len(sample_train)])])
 
         # --- Process each pulse ---
-        for s, e in zip(start_idxs, end_idxs):
+        for s, e in zip(start_idxs.tolist(), end_idxs.tolist()):
             pulse = sample_gpu[s:e]
             tp = t_gpu[s:e]
 
@@ -242,7 +285,7 @@ class WaveletGenerator:
             # --- Wavelet normalization ---
             norm = (2 ** 0.25) / (cp.sqrt(tau) * cp.pi ** 0.25)
 
-            # --- Fundamental wavelet with automatic negative frequency ---
+            # --- Fundamental wavelet with negative frequency ---
             envelope = cp.exp(-((t_gpu - t0) / tau) ** 2)
             carrier_pos = cp.exp(2j * cp.pi * center_freq * (t_gpu - t0))
             carrier_neg = cp.exp(2j * cp.pi * -center_freq * (t_gpu - t0))
@@ -256,41 +299,53 @@ class WaveletGenerator:
         f = cp.fft.fftfreq(len(t_gpu), dt)
         idx = int(cp.argmin(cp.abs(f - center_freq)))
         mag = cp.abs(W_f[idx])
-        self.amp = float(1.0 / mag) if mag > 0 else 1.0
+        amp = float(1.0 / mag) if mag > 0 else 1.0
 
         # --- Apply scaling ---
-        wavelet_train *= self.amp
-        components = [c * self.amp for c in components]
+        wavelet_train *= amp
+        components = [c * amp for c in components]
 
         # --- Apply realistic effects AFTER scaling ---
+        amp_noise = None
+        drift = None
+
         if amp_noise_std > 0:
-            wavelet_train *= 1 + amp_noise_std * self.rng.standard_normal(wavelet_train.shape)
+            amp_noise = 1 + amp_noise_std * cp.asarray(
+                self.rng.standard_normal(wavelet_train.shape)
+            )
+            wavelet_train *= amp_noise
+
         if freq_drift_ppm != 0 or harmonic_distortion != 0:
             drift = 1 + freq_drift_ppm * 1e-6 * self.rng.standard_normal()
             fc_drifted = center_freq * drift
             harmonic = cp.exp(2j * cp.pi * 2 * fc_drifted * t_gpu)
-            wavelet_train += harmonic_distortion * self.amp * norm * envelope * harmonic
+            wavelet_train += harmonic_distortion * amp * norm * envelope * harmonic
 
-        return wavelet_train, components
+        # --- Convert back to NumPy at boundary ---
+        wavelet_train_np = cp.asnumpy(wavelet_train)
+        components_np = [cp.asnumpy(c) for c in components] if return_components else None
+        amp_noise_np = cp.asnumpy(amp_noise) if amp_noise is not None else None
+
+        effects = None
+        if return_effects:
+            effects = WaveletEffects(
+                amp_noise=amp_noise_np,
+                drift=drift
+            )
+
+        return WaveletResult(
+            wavelet_train=wavelet_train_np,
+            components=components_np,
+            amp=amp if return_scaling_factor else None,
+            effects=effects
+        )
 
     # -------------------------------
     # Getters
     # -------------------------------
 
-    def get_wavelet_train(self):
-        return self.wavelet_train
-
-
-    def get_wavelet_list(self):
-        return self.wavelet_list
-
-
     def get_wavelet_params(self):
         return self.wavelet_params
-    
-    
-    def get_amp(self):
-        return self.amp
 
 
     def get_config_name(self):
@@ -299,3 +354,12 @@ class WaveletGenerator:
 
     def get_log_params(self):
         return self.log_params
+    
+
+    def get_all_params(self):
+        all_params = {
+            "wavelet_params": self.wavelet_params,
+            "config_name": self.config_name,
+            "log_params": self.log_params
+        }
+        return all_params

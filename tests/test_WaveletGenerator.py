@@ -5,6 +5,7 @@ if __name__ == '__main__':
     from os import getenv
     from dotenv import load_dotenv
     from pathlib import Path
+    from spectramelt.Analog import Analog
     from spectramelt.InputSignal import InputSignal
     from spectramelt.LocalOscillator import LocalOscillator
     from spectramelt.PulseGenerator import PulseGenerator
@@ -24,14 +25,20 @@ if __name__ == '__main__':
     display_mixed_signals = True
     display_lpf_signals = True
 
+    analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
+    analog_sig_1 = analog_1.create_analog()
+    
+
+    real_time_1 = analog_sig_1.time
+
+    real_freq_1 = analog_sig_1.frequency
+    total_time_1 = analog_sig_1.total_time
+    sim_freq_1 = analog_1.get_time_params().get('sim_freq')
+
     input_signal_1 = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
-    input_time_params_1 = input_signal_1.get_time_params()
-    real_time_1 = input_signal_1.get_analog_time()
-    real_input_1 = input_signal_1.get_input_signal()
-    real_freq_1 = input_signal_1.get_analog_frequency()
-    total_time_1 = input_signal_1.get_analog_signal_params().get('total_time')
-    sim_freq_1 = input_signal_1.get_time_params().get('sim_freq')
-    real_input_freq_1 = fftshift(np.abs(fft(real_input_1))) / (sim_freq_1*total_time_1)
+    real_input_1 = input_signal_1.create_input_signal(real_time=real_time_1)
+    real_input_time_1 = real_input_1.input_signal
+    real_input_freq_1 = fftshift(np.abs(fft(real_input_1.input_signal))) / (sim_freq_1*total_time_1)
     
     input_signal_2 = InputSignal()
     input_time_params_2 = input_signal_2.get_time_params()
@@ -49,7 +56,7 @@ if __name__ == '__main__':
     
     if display_input_signals:
         fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-        axes[0,0].plot(real_time_1, real_input_1)
+        axes[0,0].plot(real_time_1, real_input_time_1)
         axes[0,0].set_title("Time (File)")
         axes[0,0].set_xlim(-0.0002, 0.0002)
         axes[0,1].plot(real_freq_1, real_input_freq_1)

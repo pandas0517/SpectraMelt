@@ -7,7 +7,7 @@ import numpy as np
 
 
 @dataclass(frozen=True)
-class AnalogTimeData:
+class AnalogData:
     sim_freq: float  | None = None         # points per second
     adj_spacing: float | None = None       # spacing between points (1/fs)
     total_time: float | None = None        # duration of the signal
@@ -16,7 +16,7 @@ class AnalogTimeData:
     frequency: np.ndarray | None = None    # frequency vector
 
 
-class AnalogTime:
+class Analog:
     def __init__(self,
                  all_params=None,
                  time_params=None,
@@ -49,9 +49,9 @@ class AnalogTime:
         log_params = all_params.get('log_params', None)
         config_name = all_params.get('config_name', None)
         if time_params is None:
-            config_name = "Default_Input_Config"
+            config_name = "Default_Analog_Config"
         else:
-            config_name = all_params.get('config_name', "Input_Config_1")
+            config_name = all_params.get('config_name', "Analog_Config_1")
         
         self.set_log_params(log_params)    
         self.logger = None
@@ -96,7 +96,7 @@ class AnalogTime:
     # Core functional methods
     # -------------------------------
     
-    def create_analog(self):
+    def create_analog(self) -> AnalogData:
         sim_freq = self.time_params.get('sim_freq', 1000000)
         adc_samp_freq = self.time_params.get('adc_samp_freq', None)
         time_range = tuple(self.time_params.get('time_range', (0, 1)))
@@ -118,7 +118,7 @@ class AnalogTime:
         time = np.linspace(time_range[0], time_range[1], num_points, endpoint=False)
         frequency = np.linspace(-points_per_second/2, points_per_second/2, num_points, endpoint=False)
         
-        return AnalogTimeData(
+        return AnalogData(
             sim_freq=points_per_second,
             adj_spacing=1 / points_per_second,
             total_time=total_time,

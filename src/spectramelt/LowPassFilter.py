@@ -1,6 +1,14 @@
 import numpy as np
 from scipy import signal
+from dataclasses import dataclass
 from .utils import load_config_from_json, get_logger
+
+
+@dataclass(frozen=True)
+class LPFResult:
+    filtered: np.ndarray
+    noise: np.ndarray | None = None
+
 
 class LowPassFilter:
     """
@@ -11,8 +19,7 @@ class LowPassFilter:
     """
 
     def __init__(self,
-                 signal_in=None,
-                 real_time=None,
+                 all_params=None,
                  lpf_params=None,
                  log_params=None,
                  config_name=None,
@@ -30,14 +37,32 @@ class LowPassFilter:
             Path to configuration file containing filter settings.
         """
         if config_file_path is not None:
-            self.set_config_from_file(config_file_path)
+            all_params = load_config_from_json(config_file_path)
+        elif all_params is None:
+            all_params = {
+                "lpf_params": lpf_params,
+                "config_name": config_name,
+                "log_params": log_params
+            }
+
+        self.set_all_params(all_params)
+
+    # -------------------------------
+    # Setters
+    # -------------------------------
+
+    def set_all_params(self, all_params=None):
+        if all_params is None:
+            all_params = {}
+
+        lpf_params = all_params.get('lpf_params', None)
+        log_params = all_params.get('log_params', None)
+        if lpf_params is None:
+            config_name = "Default_LPF_Config"
         else:
-            self.set_lpf_params(lpf_params)
-            if lpf_params is None:
-                config_name = "Default_LPF_Config"
-            self.set_config_name(config_name)
-            self.set_log_params(log_params)
+            config_name = all_params.get('config_name', "LPF_Config_1")
         
+        self.set_log_params(log_params)    
         self.logger = None
         logging_enabled = self.log_params.get('enabled', True)
         if logging_enabled:
@@ -45,32 +70,14 @@ class LowPassFilter:
             level = self.log_params.get('level', "INFO")
             console = self.log_params.get('console', True)
             self.logger = get_logger(self.__class__.__name__, log_file, level, console)
-            if config_file_path is not None:
-                self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-
-        self.signal_out = None
-        if signal_in is not None and real_time is not None:
-            self.signal_out = self.apply_filter(signal_in, real_time)
-
-    # -------------------------------
-    # Setters
-    # -------------------------------
-
-    def set_config_from_file(self, config_file_path):
-        lpf_config = load_config_from_json(config_file_path)
-        lpf_params = lpf_config.get('lpf_params', None)
-        config_name = lpf_config.get('config_name', "LPF_Config_1")
-        log_params = lpf_config.get('log_params', None)
         
-        if lpf_params is None:
-            config_name = "Default_LPF_Config"
-
         self.set_lpf_params(lpf_params)
         self.set_config_name(config_name)
-        self.set_log_params(log_params)
+
 
     def set_config_name(self, config_name):
         self.config_name = config_name
+
         
     def set_log_params(self, log_params=None):
         if log_params is None:
@@ -80,7 +87,8 @@ class LowPassFilter:
                 "level": "INFO",
                 "console": True
             }
-        self.log_params = log_params 
+        self.log_params = log_params
+
 
     def set_lpf_params(self, lpf_params=None):
         if lpf_params is None:
@@ -94,6 +102,7 @@ class LowPassFilter:
                 "noise_std": 0.0,
                 "seed": None
             }
+
         self.rng = np.random.default_rng(lpf_params.get('seed', None))
         self.lpf_params = lpf_params
 
@@ -101,7 +110,8 @@ class LowPassFilter:
     # Core Functional Methods
     # -------------------------------
 
-    def apply_filter(self, signal_in: np.ndarray, real_time: np.ndarray) -> np.ndarray:
+    def apply_filter(self, signal_in: np.ndarray, real_time: np.ndarray,
+                     return_effects=False) -> LPFResult:
         """Apply a low-pass filter with selectable implementation ('sos' or 'filtfilt')."""
 
         # --- Determine sampling frequency from the time vector ---
@@ -152,12 +162,16 @@ class LowPassFilter:
             self.logger.error("Filter mode must be either 'sos', 'filtfilt', or 'lfilter'")
             raise ValueError("Filter mode must be either 'sos', 'filtfilt', or 'lfilter'")
 
+        noise = None
         # --- Optional noise injection ---
         if noise_std > 0:
-            filtered += self.rng.normal(0, noise_std, filtered.shape)
+            noise = self.rng.normal(0, noise_std, filtered.shape)
+            filtered += noise
 
-        return filtered
-
+        return LPFResult(
+            filtered=filtered,
+            noise=noise if return_effects else None
+        )
 
     # -------------------------------
     # Getters
@@ -166,11 +180,19 @@ class LowPassFilter:
     def get_lpf_params(self):
         return self.lpf_params
 
-    def get_signal_out(self):
-        return self.signal_out
 
     def get_config_name(self):
         return self.config_name
-    
+
+
     def get_log_params(self):
         return self.log_params
+    
+
+    def get_all_params(self):
+        all_params = {
+            "lpf_params": self.lpf_params,
+            "config_name": self.config_name,
+            "log_params": self.log_params
+        }
+        return all_params
