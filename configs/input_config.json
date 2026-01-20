@@ -20,7 +20,7 @@
     },
     "time_params": {
         "time_range": [-0.006, 0.006],
-        "adc_samp_freq": null,
+        "adc_samp_freq": 100000,
         "sim_freq": 10000000
     },
     "log_params": {

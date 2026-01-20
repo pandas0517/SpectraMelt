@@ -62,13 +62,13 @@ class LocalOscillator:
                 "log_params": log_params
             }
 
-        self.set_all_params(all)
+        self.set_all_params(all_params)
  
     # -------------------------------
     # Setters
     # -------------------------------
        
-    def set_all_params(self, all_params):
+    def set_all_params(self, all_params=None):
         if all_params is None:
             all_params = {}
         
