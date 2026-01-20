@@ -1,12 +1,6 @@
 import numpy as np
-from dataclasses import dataclass
+from .results import MixerResult
 from .utils import load_config_from_json, get_logger
-
-
-@dataclass(frozen=True)
-class MixerResult:
-    mixed: np.ndarray
-    noise: np.ndarray | None = None
 
 
 class Mixer:

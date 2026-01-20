@@ -1,50 +1,13 @@
 import numpy as np
-from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 from .utils import load_config_from_json, get_logger
-
-
-# ============================================================
-# === Signal & Result Containers
-# ============================================================
-
-@dataclass(frozen=True)
-class ConditionedSignal:
-    signal: np.ndarray
-    time: np.ndarray
-    freq: np.ndarray
-    total_time: float
-
-
-@dataclass(frozen=True)
-class SampleHoldSignal:
-    output_signal: np.ndarray
-    indices: np.ndarray
-    sampled_values: np.ndarray
-
-
-@dataclass(frozen=True)
-class QuantizedSignal:
-    quantized_values: np.ndarray
-    mid_times: np.ndarray
-    adc_indices: np.ndarray
-    sampled_frequency: np.ndarray
-
-
-@dataclass(frozen=True)
-class ADCEffects:
-    jitter_indices: Optional[np.ndarray] = None
-    hold_noise: Optional[List[float]] = None
-    thermal_noise: Optional[List[float]] = None
-
-
-@dataclass(frozen=True)
-class ADCResult:
-    quantized: QuantizedSignal
-    conditioned: Optional[ConditionedSignal] = None
-    sample_hold: Optional[SampleHoldSignal] = None
-    effects: Optional[ADCEffects] = None
-
+from .results import (
+    ConditionedSignal,
+    SampleHoldSignal,
+    QuantizedSignal,
+    ADCEffects,
+    ADCResult
+)
 
 # ============================================================
 # === ADC Core

@@ -2,18 +2,8 @@ from .utils import (
     load_config_from_json,
     get_logger,
 )
-from dataclasses import dataclass
+from .results import AnalogData
 import numpy as np
-
-
-@dataclass(frozen=True)
-class AnalogData:
-    sim_freq: float  | None = None         # points per second
-    adj_spacing: float | None = None       # spacing between points (1/fs)
-    total_time: float | None = None        # duration of the signal
-    num_points: int | None = None          # number of samples
-    time: np.ndarray | None = None         # time vector
-    frequency: np.ndarray | None = None    # frequency vector
 
 
 class Analog:

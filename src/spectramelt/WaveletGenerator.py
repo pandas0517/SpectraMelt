@@ -1,21 +1,9 @@
 import numpy as np
-from dataclasses import dataclass
-from typing import Optional
+from .results import (
+    WaveletEffects,
+    WaveletResult
+)
 from .utils import load_config_from_json, get_logger
-
-
-@dataclass(frozen=True)
-class WaveletEffects:
-    amp_noise: np.ndarray | None = None
-    drift: float | None = None
-
-
-@dataclass(frozen=True)
-class WaveletResult:
-    wavelet_train: np.ndarray | None = None
-    components: list[np.ndarray] | None = None
-    effects: Optional[WaveletEffects] | None = None
-    amp: float | None = None
 
 
 class WaveletGenerator:

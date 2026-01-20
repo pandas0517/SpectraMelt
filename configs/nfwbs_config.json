@@ -1,8 +1,6 @@
 {
     "config_name": "NFWBS_Config_1",
-    "store_internal_sigs": true,
     "dict_type": "real",
-    "create_dict": true,
     "freq_modes": {
         "output": [
             "mag",
@@ -64,7 +62,17 @@
         "stability_threshold": 0.01,
         "seed": null
     },
-    "mixer_params": {
+    "wbf_params": {
+        "filter_type": "butter",
+        "order": 6,
+        "cutoff_freq": 200000,
+        "mode": "lfilter",
+        "ripple_db": 1.0,
+        "atten_db": 40.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "mixer_1_params": {
         "conversion_gain": 1.0,
         "lo_leakage": 0.0,
         "rf_leakage": 0.0,
@@ -72,7 +80,7 @@
         "noise_std": 0.0,
         "seed": null
     },
-    "lo_params": {
+    "lo_1_params": {
         "amp": 1,
         "freq": 100000,
         "phase": 0,
@@ -86,7 +94,7 @@
         "harmonic_distortion": 0.0,
         "seed": null
     },
-    "lpf_params": {
+    "lpf_1_params": {
         "filter_type": "butter",
         "order": 6,
         "cutoff_freq": 50000,
@@ -96,17 +104,50 @@
         "noise_std": 0.0,
         "seed": null
     },
-    "wbf_params": {
+    "pulse_1_params": {
+        "pulse_width": 1e-6,
+        "amplitude": 1.0,
+        "jitter_std": 0.0,
+        "amp_noise_std": 0.0,
+        "rise_time": 0.0,
+        "fall_time": 0.0,
+        "droop_coeff": 0.0,
+        "baseline_offset": 0.0,
+        "seed": null             
+    },
+    "mixer_2_params": {
+        "conversion_gain": 1.0,
+        "lo_leakage": 0.0,
+        "rf_leakage": 0.0,
+        "nonlinearity_coeff": 0.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "lo_2_params": {
+        "amp": 1,
+        "freq": 100000,
+        "phase": 0,
+        "mod_enabled": false,
+        "phase_delta": 2000,
+        "phase_freq": 2500,
+        "phase_offset": 0,
+        "phase_noise_std": 0.0,
+        "amp_noise_std": 0.0,
+        "freq_drift_ppm": 0.0,
+        "harmonic_distortion": 0.0,
+        "seed": null
+    },
+    "lpf_2_params": {
         "filter_type": "butter",
         "order": 6,
-        "cutoff_freq": 200000,
+        "cutoff_freq": 50000,
         "mode": "lfilter",
         "ripple_db": 1.0,
         "atten_db": 40.0,
         "noise_std": 0.0,
         "seed": null
     },
-    "pulse_params": {
+    "pulse_2_params": {
         "pulse_width": 1e-6,
         "amplitude": 1.0,
         "jitter_std": 0.0,

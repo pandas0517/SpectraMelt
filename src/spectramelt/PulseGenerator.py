@@ -1,19 +1,9 @@
 import numpy as np
-from dataclasses import dataclass
+from .results import (
+    PGEffects,
+    PGResult
+)
 from .utils import load_config_from_json, get_logger
-from typing import Optional
-
-
-@dataclass(frozen=True)
-class PGEffects:
-    jitter: np.ndarray | None = None
-    amp_noise: list[float] | None = None
-
-
-@dataclass(frozen=True)
-class PGResult:
-    pulses: np.ndarray
-    effects: Optional[PGEffects] | None = None
 
 
 class PulseGenerator:

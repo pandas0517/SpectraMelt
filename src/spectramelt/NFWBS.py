@@ -6,8 +6,8 @@ from .utils import (
 )
 from .results import (
     WBFResult,
-    NYFRResult,
-    NYFRDictionary
+    NFWBSResult,
+    NFWBSDictionary
 )
 from scipy.linalg import dft
 from .LowPassFilter import LowPassFilter
@@ -15,20 +15,26 @@ from .PulseGenerator import PulseGenerator
 from .LocalOscillator import LocalOscillator
 from .ADC import ADC
 from .Mixer import Mixer
+from .WaveletGenerator import WaveletGenerator
 
 
-class NYFR:
+class NFWBS:
     """
     """
     def __init__(self,
                  all_params=None,
                  freq_modes=None,
                  outputset_params=None,
-                 lo_params=None,
-                 pulse_params=None,
-                 mixer_params=None,
                  wbf_params=None,
-                 lpf_params=None,
+                 lo_1_params=None,
+                 pulse_1_params=None,
+                 mixer_1_params=None,
+                 lpf_1_params=None,
+                 lo_2_params=None,
+                 pulse_2_params=None,
+                 wavelet_params=None,
+                 mixer_2_params=None,
+                 lpf_2_params=None,
                  adc_params=None,
                  log_params=None,
                  dict_type="real",
@@ -45,12 +51,17 @@ class NYFR:
             all_params = {
                 "freq_modes": freq_modes,
                 "outputset_params": outputset_params,
-                "lo_params": lo_params,
-                "adc_params": adc_params,
-                "pulse_params": pulse_params,
-                "lpf_params": lpf_params,
                 "wbf_params": wbf_params,
-                "mixer_params": mixer_params,
+                "lo_1_params": lo_1_params,
+                "pulse_1_params": pulse_1_params,
+                "mixer_1_params": mixer_1_params,
+                "lpf_1_params": lpf_1_params,
+                "lo_2_params": lo_2_params,
+                "pulse_2_params": pulse_2_params,
+                "wavelet_params": wavelet_params,
+                "mixer_2_params": mixer_2_params,
+                "lpf_2_params": lpf_2_params,                
+                "adc_params": adc_params,
                 "config_name": config_name,
                 "log_params": log_params,
                 "dict_type": dict_type
@@ -71,24 +82,34 @@ class NYFR:
 
         freq_modes = all_params.get('freq_modes', None)
         outputset_params = all_params.get('outputset_params', None)
-        lo_params = all_params.get('lo_params', None)
-        adc_params = all_params.get('adc_params', None)
-        pulse_params = all_params.get('pulse_params', None)
-        lpf_params = all_params.get('lpf_params', None)
         wbf_params = all_params.get('wbf_params', None)
-        mixer_params = all_params.get('mixer_params', None)
+        lo_1_params = all_params.get('lo_1_params', None)
+        pulse_1_params = all_params.get('pulse_1_params', None)
+        mixer_1_params = all_params.get('mixer_1_params', None)
+        lpf_1_params = all_params.get('lpf_1_params', None)
+        lo_2_params = all_params.get('lo_2_params', None)
+        pulse_2_params = all_params.get('pulse_2_params', None)
+        wavelet_params = all_params.get('wavelet_params', None)
+        mixer_2_params = all_params.get('mixer_2_params', None)
+        lpf_2_params = all_params.get('lpf_2_params', None)
+        adc_params = all_params.get('adc_params', None)
         dict_type = all_params.get('dict_type', "real")
         log_params = all_params.get('log_params', None)
         
-        if ( lo_params is None and 
+        if ( lo_1_params is None and 
             adc_params is None and
-            pulse_params is None and
-            lpf_params is None and
+            pulse_1_params is None and
+            lpf_1_params is None and
             wbf_params is None and
-            mixer_params is None ):
-            config_name = "Default_NYFR_Config"
+            mixer_1_params is None and
+            lo_2_params is None and
+            pulse_2_params is None and
+            wavelet_params is None and
+            mixer_2_params is None and
+            lpf_2_params is None):
+            config_name = "Default_NFWBS_Config"
         else:
-            config_name = all_params.get('config_name', "NYFR_Config_1")
+            config_name = all_params.get('config_name', "NFWBS_Config_1")
         
         self.set_log_params(log_params)    
         self.logger = None
@@ -101,19 +122,24 @@ class NYFR:
 
         self.set_freq_modes(freq_modes)
         self.set_outputset_params(outputset_params)
-        self.set_lo_params(lo_params)
-        self.set_pulse_params(pulse_params)
-        self.set_dict_type(dict_type)
-        self.set_adc_params(adc_params)
-        self.set_config_name(config_name)
-        self.set_lpf_params(lpf_params)
         self.set_wbf_params(wbf_params)
-        self.set_mixer_params(mixer_params)
+        self.set_lo_1_params(lo_1_params)
+        self.set_pulse_1_params(pulse_1_params)
+        self.set_mixer_1_params(mixer_1_params)
+        self.set_lpf_2_params(lpf_2_params)
+        self.set_lo_2_params(lo_2_params)
+        self.set_pulse_2_params(pulse_2_params)
+        self.set_wavelet_params(wavelet_params)
+        self.set_mixer_2_params(mixer_2_params)
+        self.set_lpf_2_params(lpf_2_params)        
+        self.set_adc_params(adc_params)
+        self.set_dict_type(dict_type)
+        self.set_config_name(config_name)
         
     
     def set_config_name(self, config_name):
         if config_name is None:
-            config_name = "NYFR_Config_1"
+            config_name = "NFWBS_Config_1"
         self.config_name = config_name
         
     
@@ -181,28 +207,48 @@ class NYFR:
         self.outputset_params = outputset_params
         
     
-    def set_lo_params(self, lo_params):         
-        self.lo_params = lo_params
+    def set_lo_1_params(self, lo_params):         
+        self.lo_1_params = lo_params
+        
+        
+    def set_lo_2_params(self, lo_params):         
+        self.lo_2_params = lo_params
         
     
     def set_adc_params(self, adc_params):        
         self.adc_params = adc_params
 
     
-    def set_pulse_params(self, pulse_params):
-        self.pulse_params = pulse_params
+    def set_pulse_1_params(self, pulse_params):
+        self.pulse_1_params = pulse_params
+        
+
+    def set_pulse_2_params(self, pulse_params):
+        self.pulse_2_params = pulse_params
 
     
-    def set_lpf_params(self, lpf_params):
-        self.lpf_params = lpf_params
+    def set_lpf_1_params(self, lpf_params):
+        self.lpf_1_params = lpf_params
     
-    
+
+    def set_lpf_2_params(self, lpf_params):
+        self.lpf_2_params = lpf_params
+
+  
     def set_wbf_params(self, wbf_params):
         self.wbf_params = wbf_params
  
     
-    def set_mixer_params(self, mixer_params):  
-        self.mixer_params = mixer_params
+    def set_mixer_1_params(self, mixer_params):  
+        self.mixer_1_params = mixer_params
+        
+
+    def set_mixer_2_params(self, mixer_params):  
+        self.mixer_2_params = mixer_params
+        
+        
+    def set_wavelet_params(self, wavelet_params):
+        self.wavelet_params = wavelet_params
               
     # -------------------------------
     # Core functional methods
@@ -237,7 +283,7 @@ class NYFR:
             R, S, PSI = self._create_real_dict(R_init, M_index, dft_matrix, lo_phase_mod_mid, K_band, Zones)
 
         # Final dictionary multiplication
-        return NYFRDictionary(
+        return NFWBSDictionary(
             dictionary=R @ S @ PSI,
             zones=Zones,
             k_bands=K_band
@@ -309,17 +355,27 @@ class NYFR:
     def create_output_signal(self, input_signal, real_time,
                              return_internal=False,
                              return_wbf=False,
-                             return_lo=False,
-                             return_pulse=False,
-                             return_mixed=False,
-                             return_lpf=False,
+                             return_lo_1=False,
+                             return_pulse_1=False,
+                             return_mixed_1=False,
+                             return_lpf_1=False,
+                             return_lo_2=False,
+                             return_pulse_2=False,
+                             return_wavelet=False,
+                             return_mixed_2=False,
+                             return_lpf_2=False,
                              return_effects=False):
         
-        return_wbf   = return_wbf   or return_internal
-        return_lo    = return_lo    or return_internal
-        return_pulse = return_pulse or return_internal
-        return_mixed = return_mixed or return_internal
-        return_lpf   = return_lpf   or return_internal
+        return_wbf     = return_wbf     or return_internal
+        return_lo_1    = return_lo_1    or return_internal
+        return_pulse_1 = return_pulse_1 or return_internal
+        return_mixed_1 = return_mixed_1 or return_internal
+        return_lpf_1   = return_lpf_1   or return_internal
+        return_lo_2    = return_lo_2    or return_internal
+        return_pulse_2 = return_pulse_2 or return_internal
+        return_wavelet = return_wavelet or return_internal
+        return_mixed_2 = return_mixed_2 or return_internal
+        return_lpf_2   = return_lpf_2   or return_internal
 
         wbf = LowPassFilter(lpf_params=self.wbf_params)
         if self.wbf_params is None:
@@ -327,46 +383,80 @@ class NYFR:
         wbf_signal = wbf.apply_filter(input_signal, real_time,
                                       return_effects=return_effects)
         
-        lo = LocalOscillator(lo_params=self.lo_params)
-        if self.lo_params is None:
-            self.lo_params = lo.get_lo_params()
-        lo_signal = lo.generate_signal(real_time,
-                                       return_pre_start=True,
-                                       return_phase_mod=True,
-                                       return_effects=return_effects)
+        lo_1 = LocalOscillator(lo_params=self.lo_1_params)
+        if self.lo_1_params is None:
+            self.lo_1_params = lo_1.get_lo_params()
+        lo_signal_1 = lo_1.generate_signal(real_time,
+                                           return_pre_start=True,
+                                           return_phase_mod=True,
+                                           return_effects=return_effects)
         
-        lo_pre_start = lo_signal.pre_start_lo
-        lo_phase_mod = lo_signal.phase_mod
+        lo_pre_start_1 = lo_signal_1.pre_start_lo
+        lo_phase_mod = lo_signal_1.phase_mod
         
-        pulse_gen = PulseGenerator(pulse_params=self.pulse_params)
-        if self.pulse_params is None:
-            self.pulse_params = pulse_gen.get_pulse_params()
+        pulse_gen_1 = PulseGenerator(pulse_params=self.pulse_1_params)
+        if self.pulse_1_params is None:
+            self.pulse_1_params = pulse_gen_1.get_pulse_params()
         
-        pulse_signal = pulse_gen.generate(lo_signal.lo, real_time, lo_pre_start,
+        pulse_signal_1 = pulse_gen_1.generate(lo_signal_1.lo, real_time, lo_pre_start_1,
+                                              return_effects=return_effects)
+        
+        mixed_1 = Mixer(mixer_params=self.mixer_1_params)
+        if self.mixer_1_params is None:
+            self.mixer_1_params = mixed_1.get_mixer_params()
+        mixed_signal_1 = mixed_1.mix(wbf_signal.filtered, pulse_signal_1.pulses,
+                                     return_effects=return_effects)
+        
+        if self.lpf_1_params is None:
+            self.lpf_1_params = self.wbf_params.copy()
+            self.lpf_1_params['cutoff_freq'] = 100
+        lpf_1 = LowPassFilter(lpf_params=self.lpf_1_params)
+        lpf_signal_1 = lpf_1.apply_filter(mixed_signal_1.mixed, real_time,
                                           return_effects=return_effects)
         
-        mixed = Mixer(mixer_params=self.mixer_params)
-        if self.mixer_params is None:
-            self.mixer_params = mixed.get_mixer_params()
-         
-        mixed_signal = mixed.mix(wbf_signal.filtered, pulse_signal.pulses,
-                                 return_effects=return_effects)
+        lo_2 = LocalOscillator(lo_params=self.lo_2_params)
+        if self.lo_2_params is None:
+            self.lo_2_params = lo_2.get_lo_params()
+        lo_signal_2 = lo_2.generate_signal(real_time,
+                                           return_pre_start=True,
+                                           return_effects=return_effects)
         
-        if self.lpf_params is None:
-            self.lpf_params = self.wbf_params.copy()
-            self.lpf_params['cutoff_freq'] = 100
-        lpf = LowPassFilter(lpf_params=self.lpf_params)
-        lpf_signal = lpf.apply_filter(mixed_signal.mixed, real_time,
-                                      return_effects=return_effects)
+        lo_pre_start_2 = lo_signal_2.pre_start_lo
+        
+        pulse_gen_2 = PulseGenerator(pulse_params=self.pulse_2_params)
+        if self.pulse_2_params is None:
+            self.pulse_2_params = pulse_gen_2.get_pulse_params()
+        
+        pulse_signal_2 = pulse_gen_2.generate(lo_signal_2.lo, real_time, lo_pre_start_2,
+                                              return_effects=return_effects)
+        
+        wavelet_gen = WaveletGenerator(wavelet_params=self.wavelet_params)
+        if self.wavelet_params is None:
+            self.wavelet_params = wavelet_gen.get_wavelet_params()
+        wavelet_sig = wavelet_gen.generate_wavelet_train(pulse_signal_2.pulses, real_time,
+                                                         return_effects=return_effects)
+        
+        mixed_2 = Mixer(mixer_params=self.mixer_2_params)
+        if self.mixer_2_params is None:
+            self.mixer_2_params = mixed_2.get_mixer_params()
+        mixed_signal_2 = mixed_2.mix(lpf_signal_1.filtered, wavelet_sig.wavelet_train,
+                                     return_effects=return_effects)
+        
+        if self.lpf_2_params is None:
+            self.lpf_2_params = self.wbf_params.copy()
+            self.lpf_2_params['cutoff_freq'] = 100
+        lpf_2 = LowPassFilter(lpf_params=self.lpf_2_params)
+        lpf_signal_2 = lpf_2.apply_filter(mixed_signal_2.mixed, real_time,
+                                          return_effects=return_effects)        
         
         adc = ADC(adc_params=self.adc_params)
         if self.adc_params is None:
             self.adc_params = adc.get_adc_params()
 
-        adc_signal = adc.analog_to_digital(lpf_signal.filtered, real_time,
-                                            return_conditioned=True,
-                                            return_sample_hold=True,
-                                            return_effects=return_effects)
+        adc_signal = adc.analog_to_digital(lpf_signal_2.filtered, real_time,
+                                           return_conditioned=True,
+                                           return_sample_hold=True,
+                                           return_effects=return_effects)
 
         conditioned_time = adc_signal.conditioned.time
         
@@ -419,13 +509,18 @@ class NYFR:
             # Extract the corresponding lo_phase_mod values
             lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
 
-        return NYFRResult(
+        return NFWBSResult(
             adc_signal=adc_signal,
             wbf_signal=all_wbf_signals if return_wbf else None,
-            lo_signal=lo_signal if return_lo else None,
-            pulse_signal=pulse_signal if return_pulse else None,
-            mixed_signal=mixed_signal if return_mixed else None,
-            lpf_signal=lpf_signal if return_lpf else None,
+            lo_1_signal=lo_signal_1 if return_lo_1 else None,
+            pulse_1_signal=pulse_signal_1 if return_pulse_1 else None,
+            mixed_1_signal=mixed_signal_1 if return_mixed_1 else None,
+            lpf_1_signal=lpf_signal_1 if return_lpf_1 else None,
+            lo_2_signal=lo_signal_2 if return_lo_2 else None,
+            pulse_2_signal=pulse_signal_2 if return_pulse_2 else None,
+            wavelet_signal=wavelet_sig if return_wavelet else None,
+            mixed_2_signal=mixed_signal_2 if return_mixed_2 else None,
+            lpf_2_signal=lpf_signal_2 if return_lpf_2 else None,
             lo_phase_mod_mid=lo_phase_mod_mid
         )
     

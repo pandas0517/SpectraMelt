@@ -3,24 +3,11 @@ from .utils import (
     get_logger,
     filter_valid_names
 )
-from dataclasses import dataclass
+from .results import (
+    InputSignalEffects,
+    InputSignalResult
+)
 import numpy as np
-from typing import Optional
-
-
-@dataclass(frozen=True)
-class InputSignalEffects:
-    noise: np.ndarray | None = None
-    delay: tuple[float, ...] | None = None
-    echo_att: tuple[float, ...] | None = None
-    local_doppler: tuple[float, ...] | None = None
-    phase_inversion: tuple[bool, ...] | None = None
-
-
-@dataclass(frozen=True)
-class InputSignalResult:
-    input_signal: np.ndarray | None = None
-    effects: InputSignalEffects | None = None
 
 
 class InputSignal:

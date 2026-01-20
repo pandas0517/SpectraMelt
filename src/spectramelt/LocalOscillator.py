@@ -1,23 +1,9 @@
 import numpy as np
-from dataclasses import dataclass
-from typing import Tuple, Union
+from .results import (
+    LOEffects,
+    LOResult
+)
 from .utils import load_config_from_json, get_logger
-
-
-@dataclass(frozen=True)
-class LOEffects:
-    phase_noise: np.ndarray | None = None
-    pre_phase_noise: np.ndarray | None = None
-    amp_noise: np.ndarray | None = None
-    pre_amp_noise: np.ndarray | None = None
-
-
-@dataclass(frozen=True)
-class LOResult:
-    lo: np.ndarray
-    phase_mod: np.ndarray | None = None
-    pre_start_lo: float | None = None
-    effects: LOEffects | None = None
     
 
 class LocalOscillator:

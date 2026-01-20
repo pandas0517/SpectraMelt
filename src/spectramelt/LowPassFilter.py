@@ -1,13 +1,7 @@
 import numpy as np
 from scipy import signal
-from dataclasses import dataclass
+from .results import LPFResult
 from .utils import load_config_from_json, get_logger
-
-
-@dataclass(frozen=True)
-class LPFResult:
-    filtered: np.ndarray
-    noise: np.ndarray | None = None
 
 
 class LowPassFilter:

@@ -41,7 +41,7 @@ if __name__ == '__main__':
     
     analog_2 = Analog()
     analog_time_params_2 = analog_2.get_time_params()
-    analog_time_params_2["time_range"] = (0, 100)
+    analog_time_params_2["time_range"] = (0, 10)
     analog_time_params_2["sim_freq"] = 100000
     analog_2.set_time_params(analog_time_params_2)
     analog_sig_2 = analog_2.create_analog()
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     
     lo_2 = LocalOscillator()
     lo_params_2 = lo_2.get_lo_params()
-    lo_params_2["freq"] = 0.1
+    lo_params_2["freq"] = 1
     lo_params_2["mod_enabled"] = False
     lo_2.set_lo_params(lo_params_2)
     lo_signal_2 = lo_2.generate_signal(real_time_2)
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     pulse_gen_2 = PulseGenerator()
     pulse_params_2 = pulse_gen_2.get_pulse_params()
-    pulse_params_2["pulse_width"] = 0.001
+    pulse_params_2["pulse_width"] = 0.05
     pulse_gen_2.set_pulse_params(pulse_params_2)
     pulse_signal_2 = pulse_gen_2.generate(lo_signal_2.lo, real_time_2, lo_pre_start_2)
     lo_freq_2 = fftshift(np.abs(fft(lo_signal_2.lo))) / (sim_freq_2*total_time_2)
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     
     wavelet_gen_1 = WaveletGenerator(config_file_path=Path(getenv('NFWBS_CONF')))
     # start = time.time()
-    wavelet_sig_1 = wavelet_gen_1.generate_wavelet_train_gpu(pulse_signal_1.pulses, real_time_1)
+    wavelet_sig_1 = wavelet_gen_1.generate_wavelet_train(pulse_signal_1.pulses, real_time_1)
     # stop = time.time()
     # wavelet_gen_gpu_time = stop - start
     # print(wavelet_gen_gpu_time)
@@ -145,9 +145,9 @@ if __name__ == '__main__':
     
     wavelet_gen_2 = WaveletGenerator()
     wavelet_param_2 = wavelet_gen_2.get_wavelet_params()
-    wavelet_param_2["center_freq"] = 35
+    wavelet_param_2["center_freq"] = 500
     wavelet_gen_2.set_wavelet_params(wavelet_param_2)
-    wavelet_sig_2 = wavelet_gen_2.generate_wavelet_train_gpu(pulse_signal_2.pulses, real_time_2)
+    wavelet_sig_2 = wavelet_gen_2.generate_wavelet_train(pulse_signal_2.pulses, real_time_2)
     wavelet_freq_2 = fftshift(np.abs(fft(wavelet_sig_2.wavelet_train))) / (sim_freq_2*total_time_2)
     
     if display_wavelet_signals:
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         axes[1,0].set_xlim(0, 10)
         axes[1,1].plot(real_freq_2, wavelet_freq_2)
         axes[1,1].set_title("Frequency Magnitude (Default)")
-        # axes[1,1].set_xlim(-120, 120)
+        # axes[1,1].set_xlim(4900, 5100)
         fig.suptitle("Gabor Wavelet Train Signals")
         fig.tight_layout()
         plt.show()
@@ -173,7 +173,7 @@ if __name__ == '__main__':
     mixed_freq_1 = fftshift(np.abs(fft(mixed_signal_1.mixed))) / (sim_freq_1*total_time_1)
 
     mixed_2 = Mixer()
-    mixed_signal_2 = mixed_2.mix(real_input_2, wavelet_sig_2)
+    mixed_signal_2 = mixed_2.mix(real_input_2.input_signal, wavelet_sig_2.wavelet_train)
     mixed_freq_2 = fftshift(np.abs(fft(mixed_signal_2.mixed))) / (sim_freq_2*total_time_2)
     
     if display_mixed_signals:
@@ -186,36 +186,39 @@ if __name__ == '__main__':
         axes[0,1].set_xlim(-200000, 200000)
         axes[1,0].plot(real_time_2, mixed_signal_2.mixed.real)
         axes[1,0].set_title("Time (Default)")
-        axes[1,0].set_xlim(0, 0.05)
+        axes[1,0].set_xlim(0, 10)
         axes[1,1].plot(real_freq_2, mixed_freq_2)
         axes[1,1].set_title("Frequency Magnitude (Default)")
-        axes[1,1].set_xlim(-120, 120)
+        # axes[1,1].set_xlim(4900, 5100)
         fig.suptitle("Mixed Gabor Wavelet Train Signals")
         fig.tight_layout()
         plt.show()
         
-    lpf_1 = LowPassFilter(mixed_1, config_file_path=Path(getenv('NFWBS_CONF')))
-    lpf_signal_1 = lpf_1.get_signal_out()
-    lpf_freq_1 = fftshift(np.abs(fft(lpf_signal_1))) / (sim_freq_1*total_time_1)
+    lpf_1 = LowPassFilter(config_file_path=Path(getenv('NFWBS_CONF')))
+    lpf_signal_1 = lpf_1.apply_filter(mixed_signal_1.mixed, real_time_1)
+    lpf_freq_1 = fftshift(np.abs(fft(lpf_signal_1.filtered))) / (sim_freq_1*total_time_1)
     
-    lpf_2 = LowPassFilter(mixed_2)
-    lpf_signal_2 = lpf_2.get_signal_out()
-    lpf_freq_2 = fftshift(np.abs(fft(lpf_signal_2))) / (sim_freq_2*total_time_2)
+    lpf_2 = LowPassFilter()
+    lpf_params_2 = lpf_2.get_lpf_params()
+    lpf_params_2["cutoff_freq"] = 750
+    lpf_2.set_lpf_params(lpf_params_2)
+    lpf_signal_2 = lpf_2.apply_filter(mixed_signal_2.mixed, real_time_2)
+    lpf_freq_2 = fftshift(np.abs(fft(lpf_signal_2.filtered))) / (sim_freq_2*total_time_2)
         
     if display_lpf_signals:
         fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 3 columns
-        axes[0,0].plot(real_time_1, lpf_signal_1.real)
+        axes[0,0].plot(real_time_1, lpf_signal_1.filtered.real)
         axes[0,0].set_title("Time (File)")
         axes[0,0].set_xlim(-0.00002, 0.00002)
         axes[0,1].plot(real_freq_1, lpf_freq_1)
         axes[0,1].set_title("Frequency Magnitude (File)")
         axes[0,1].set_xlim(-200000, 200000)
-        axes[1,0].plot(real_time_2, lpf_signal_2.real)
+        axes[1,0].plot(real_time_2, lpf_signal_2.filtered.real)
         axes[1,0].set_title("Time (Default)")
         axes[1,0].set_xlim(0, 0.05)
         axes[1,1].plot(real_freq_2, lpf_freq_2)
         axes[1,1].set_title("Frequency Magnitude (Default)")
-        axes[1,1].set_xlim(-120, 120)
+        # axes[1,1].set_xlim(-120, 120)
         fig.suptitle("Mixed Lowpass Filtered Gabor Wavelet Train Signals")
         fig.tight_layout()
         plt.show()
