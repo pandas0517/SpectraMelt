@@ -536,28 +536,48 @@ class NFWBS:
         return self.outputset_params
     
     
-    def get_lo_params(self):
-        return self.lo_params
+    def get_lo_1_params(self):
+        return self.lo_1_params
     
     
-    def get_pulse_params(self):
-        return self.pulse_params
-    
-    
-    def get_adc_params(self):
-        return self.adc_params
+    def get_pulse_1_params(self):
+        return self.pulse_1_params
      
     
-    def get_mixer_params(self):
-        return self.mixer_params
+    def get_mixer_1_params(self):
+        return self.mixer_1_params
     
     
-    def get_lpf_params(self):
-        return self.lpf_params
+    def get_lpf_1_params(self):
+        return self.lpf_1_params
+    
+    
+    def get_lo_2_params(self):
+        return self.lo_2_params
+    
+    
+    def get_pulse_2_params(self):
+        return self.pulse_2_params
+    
+    
+    def get_wavelet_params(self):
+        return self.wavelet_params
+     
+    
+    def get_mixer_2_params(self):
+        return self.mixer_2_params
+    
+    
+    def get_lpf_2_params(self):
+        return self.lpf_2_params
     
     
     def get_wbf_params(self):
         return self.wbf_params
+    
+    
+    def get_adc_params(self):
+        return self.adc_params
     
     
     def get_dict_type(self):
@@ -577,11 +597,16 @@ class NFWBS:
             "config_name": self.config_name,
             "freq_modes": self.freq_modes,
             "outputset_params": self.outputset_params,
-            "lo_params": self.lo_params,
-            "mixer_params": self.mixer_params,
             "wbf_params": self.wbf_params,
-            "lpf_params": self.lpf_params,
-            "pulse_params": self.pulse_params,
+            "lo_1_params": self.lo_1_params,
+            "mixer_1_params": self.mixer_1_params,
+            "lpf_1_params": self.lpf_1_params,
+            "pulse_1_params": self.pulse_1_params,
+            "lo_2_params": self.lo_2_params,
+            "mixer_2_params": self.mixer_2_params,
+            "lpf_2_params": self.lpf_2_params,
+            "pulse_2_params": self.pulse_2_params,
+            "wavelet_params": self.wavelet_params,
             "adc_params": self.adc_params,
             "log_params": self.log_params,
         }
