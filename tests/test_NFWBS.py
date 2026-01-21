@@ -7,7 +7,8 @@ if __name__ == '__main__':
     from spectramelt.utils import get_logger, load_config_from_json
     from pathlib import Path
     from spectramelt.InputSignal import InputSignal
-    from spectramelt.NYFR import NYFR
+    from spectramelt.Analog import Analog
+    from spectramelt.NFWBS import NFWBS
     from spectramelt.Recovery import Recovery
     import matplotlib.pyplot as plt
     from scipy.fft import fft, ifft, fftshift
@@ -28,26 +29,37 @@ if __name__ == '__main__':
     display_recovered_signals = False
     display_premultiply_signals = True
     
-    input_conf_1 = load_config_from_json(Path(getenv('INPUT_CONF')))
-    input_signal_1 = InputSignal(input_conf_1)
-    real_time_1 = input_signal_1.get_analog_time()
-    real_input_1 = input_signal_1.get_input_signal()
-    real_freq_1 = input_signal_1.get_analog_frequency()
-    total_time_1 = input_signal_1.get_analog_signal_params().get('total_time')
-    sim_freq_1 = input_signal_1.get_analog_signals().get('sim_freq')
-    real_input_freq_1 = np.fft.fftshift(np.abs(fft(real_input_1))) / (sim_freq_1*total_time_1)
+    analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
+    analog_sig_1 = analog_1.create_analog()
     
+    real_time_1 = analog_sig_1.time
+    real_freq_1 = analog_sig_1.frequency
+    total_time_1 = analog_sig_1.total_time
+    sim_freq_1 = analog_1.get_time_params().get('sim_freq')
+
+    input_signal_1 = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
+    real_input_1 = input_signal_1.create_input_signal(real_time=real_time_1)
+    real_input_time_1 = real_input_1.input_signal
+    real_input_freq_1 = fftshift(np.abs(fft(real_input_1.input_signal))) / (sim_freq_1*total_time_1)
+    
+    analog_2 = Analog()
+    analog_time_params_2 = analog_2.get_time_params()
+    analog_time_params_2["time_range"] = (0, 10)
+    analog_time_params_2["sim_freq"] = 100000
+    analog_2.set_time_params(analog_time_params_2)
+    analog_sig_2 = analog_2.create_analog()
+
+    real_time_2 = analog_sig_2.time
+    real_freq_2 = analog_sig_2.frequency
+    total_time_2 = analog_sig_2.total_time
+    sim_freq_2 = analog_2.get_time_params().get('sim_freq')
+
     input_signal_2 = InputSignal()
-    real_time_2 = input_signal_2.get_analog_time()
-    real_input_2 = input_signal_2.get_input_signal()
-    real_freq_2 = input_signal_2.get_analog_frequency()
-    total_time_2 = input_signal_2.get_analog_signal_params().get('total_time')
-    sim_freq_2 = input_signal_2.get_analog_signals().get('sim_freq')
-    real_input_freq_2 = np.fft.fftshift(np.abs(fft(real_input_2))) / (sim_freq_2*total_time_2)
-    
-    nyfr_config_1 = load_config_from_json(Path(getenv('NYFR_CONF')))
-    start = time.time()
-    nyfr_1 = NYFR(real_input_1, real_time_1, nyfr_config_1)
+    real_input_2 = input_signal_2.create_input_signal(real_time=real_time_2)
+    real_input_time_2 = real_input_2.input_signal
+    real_input_freq_2 = fftshift(np.abs(fft(real_input_2.input_signal))) / (sim_freq_2*total_time_2)
+
+    nfwbs_1 = NYFR(real_input_1, real_time_1, nyfr_config_1)
     end = time.time()
     logger.info(f"NYFR Execution time with file config: {end - start:.6f} seconds")
     
