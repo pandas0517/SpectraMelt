@@ -132,7 +132,7 @@ if __name__ == '__main__':
     
     wavelet_gen_1 = WaveletGenerator(config_file_path=Path(getenv('NFWBS_CONF')))
     # start = time.time()
-    wavelet_sig_1 = wavelet_gen_1.generate_wavelet_train(pulse_signal_1.pulses, real_time_1)
+    wavelet_sig_1 = wavelet_gen_1.generate_wavelet_train(pulse_signal_1.pulses, real_time_1, device="gpu")
     # stop = time.time()
     # wavelet_gen_gpu_time = stop - start
     # print(wavelet_gen_gpu_time)
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     wavelet_param_2 = wavelet_gen_2.get_wavelet_params()
     wavelet_param_2["center_freq"] = 500
     wavelet_gen_2.set_wavelet_params(wavelet_param_2)
-    wavelet_sig_2 = wavelet_gen_2.generate_wavelet_train(pulse_signal_2.pulses, real_time_2)
+    wavelet_sig_2 = wavelet_gen_2.generate_wavelet_train(pulse_signal_2.pulses, real_time_2, device="gpu")
     wavelet_freq_2 = fftshift(np.abs(fft(wavelet_sig_2.wavelet_train))) / (sim_freq_2*total_time_2)
     
     if display_wavelet_signals:
