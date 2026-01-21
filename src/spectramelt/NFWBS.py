@@ -364,7 +364,7 @@ class NFWBS:
                              return_wavelet=False,
                              return_mixed_2=False,
                              return_lpf_2=False,
-                             return_effects=False):
+                             return_effects=False) -> NFWBSResult:
         
         return_wbf     = return_wbf     or return_internal
         return_lo_1    = return_lo_1    or return_internal

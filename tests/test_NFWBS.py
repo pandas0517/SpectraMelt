@@ -21,15 +21,25 @@ if __name__ == '__main__':
     
     display_analog_signals = True
     display_wbf_signals = False
-    display_LO_signals = False
-    display_mixed_signals = False
-    display_lpf_signals = False
+    display_LO_1_signals = False
+    display_mixed_1_signals = False
+    display_lpf_1_signals = False
+    display_LO_2_signals = False
+    display_wavelet_signals = False
+    display_mixed_2_signals = False
+    display_lpf_2_signals = False
     display_conditioned_signals = True
     display_ADC_signals = True
     display_recovered_signals = False
     display_premultiply_signals = True
     
+    nfwbs_1 = NFWBS(config_file_path=Path(getenv('NFWBS_CONF')))
+    nfwbs_1_adc_params = nfwbs_1.get_adc_params()
+    
     analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
+    analog_1_time_params = analog_1.get_time_params()
+    analog_1_time_params["adc_samp_freq"] = nfwbs_1_adc_params.get('adc_samp_freq')
+    analog_1.set_time_params(analog_1_time_params)
     analog_sig_1 = analog_1.create_analog()
     
     real_time_1 = analog_sig_1.time
@@ -59,40 +69,41 @@ if __name__ == '__main__':
     real_input_time_2 = real_input_2.input_signal
     real_input_freq_2 = fftshift(np.abs(fft(real_input_2.input_signal))) / (sim_freq_2*total_time_2)
 
-    nfwbs_1 = NYFR(real_input_1, real_time_1, nyfr_config_1)
-    end = time.time()
-    logger.info(f"NYFR Execution time with file config: {end - start:.6f} seconds")
     
-    wbf_signal_1 = nyfr_1.get_wbf_signal()
-    wbf_params_1 = nyfr_1.get_wbf_params()
+    nfwbs_1_signals = nfwbs_1.create_output_signal(input_signal=real_input_1, real_time=real_time_1,
+                                                   return_internal=True)
+    # end = time.time()
+    # logger.info(f"NYFR Execution time with file config: {end - start:.6f} seconds")
+    
+    wbf_signal_1 = nfwbs_1_signals.wbf_signal
+    wbf_params_1 = nfwbs_1.get_wbf_params()
     wbf_samp_freq_1 = wbf_params_1.get('cutoff_freq')
     wbf_sig_freq_1 = fftshift(np.abs(fft(wbf_signal_1))) / (sim_freq_1*total_time_1)
-    lo_signal_1 = nyfr_1.get_lo_signal()
+    lo_signal_1 = nfwbs_1_signals.lo_1_signal
     lo_freq_1 = fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
-    pulse_signal_1 = nyfr_1.get_pulse_signal()
+    pulse_signal_1 = nfwbs_1_signals.pulse_1_signal
     pulse_freq_1 = fftshift(np.abs(fft(pulse_signal_1))) / (sim_freq_1*total_time_1)
-    mixed_signal_1 = nyfr_1.get_mixed_signal()
+    mixed_signal_1 = nfwbs_1_signals.mixed_1_signal
     mixed_freq_1 = fftshift(np.abs(fft(mixed_signal_1))) / (sim_freq_1*total_time_1)
-    lpf_params_1 = nyfr_1.get_lpf_params()
-    lpf_signal_1 = nyfr_1.get_lpf_signal()
+    lpf_params_1 = nfwbs_1.get_lpf_1_params()
+    lpf_signal_1 = nfwbs_1_signals.lpf_1_signal
     lpf_freq_1 = fftshift(np.abs(fft(lpf_signal_1))) / (sim_freq_1*total_time_1)
-    lpf_cond_sigs_1 = nyfr_1.get_conditioned_signals()
-    lpf_cond_sig_1 = lpf_cond_sigs_1.get('signal')
-    lpf_cond_time_1 = lpf_cond_sigs_1.get('time')
-    lpf_cond_freq_1 = lpf_cond_sigs_1.get('freq')
-    lpf_cond_total_time_1 = lpf_cond_sigs_1.get('total_time') 
+    lpf_cond_sig_1 = nfwbs_1_signals.adc_signal.conditioned.signal
+    lpf_cond_time_1 = nfwbs_1_signals.adc_signal.conditioned.time
+    lpf_cond_freq_1 = nfwbs_1_signals.adc_signal.conditioned.freq
+    lpf_cond_total_time_1 = nfwbs_1_signals.adc_signal.conditioned.total_time
     lpf_cond_sig_freq_1 = fftshift(np.abs(fft(lpf_cond_sig_1))) / (sim_freq_1*lpf_cond_total_time_1)
-    bits_nyfr_1 = nyfr_1.get_adc_params().get('num_bits')
-    sh_output_nyfr_1 = nyfr_1.get_sh_signals().get('output_signal')
-    mid_times_nyfr_1 = nyfr_1.get_output_signals().get('mid_times')
-    quantized_nyfr_1 = nyfr_1.get_output_signals().get('quantized_values')
-    samp_freq_nyfr_1 = nyfr_1.get_output_signals().get('sampled_frequency')
-    quant_freq_nyfr_1 = fftshift(np.abs(fft(quantized_nyfr_1))) / len(samp_freq_nyfr_1)
+    bits_nyfr_1 = nfwbs_1_adc_params.get('num_bits')
+    sh_output_nfwbs_1 = nfwbs_1_signals.adc_signal.sample_hold.output_signal
+    mid_times_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.mid_times
+    quantized_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.quantized_values
+    samp_freq_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.sampled_frequency
+    quant_freq_nfwbs_1 = fftshift(np.abs(fft(quantized_nfwbs_1))) / len(samp_freq_nfwbs_1)
     dictionary_1 = nyfr_1.get_nyfr_dict()
     pinv_1 = np.linalg.pinv(100*dictionary_1)
     premultiply_1 = pinv_1 @ quantized_nyfr_1
-    wbf_time_1 = nyfr_1.get_wbf_time()
-    wbf_freq_1 = nyfr_1.get_wbf_freq()
+    wbf_time_1 = wbf_signal_1.time
+    wbf_freq_1 = wbf_signal_1.freq
     recovery_config_path = Path(getenv('RECOVERY_CONF'))
     recovery_1 = Recovery(quantized_nyfr_1, dictionary_1, config_file_path=recovery_config_path)
     recovery_params_1 = recovery_1.get_recovery_params()
