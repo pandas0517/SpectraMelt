@@ -110,7 +110,55 @@ class WaveletGenerator:
     # Core functional methods
     # -------------------------------
 
-    def generate_wavelet_train(self, sample_train, t,
+    def generate_wavelet_train(
+        self,
+        sample_train: np.ndarray,
+        t: np.ndarray,
+        device: str = "cpu",
+        return_components: bool = False,
+        return_scaling_factor: bool = False,
+        return_effects: bool = False
+    ) -> WaveletResult:
+        """
+        Generate a Gabor wavelet train using either CPU or GPU backend.
+
+        Parameters
+        ----------
+        device : {"cpu", "gpu"}
+            Select computation backend
+        """
+        device = device.lower()
+
+        if device == "cpu":
+            return self.generate_wavelet_train_cpu(
+                sample_train=sample_train,
+                t=t,
+                return_components=return_components,
+                return_scaling_factor=return_scaling_factor,
+                return_effects=return_effects
+            )
+
+        elif device == "gpu":
+            try:
+                return self.generate_wavelet_train_gpu(
+                    sample_train=sample_train,
+                    t=t,
+                    return_components=return_components,
+                    return_scaling_factor=return_scaling_factor,
+                    return_effects=return_effects
+                )
+            except ImportError as e:
+                raise RuntimeError(
+                    "GPU backend requested but CuPy is not available."
+                ) from e
+
+        else:
+            raise ValueError(
+                f"Invalid device '{device}'. Must be 'cpu' or 'gpu'."
+            )
+
+
+    def generate_wavelet_train_cpu(self, sample_train, t,
                                return_components=False,
                                return_scaling_factor=False,
                                return_effects=False) -> WaveletResult:
