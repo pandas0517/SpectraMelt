@@ -99,9 +99,9 @@ if __name__ == '__main__':
     quantized_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.quantized_values
     samp_freq_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.sampled_frequency
     quant_freq_nfwbs_1 = fftshift(np.abs(fft(quantized_nfwbs_1))) / len(samp_freq_nfwbs_1)
-    dictionary_1 = nyfr_1.get_nyfr_dict()
-    pinv_1 = np.linalg.pinv(100*dictionary_1)
-    premultiply_1 = pinv_1 @ quantized_nyfr_1
+    # dictionary_1 = nyfr_1.get_nyfr_dict()
+    # pinv_1 = np.linalg.pinv(100*dictionary_1)
+    # premultiply_1 = pinv_1 @ quantized_nyfr_1
     wbf_time_1 = wbf_signal_1.time
     wbf_freq_1 = wbf_signal_1.freq
     recovery_config_path = Path(getenv('RECOVERY_CONF'))
