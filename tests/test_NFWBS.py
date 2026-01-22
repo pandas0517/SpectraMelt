@@ -330,13 +330,13 @@ if __name__ == '__main__':
         
     if display_wavelet_signals:
         fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-        axes[0,0].plot(real_time_1, wavelet_signal_1.wavelet_train)
+        axes[0,0].plot(real_time_1, wavelet_signal_1.wavelet_train.real)
         axes[0,0].set_title("Time (File)")
         axes[0,0].set_xlim(-0.0005, 0.0005)
         axes[0,1].plot(real_freq_1, wavelet_freq_1)
         axes[0,1].set_title("Frequency (File)")
         axes[0,1].set_xlim(-120000, 120000)
-        axes[1,0].plot(real_time_2, wavelet_signal_2.wavelet_train)
+        axes[1,0].plot(real_time_2, wavelet_signal_2.wavelet_train.real)
         axes[1,0].set_title("Time (Default)")
         axes[1,0].set_xlim(0, 0.1)
         axes[1,1].plot(real_freq_2, wavelet_freq_2)

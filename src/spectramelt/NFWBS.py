@@ -261,7 +261,7 @@ class NFWBS:
         if wbf_params is None:
             wbf = LowPassFilter()
             wbf_params = wbf.get_lpf_params()
-            wbf_params["cutoff_freq"] = 100 * wbf_params["cutoff_freq"]
+            wbf_params["cutoff_freq"] = 10 * wbf_params["cutoff_freq"]
         self.wbf_params = wbf_params
  
     
