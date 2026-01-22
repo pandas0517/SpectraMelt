@@ -1,5 +1,9 @@
-src/__pycache__/
+__pycache__/
+*.egg-info/
 *.keras
 *.npy
-test_sets/
+Data_Sets/
 .venv/
+tmp/
+out/
+*.log
