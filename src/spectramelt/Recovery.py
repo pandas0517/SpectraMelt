@@ -38,12 +38,13 @@ class Recovery:
         if config_file_path is not None:
             all_params = load_config_from_json(config_file_path)
         elif all_params is None:
-            all_params = {}
-            all_params = ["freq_modes"] = freq_modes
-            all_params["recovery_params"] = recovery_params
-            all_params["dataframe_params"] = dataframe_params
-            all_params["log_params"] = log_params
-            all_params["config_name"] = config_name
+            all_params = {
+                "freq_modes": freq_modes,
+                "recovery_params": recovery_params,
+                "dataframe_params": dataframe_params,
+                "log_params": log_params,
+                "config_name": config_name
+            }
         
         self.set_all_params(all_params)
         

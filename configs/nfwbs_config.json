@@ -125,7 +125,7 @@
     },
     "lo_2_params": {
         "amp": 1,
-        "freq": 100000,
+        "freq": 1,
         "phase": 0,
         "mod_enabled": false,
         "phase_delta": 2000,

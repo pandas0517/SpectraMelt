@@ -126,7 +126,7 @@ class NFWBS:
         self.set_lo_1_params(lo_1_params)
         self.set_pulse_1_params(pulse_1_params)
         self.set_mixer_1_params(mixer_1_params)
-        self.set_lpf_2_params(lpf_2_params)
+        self.set_lpf_1_params(lpf_1_params)
         self.set_lo_2_params(lo_2_params)
         self.set_pulse_2_params(pulse_2_params)
         self.set_wavelet_params(wavelet_params)
@@ -207,47 +207,82 @@ class NFWBS:
         self.outputset_params = outputset_params
         
     
-    def set_lo_1_params(self, lo_params):         
+    def set_lo_1_params(self, lo_params=None):
+        if lo_params is None:
+            lo = LocalOscillator()
+            lo_params = lo.get_lo_params()      
         self.lo_1_params = lo_params
         
         
-    def set_lo_2_params(self, lo_params):         
+    def set_lo_2_params(self, lo_params=None):
+        if lo_params is None:
+            lo = LocalOscillator()
+            lo_params = lo.get_lo_params()
+            lo_params["mod_enabled"] = False  
         self.lo_2_params = lo_params
         
     
-    def set_adc_params(self, adc_params):        
+    def set_adc_params(self, adc_params=None):
+        if adc_params is None:
+            adc = ADC()
+            adc_params = adc.get_adc_params()   
         self.adc_params = adc_params
 
     
-    def set_pulse_1_params(self, pulse_params):
+    def set_pulse_1_params(self, pulse_params=None):
+        if pulse_params is None:
+            pulse = PulseGenerator()
+            pulse_params = pulse.get_pulse_params()
         self.pulse_1_params = pulse_params
         
 
-    def set_pulse_2_params(self, pulse_params):
+    def set_pulse_2_params(self, pulse_params=None):
+        if pulse_params is None:
+            pulse = PulseGenerator()
+            pulse_params = pulse.get_pulse_params()
         self.pulse_2_params = pulse_params
 
     
-    def set_lpf_1_params(self, lpf_params):
+    def set_lpf_1_params(self, lpf_params=None):
+        if lpf_params is None:
+            lpf = LowPassFilter()
+            lpf_params = lpf.get_lpf_params()
         self.lpf_1_params = lpf_params
     
 
-    def set_lpf_2_params(self, lpf_params):
+    def set_lpf_2_params(self, lpf_params=None):
+        if lpf_params is None:
+            lpf = LowPassFilter()
+            lpf_params = lpf.get_lpf_params()
         self.lpf_2_params = lpf_params
 
   
-    def set_wbf_params(self, wbf_params):
+    def set_wbf_params(self, wbf_params=None):
+        if wbf_params is None:
+            wbf = LowPassFilter()
+            wbf_params = wbf.get_lpf_params()
+            wbf_params["cutoff_freq"] = 100 * wbf_params["cutoff_freq"]
         self.wbf_params = wbf_params
  
     
-    def set_mixer_1_params(self, mixer_params):  
+    def set_mixer_1_params(self, mixer_params=None):
+        if mixer_params is None:
+            mixer = Mixer()
+            mixer_params = mixer.get_mixer_params() 
         self.mixer_1_params = mixer_params
         
 
-    def set_mixer_2_params(self, mixer_params):  
+    def set_mixer_2_params(self, mixer_params=None):
+        if mixer_params is None:
+            mixer = Mixer()
+            mixer_params = mixer.get_mixer_params()   
         self.mixer_2_params = mixer_params
         
         
-    def set_wavelet_params(self, wavelet_params):
+    def set_wavelet_params(self, wavelet_params=None):
+        if wavelet_params is None:
+            wavelet = WaveletGenerator()
+            wavelet_params = wavelet.get_wavelet_params()
         self.wavelet_params = wavelet_params
               
     # -------------------------------
@@ -364,7 +399,8 @@ class NFWBS:
                              return_wavelet=False,
                              return_mixed_2=False,
                              return_lpf_2=False,
-                             return_effects=False) -> NFWBSResult:
+                             return_effects=False,
+                             use_gpu=False) -> NFWBSResult:
         
         return_wbf     = return_wbf     or return_internal
         return_lo_1    = return_lo_1    or return_internal
@@ -376,6 +412,10 @@ class NFWBS:
         return_wavelet = return_wavelet or return_internal
         return_mixed_2 = return_mixed_2 or return_internal
         return_lpf_2   = return_lpf_2   or return_internal
+        
+        device = "cpu"
+        if use_gpu:
+            device = "gpu"
 
         wbf = LowPassFilter(lpf_params=self.wbf_params)
         if self.wbf_params is None:
@@ -434,7 +474,8 @@ class NFWBS:
         if self.wavelet_params is None:
             self.wavelet_params = wavelet_gen.get_wavelet_params()
         wavelet_sig = wavelet_gen.generate_wavelet_train(pulse_signal_2.pulses, real_time,
-                                                         return_effects=return_effects)
+                                                         return_effects=return_effects,
+                                                         device=device)
         
         mixed_2 = Mixer(mixer_params=self.mixer_2_params)
         if self.mixer_2_params is None:
@@ -453,7 +494,7 @@ class NFWBS:
         if self.adc_params is None:
             self.adc_params = adc.get_adc_params()
 
-        adc_signal = adc.analog_to_digital(lpf_signal_2.filtered, real_time,
+        adc_signal = adc.analog_to_digital(lpf_signal_2.filtered.real, real_time,
                                            return_conditioned=True,
                                            return_sample_hold=True,
                                            return_effects=return_effects)

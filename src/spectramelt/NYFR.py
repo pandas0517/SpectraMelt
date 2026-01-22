@@ -181,27 +181,46 @@ class NYFR:
         self.outputset_params = outputset_params
         
     
-    def set_lo_params(self, lo_params):         
+    def set_lo_params(self, lo_params=None):
+        if lo_params is None:
+            lo = LocalOscillator()
+            lo_params = lo.get_lo_params()     
         self.lo_params = lo_params
         
     
-    def set_adc_params(self, adc_params):        
+    def set_adc_params(self, adc_params=None):
+        if adc_params is None:
+            adc = ADC()
+            adc_params = adc.get_adc_params()    
         self.adc_params = adc_params
 
     
-    def set_pulse_params(self, pulse_params):
+    def set_pulse_params(self, pulse_params=None):
+        if pulse_params is None:
+            pulse = PulseGenerator()
+            pulse_params = pulse.get_pulse_params()
         self.pulse_params = pulse_params
 
     
-    def set_lpf_params(self, lpf_params):
+    def set_lpf_params(self, lpf_params=None):
+        if lpf_params is None:
+            lpf = LowPassFilter()
+            lpf_params = lpf.get_lpf_params()
         self.lpf_params = lpf_params
     
     
-    def set_wbf_params(self, wbf_params):
+    def set_wbf_params(self, wbf_params=None):
+        if wbf_params is None:
+            wbf = LowPassFilter()
+            wbf_params = wbf.get_lpf_params()
+            wbf_params["cutoff_freq"] = 100 * wbf_params["cutoff_freq"]
         self.wbf_params = wbf_params
  
     
-    def set_mixer_params(self, mixer_params):  
+    def set_mixer_params(self, mixer_params=None):
+        if mixer_params is None:
+            mixer = Mixer()
+            mixer_params = mixer.get_mixer_params()
         self.mixer_params = mixer_params
               
     # -------------------------------
