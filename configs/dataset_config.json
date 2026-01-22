@@ -1,0 +1,61 @@
+{
+    "config_name": "Dataset_Config_1",
+    "seed": null,
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "INFO",
+        "console": true
+    },
+    "directory_params": {
+        "dataset_dir": "Dataset_Config_1",
+        "paths": [
+            "inputs",
+            "outputs",
+            "premultiply",
+            "wideband",
+            "recovery",
+            "ml_models"
+        ],
+        "linux_base": {
+            "inputs": "/mnt/fdata",
+            "outputs": "/mnt/fdata",
+            "premultiply": "/mnt/fdata",
+            "wideband": "/mnt/fdata",
+            "recovery": "/mnt/fdata",
+            "ml_models": "/mnt/fdata"
+        },
+        "windows_base": {
+            "inputs": "F:/",
+            "outputs": "F:/",
+            "premultiply": "F:/",
+            "wideband": "F:/",
+            "recovery": "F:/",
+            "ml_models": "F:/"
+        },
+        "tail": {
+            "inputs": "Inputs",
+            "outputs": "Outputs",
+            "premultiply": "Premultiply",
+            "wideband": "Wideband",
+            "recovery": "Recovery",
+            "ml_models": "ML_Models"            
+        }
+    },
+    "filenames": {
+        "real_time_freq": "real_time_freq.npz",
+        "wbf_time_freq": "wbf_time_freq.npz",
+        "samp_time_freq": "sampled_time_freq.npz",
+        "time_signals": "time_signals.npy",
+        "wave_params": "wave_params.pkl",
+        "freq_signals": "freq_signals.npz",
+        "dataset_config": "dataset_config.json",
+        "input_config": "inputset_config.json",
+        "recovery_config": "recovery_config.json",
+        "ml_config": "ml_config.json",
+        "ml_model": "ml_model.keras",
+        "DUT_config": "DUT_config.json",
+        "dictionary": "dictionary.npy",
+        "recovery_df": "recovery_df.pkl"
+    }
+}

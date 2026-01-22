@@ -1,0 +1,111 @@
+'''
+@author: pete
+'''
+if __name__ == '__main__':
+    import os
+    import sys
+    # Add the src directory to the system path
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+    from dotenv import load_dotenv
+    load_dotenv()
+    from pathlib import Path
+    from InputSignal import InputSignal
+    from LocalOscillator import LocalOscillator
+    from PulseGenerator import PulseGenerator
+    from Mixer import Mixer
+    import matplotlib.pyplot as plt
+    from scipy.fftpack import fft
+    import numpy as np
+
+    input_signal_1 = InputSignal(config_file_path=Path(os.getenv('SYSTEM_CONF')))
+    real_time_1 = input_signal_1.get_analog_time()
+    real_input_1 = input_signal_1.get_input_signal()
+    real_freq_1 = input_signal_1.get_analog_frequency()
+    total_time_1 = input_signal_1.get_analog_signal_params().get('total_time')
+    sim_freq_1 = input_signal_1.get_time_params().get('sim_freq')
+    real_input_freq_1 = np.fft.fftshift(np.abs(fft(real_input_1))) / (sim_freq_1*total_time_1)
+    
+    input_signal_2 = InputSignal()
+    real_time_2 = input_signal_2.get_analog_time()
+    real_input_2 = input_signal_2.get_input_signal()
+    real_freq_2 = input_signal_2.get_analog_frequency()
+    total_time_2 = input_signal_2.get_analog_signal_params().get('total_time')
+    sim_freq_2 = input_signal_2.get_time_params().get('sim_freq')
+    real_input_freq_2 = np.fft.fftshift(np.abs(fft(real_input_2))) / (sim_freq_2*total_time_2)
+       
+    fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
+    axes[0,0].plot(real_time_1, real_input_1)
+    axes[0,0].set_title("Time (File)")
+    axes[0,1].plot(real_freq_1, real_input_freq_1)
+    axes[0,1].set_title("Frequency (File)")
+    axes[0,1].set_xlim(-5, 5)
+    axes[1,0].plot(real_time_2, real_input_2)
+    axes[1,0].set_title("Time (Default)")
+    axes[1,1].plot(real_freq_2, real_input_freq_2)
+    axes[1,1].set_title("Frequency (Default)")
+    axes[1,1].set_xlim(-5, 5)
+    fig.suptitle("Simulated Analog Signals")
+    fig.tight_layout()
+    plt.show()
+    
+    lo_1 = LocalOscillator(real_time_1, config_file_path=Path(os.getenv('NYFR_CONF')))
+    lo_signal_1 = lo_1.get_lo_signal()
+    lo_pre_start_1 = lo_1.get_pre_start_lo()
+    pulse_gen_1 = PulseGenerator(lo_signal_1, real_time_1, lo_pre_start_1,
+                                 config_file_path=Path(os.getenv('NYFR_CONF')))
+    pulse_signal_1 = pulse_gen_1.get_pulse_signal()
+    mixed_1 = Mixer(real_input_1, pulse_signal_1, config_file_path=Path(os.getenv('NYFR_CONF')))
+    mixed_signal_1 = mixed_1.get_mixed_signal()
+    lo_freq_1 = np.fft.fftshift(np.abs(fft(lo_signal_1))) / (sim_freq_1*total_time_1)
+    pulse_freq_1 = np.fft.fftshift(np.abs(fft(pulse_signal_1))) / (sim_freq_1*total_time_1)
+    mixed_freq_1 = np.fft.fftshift(np.abs(fft(mixed_signal_1))) / (sim_freq_1*total_time_1)
+    lo_2 = LocalOscillator(real_time_2)
+    lo_signal_2 = lo_2.get_lo_signal()
+    lo_pre_start_2 = lo_2.get_pre_start_lo()
+    pulse_gen_2 = PulseGenerator(lo_signal_2, real_time_2, pre_start_val=lo_pre_start_2)
+    pulse_signal_2 = pulse_gen_2.get_pulse_signal()
+    mixed_2 = Mixer(real_input_2, pulse_signal_2)
+    mixed_signal_2 = mixed_2.get_mixed_signal()
+    lo_freq_2 = np.fft.fftshift(np.abs(fft(lo_signal_2))) / (sim_freq_2*total_time_2)
+    pulse_freq_2 = np.fft.fftshift(np.abs(fft(pulse_signal_2))) / (sim_freq_2*total_time_2)
+    mixed_freq_2 = np.fft.fftshift(np.abs(fft(mixed_signal_2))) / (sim_freq_2*total_time_2)
+    
+    fig, axes = plt.subplots(2, 3, figsize=(8,4))  # 2 rows, 3 columns
+    axes[0,0].plot(real_time_1, lo_signal_1)
+    axes[0,0].plot(real_time_1, pulse_signal_1)
+    axes[0,0].set_title("Time (File)")
+    axes[0,0].set_xlim(-0.05, 0.05)
+    axes[0,1].plot(real_freq_1, lo_freq_1)
+    axes[0,1].set_title("LO Frequency (File)")
+    axes[0,1].set_xlim(-120, 120)
+    axes[0,2].plot(real_freq_1, pulse_freq_1)
+    axes[0,2].set_title("Pulse Frequency (File)")
+    axes[1,0].plot(real_time_2, lo_signal_2)
+    axes[1,0].plot(real_time_2, pulse_signal_2)
+    axes[1,0].set_title("Time (Default)")
+    axes[1,0].set_xlim(0, 0.05)
+    axes[1,1].plot(real_freq_2, lo_freq_2)
+    axes[1,1].set_title("LO Frequency (Default)")
+    axes[1,1].set_xlim(-120, 120)
+    axes[1,2].plot(real_freq_2, pulse_freq_2)
+    axes[1,2].set_title("Pulse Frequency (File)")
+    fig.suptitle("LO and Pulse Signals")
+    fig.tight_layout()
+    plt.show()
+    
+    fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
+    axes[0,0].plot(real_time_1, mixed_signal_1)
+    axes[0,0].set_title("Time (File)")
+    axes[0,0].set_xlim(-0.05, 0.05)
+    axes[0,1].plot(real_freq_1, mixed_freq_1)
+    axes[0,1].set_title("Frequency (File)")
+    #axes[0,1].set_xlim(-120, 120)
+    axes[1,0].plot(real_time_2, mixed_signal_2)
+    axes[1,0].set_title("Time (Default)")
+    axes[1,0].set_xlim(0, 0.05)
+    axes[1,1].plot(real_freq_2, mixed_freq_2)
+    axes[1,1].set_title("Frequency (Default)")
+    #axes[1,1].set_xlim(-120, 120)
+    fig.suptitle("Mixed Signals")
+    fig.tight_layout()
+    plt.show()

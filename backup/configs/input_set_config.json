@@ -1,0 +1,12 @@
+{
+    "input_config_name": "Input_Config_1",
+    "tot_num_freq_combos": 40000,
+    "amp_min": 0.5,
+    "amp_max": 1,
+    "use_per_signal_model": true,
+    "noise_levels": [["no_noise", []], ["low_noise", [0.2, 0.3]], ["high_noise", [2, 3]]],
+    "phase_shifts": [["no_phase_shift", []], ["low_phase_shift",[0.05,0.25]], ["high_phase_shift", [0.4,0.75]]],
+    "f_mods": [["f_mod_0_1", 0.1], ["f_mod_0_2", 0.2], ["f_mod_0_25", 0.25], ["f_mod_0_5", 0.5]],
+    "f_deltas": [["f_delta_0_1", 0.1], ["f_delta_0_8", 0.8], ["f_delta_1_2", 1.2], ["f_delta_9_9", 10.0]],
+    "input_tones": [["1_2", [1,2]], ["3", [3]], ["4", [4]], ["5", [5]]]
+}

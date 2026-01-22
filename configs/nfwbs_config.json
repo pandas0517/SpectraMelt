@@ -1,0 +1,161 @@
+{
+    "config_name": "NFWBS_Config_1",
+    "dict_type": "real",
+    "freq_modes": {
+        "output": [
+            "mag",
+            "ang",
+            "real",
+            "imag"
+        ],
+        "wideband": [
+            "mag",
+            "ang",
+            "real",
+            "imag",
+            "real_imag",
+            "mag_ang_sincos"
+        ]
+    },
+    "outputset_params": {
+        "DUT_type": "NFWBS",
+        "decode_to_time": true,
+        "normalize": true,
+        "fft_shift": true,
+        "normalize_wbf": true,
+        "fft_shift_wbf": false,
+        "overwrite": false
+    },
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "INFO",
+        "console": true
+    },
+    "wavelet_params": {
+        "center_freq": 1e6,
+        "amp_noise_std": 0.0,
+        "freq_drift_ppm": 0.0,
+        "harmonic_distortion": 0.0,
+        "phase_noise_std": 0.0,
+        "threshold": 1e-3,
+        "seed": null
+    },
+    "adc_params": {
+        "store_conditioned_sigs": true,
+        "store_sh_sigs": true,
+        "adc_samp_freq": 100000,
+        "allow_clipping": true,
+        "v_ref_range": [-10, 10],
+        "num_bits": 8,
+        "thermal_noise_std_dev": 0.0,
+        "non_linearity_mode": null,
+        "alpha": 0.0,
+        "threshold": 1.0,
+        "jitter_std": 0.0,
+        "acquisition_time_constant": 0.0,
+        "hold_noise_std": 0.0,
+        "transient_mode": "fixed",
+        "truncate_transients": true,
+        "transient_fraction": 0.05,
+        "detection_window": 0.05,
+        "stability_threshold": 0.01,
+        "seed": null
+    },
+    "wbf_params": {
+        "filter_type": "butter",
+        "order": 6,
+        "cutoff_freq": 200000,
+        "mode": "lfilter",
+        "ripple_db": 1.0,
+        "atten_db": 40.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "mixer_1_params": {
+        "conversion_gain": 1.0,
+        "lo_leakage": 0.0,
+        "rf_leakage": 0.0,
+        "nonlinearity_coeff": 0.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "lo_1_params": {
+        "amp": 1,
+        "freq": 100000,
+        "phase": 0,
+        "mod_enabled": true,
+        "phase_delta": 2000,
+        "phase_freq": 2500,
+        "phase_offset": 0,
+        "phase_noise_std": 0.0,
+        "amp_noise_std": 0.0,
+        "freq_drift_ppm": 0.0,
+        "harmonic_distortion": 0.0,
+        "seed": null
+    },
+    "lpf_1_params": {
+        "filter_type": "butter",
+        "order": 6,
+        "cutoff_freq": 50000,
+        "mode": "lfilter",
+        "ripple_db": 1.0,
+        "atten_db": 40.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "pulse_1_params": {
+        "pulse_width": 1e-6,
+        "amplitude": 1.0,
+        "jitter_std": 0.0,
+        "amp_noise_std": 0.0,
+        "rise_time": 0.0,
+        "fall_time": 0.0,
+        "droop_coeff": 0.0,
+        "baseline_offset": 0.0,
+        "seed": null             
+    },
+    "mixer_2_params": {
+        "conversion_gain": 1.0,
+        "lo_leakage": 0.0,
+        "rf_leakage": 0.0,
+        "nonlinearity_coeff": 0.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "lo_2_params": {
+        "amp": 1,
+        "freq": 1,
+        "phase": 0,
+        "mod_enabled": false,
+        "phase_delta": 2000,
+        "phase_freq": 2500,
+        "phase_offset": 0,
+        "phase_noise_std": 0.0,
+        "amp_noise_std": 0.0,
+        "freq_drift_ppm": 0.0,
+        "harmonic_distortion": 0.0,
+        "seed": null
+    },
+    "lpf_2_params": {
+        "filter_type": "butter",
+        "order": 6,
+        "cutoff_freq": 50000,
+        "mode": "lfilter",
+        "ripple_db": 1.0,
+        "atten_db": 40.0,
+        "noise_std": 0.0,
+        "seed": null
+    },
+    "pulse_2_params": {
+        "pulse_width": 1e-6,
+        "amplitude": 1.0,
+        "jitter_std": 0.0,
+        "amp_noise_std": 0.0,
+        "rise_time": 0.0,
+        "fall_time": 0.0,
+        "droop_coeff": 0.0,
+        "baseline_offset": 0.0,
+        "seed": null             
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "config_name": "Input_Config_Ideal_1",
+    "freq_modes": [
+        "mag",
+        "ang",
+        "real",
+        "imag"
+    ],
+    "inputset_params": {
+        "num_sigs": 4000,
+        "num_recovery_sigs": 100,
+        "wave_precision": 3,
+        "tones_per_sig": [
+            2, 3, 4, 5, 6,
+            7, 8, 9, 10, 11
+        ],
+        "normalize": true,
+        "fft_shift": true,
+        "overwrite": true
+    },
+    "time_params": {
+        "time_range": [-0.006, 0.006],
+        "adc_samp_freq": 100000,
+        "sim_freq": 10000000
+    },
+    "log_params": {
+        "enabled": true,
+        "log_file": null,
+        "level": "INFO",
+        "console": true
+    },
+    "env_params": {
+        "noise_level": 0.0,
+        "attenuation": 1.0,
+        "doppler": 0.0,
+        "delay": 0.0,
+        "num_echoes": 0,
+        "max_delay": 0.0,
+        "max_doppler": 0.0,
+        "phase_inversion_prob": 0.0,
+        "seed": null
+    },
+    "wave_params":{
+        "num_waves": 5,
+        "freq_range": [1, 200000],
+        "amp_range": [0.7, 1.0],
+        "phase_range": [0.25,0.75],
+        "v_ref_range": [0, 1],
+        "allow_clipping": true,
+        "waves": [
+            {"amp": 0.25,
+            "freq": 5000,
+            "phase": 0},
+            {"amp": 0.25,
+            "freq": 16000,
+            "phase": 0},
+            {"amp": 0.25,
+            "freq": 150000,
+            "phase": 0}
+        ]
+    }
+}
