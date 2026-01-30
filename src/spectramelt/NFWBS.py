@@ -9,6 +9,7 @@ from .results import (
     NFWBSResult,
     NFWBSDictionary
 )
+import copy
 from scipy.linalg import dft
 from .LowPassFilter import LowPassFilter
 from .PulseGenerator import PulseGenerator
@@ -195,7 +196,7 @@ class NFWBS:
     def set_outputset_params(self, outputset_params=None):
         if outputset_params is None:
             outputset_params = {
-                "DUT_type": "NYFR",
+                "DUT_type": "NFWBS",
                 "decode_to_time": True,
                 "normalize": True,
                 "fft_shift": True,
@@ -570,55 +571,55 @@ class NFWBS:
     # -------------------------------
     
     def get_freq_modes(self):
-        return self.freq_modes
+        return copy.deepcopy(self.freq_modes)
     
     
     def get_outputset_params(self):
-        return self.outputset_params
+        return self.outputset_params.copy()
     
     
     def get_lo_1_params(self):
-        return self.lo_1_params
+        return self.lo_1_params.copy()
     
     
     def get_pulse_1_params(self):
-        return self.pulse_1_params
+        return self.pulse_1_params.copy()
      
     
     def get_mixer_1_params(self):
-        return self.mixer_1_params
+        return self.mixer_1_params.copy()
     
     
     def get_lpf_1_params(self):
-        return self.lpf_1_params
+        return self.lpf_1_params.copy()
     
     
     def get_lo_2_params(self):
-        return self.lo_2_params
+        return self.lo_2_params.copy()
     
     
     def get_pulse_2_params(self):
-        return self.pulse_2_params
+        return self.pulse_2_params.copy()
     
     
     def get_wavelet_params(self):
-        return self.wavelet_params
+        return self.wavelet_params.copy()
      
     
     def get_mixer_2_params(self):
-        return self.mixer_2_params
+        return self.mixer_2_params.copy()
     
     
     def get_lpf_2_params(self):
-        return self.lpf_2_params
+        return self.lpf_2_params.copy()
     
     
     def get_wbf_params(self):
-        return self.wbf_params
+        return self.wbf_params.copy()
     
     
     def get_adc_params(self):
-        return self.adc_params
+        return copy.deepcopy(self.adc_params)
     
     
     def get_dict_type(self):
@@ -630,7 +631,7 @@ class NFWBS:
     
     
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_all_params(self):
@@ -651,4 +652,4 @@ class NFWBS:
             "adc_params": self.adc_params,
             "log_params": self.log_params,
         }
-        return all_params
+        return copy.deepcopy(all_params)

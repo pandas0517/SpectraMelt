@@ -107,14 +107,14 @@ class Mixer:
         return self.config_name
 
     def get_mixer_params(self):
-        return self.mixer_params
+        return self.mixer_params.copy()
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
 
     def get_all_params(self):
         return {
-            "mixer_params": self.mixer_params,
-            "log_params": self.log_params,
+            "mixer_params": self.mixer_params.copy(),
+            "log_params": self.log_params.copy(),
             "config_name": self.config_name
         }

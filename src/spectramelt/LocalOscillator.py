@@ -217,17 +217,17 @@ class LocalOscillator:
     
     
     def get_lo_params(self):
-        return self.lo_params
+        return self.lo_params.copy()
     
     
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_all_params(self):
         all_params = {
-            "lo_params": self.lo_params,
+            "lo_params": self.lo_params.copy(),
             "config_name": self.config_name,
-            "log_params": self.log_params
+            "log_params": self.log_params.copy()
         }
         return all_params

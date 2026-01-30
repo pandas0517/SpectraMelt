@@ -42,24 +42,16 @@
         "seed": null
     },
     "adc_params": {
-        "store_conditioned_sigs": true,
-        "store_sh_sigs": true,
         "adc_samp_freq": 100000,
         "allow_clipping": true,
         "v_ref_range": [-10, 10],
         "num_bits": 8,
         "thermal_noise_std_dev": 0.0,
-        "non_linearity_mode": null,
-        "alpha": 0.0,
-        "threshold": 1.0,
         "jitter_std": 0.0,
-        "acquisition_time_constant": 0.0,
         "hold_noise_std": 0.0,
         "transient_mode": "fixed",
         "truncate_transients": true,
         "transient_fraction": 0.05,
-        "detection_window": 0.05,
-        "stability_threshold": 0.01,
         "seed": null
     },
     "wbf_params": {

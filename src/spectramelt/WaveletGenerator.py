@@ -381,7 +381,7 @@ class WaveletGenerator:
     # -------------------------------
 
     def get_wavelet_params(self):
-        return self.wavelet_params
+        return self.wavelet_params.copy()
 
 
     def get_config_name(self):
@@ -389,13 +389,13 @@ class WaveletGenerator:
 
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_all_params(self):
         all_params = {
-            "wavelet_params": self.wavelet_params,
+            "wavelet_params": self.wavelet_params.copy(),
             "config_name": self.config_name,
-            "log_params": self.log_params
+            "log_params": self.log_params.copy()
         }
         return all_params

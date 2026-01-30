@@ -4,6 +4,7 @@ from .utils import (
 )
 from .results import AnalogData
 import numpy as np
+import copy
 
 
 class Analog:
@@ -126,17 +127,17 @@ class Analog:
            
     
     def get_time_params(self):
-        return self.time_params
+        return copy.deepcopy(self.time_params)
     
     
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_all_params(self):
-        input_params = {
+        all_params = {
             "config_name": self.config_name,
             "time_params": self.time_params,
             "log_params": self.log_params
         }
-        return input_params
+        return copy.deepcopy(all_params)

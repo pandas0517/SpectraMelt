@@ -1270,8 +1270,6 @@ class DataSet:
         DUT_output = DUT_config.get('output')
         DUT_config_name = DUT_output.get('config_name')
 
-
-            
         input_dict = {
             get_prefix_before_recovery(p.name): p
             for p in input_dir.iterdir()
@@ -1375,38 +1373,34 @@ class DataSet:
     
     def get_ML_config_name(self):
         return self.ML_config_name
-    
-    
-    def get_freq_modes(self):
-        return self.freq_modes
 
     
     def get_directories(self):
-        return self.directories
+        return self.directories.copy()
 
 
     def get_flat_filenames(self):
-        return self.flat_filenames
+        return self.flat_filenames.copy()
     
     
     def get_filenames(self):
-        return self.filenames
+        return self.filenames.copy()
 
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_directory_params(self):
-        return self.directory_params
+        return copy.deepcopy(self.directory_params)
     
     
     def get_valid_dut_types(cls):
-        return cls.VALID_DUT_TYPES
+        return cls.VALID_DUT_TYPES.copy()
     
     
     def get_all_params(self):
-        dataset_params = {
+        all_params = {
             "config_name": self.config_name,
             "DUT_config_name": self.DUT_config_name,
             "input_config_name": self.input_config_name,
@@ -1417,4 +1411,4 @@ class DataSet:
             "directories": self.directories,
             "filenames": self.filenames,
         }
-        return dataset_params
+        return copy.deepcopy(all_params)

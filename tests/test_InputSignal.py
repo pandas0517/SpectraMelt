@@ -13,7 +13,6 @@ if __name__ == '__main__':
     import numpy as np
 
     analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
-    
     analog_sig_1 = analog_1.create_analog()
     
     real_time_1 = analog_sig_1.time
@@ -32,7 +31,7 @@ if __name__ == '__main__':
 
     input_signal_2 = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
     input_signal_2_env_params = input_signal_2.get_env_params()
-    input_signal_2_env_params["noise_level"] = 0.5
+    input_signal_2_env_params["noise_level"] = 3.0
     input_signal_2_env_params["attenuation"] = 0.7
     input_signal_2_env_params["doppler"] = 5e-5
     input_signal_2_env_params["delay"] = 0.5e-6
@@ -41,9 +40,11 @@ if __name__ == '__main__':
     input_signal_2_env_params["max_doppler"] = 1e-4
     input_signal_2_env_params["phase_inversion_prob"] = 0.2
     input_signal_2.set_env_params(input_signal_2_env_params)
+    
     input_signal_2_wave_params = input_signal_2.get_wave_params()
     input_signal_2_wave_params["v_ref_range"] = (0, 5)
     input_signal_2.set_wave_params(input_signal_2_wave_params)
+    
     real_input_2 = input_signal_2.create_input_signal(real_time=real_time_1)
     real_input_time_2 = real_input_2.input_signal
     real_input_freq_2 = fftshift(np.abs(fft(real_input_2.input_signal))) / (sim_freq_1*total_time_1)
@@ -54,18 +55,19 @@ if __name__ == '__main__':
     axes[0,0].set_title("Time (Ideal)")
     axes[0,1].plot(real_freq_1, real_input_freq_1)
     axes[0,1].set_title("Frequency - Magnitude (Ideal)")
-    axes[0,1].set_xlim(-200000, 200000)
+    axes[0,1].set_xlim(-300000, 300000)
     axes[0,2].plot(real_freq_1, real_input_phase_1)
     axes[0,2].set_title("Frequency - Phase (Ideal)")
-    axes[0,2].set_xlim(-200000, 200000)
+    axes[0,2].set_xlim(-300000, 300000)
     axes[1,0].plot(real_time_1, real_input_time_2)
     axes[1,0].set_title("Time (Real World)")
     axes[1,1].plot(real_freq_1, real_input_freq_2)
     axes[1,1].set_title("Frequency - Magnitude (Real World)")
-    axes[1,1].set_xlim(-200000, 200000)
+    axes[1,1].set_ylim(0,0.1)
+    axes[1,1].set_xlim(-300000, 300000)
     axes[1,2].plot(real_freq_1, real_input_phase_2)
-    axes[1,2].set_title("Frequency - Phase (Ideal)")
-    axes[1,2].set_xlim(-200000, 200000)
-    fig.suptitle("Simulated Analog Signals")
+    axes[1,2].set_title("Frequency - Phase (Real World)")
+    axes[1,2].set_xlim(-300000, 300000)
+    # fig.suptitle("Simulated Analog Signals")
     fig.tight_layout()
     plt.show()

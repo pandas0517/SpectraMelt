@@ -7,6 +7,7 @@ from .results import (
     InputSignalEffects,
     InputSignalResult
 )
+import copy
 import numpy as np
 
 
@@ -290,22 +291,22 @@ class InputSignal:
         return self.config_name
 
     def get_freq_modes(self):
-        return self.freq_modes
+        return self.freq_modes.copy()
 
     def get_inputset_params(self):
-        return self.inputset_params
+        return copy.deepcopy(self.inputset_params)
 
     def get_env_params(self):
-        return self.env_params
+        return self.env_params.copy()
 
     def get_wave_params(self):
-        return self.wave_params
+        return copy.deepcopy(self.wave_params)
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
 
     def get_all_params(self):
-        input_params = {
+        all_params = {
             "config_name": self.config_name,
             "freq_modes": self.freq_modes,
             "inputset_params": self.inputset_params,
@@ -313,4 +314,4 @@ class InputSignal:
             "wave_params": self.wave_params,
             "log_params": self.log_params
         }
-        return input_params
+        return copy.deepcopy(all_params)

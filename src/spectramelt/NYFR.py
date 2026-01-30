@@ -9,6 +9,7 @@ from .results import (
     NYFRResult,
     NYFRDictionary
 )
+import copy
 from scipy.linalg import dft
 from .LowPassFilter import LowPassFilter
 from .PulseGenerator import PulseGenerator
@@ -453,35 +454,35 @@ class NYFR:
     # -------------------------------
     
     def get_freq_modes(self):
-        return self.freq_modes
+        return copy.deepcopy(self.freq_modes)
     
     
     def get_outputset_params(self):
-        return self.outputset_params
+        return self.outputset_params.copy()
     
     
     def get_lo_params(self):
-        return self.lo_params
+        return self.lo_params.copy()
     
     
     def get_pulse_params(self):
-        return self.pulse_params
+        return self.pulse_params.copy()
     
     
     def get_adc_params(self):
-        return self.adc_params
+        return copy.deepcopy(self.adc_params)
      
     
     def get_mixer_params(self):
-        return self.mixer_params
+        return self.mixer_params.copy()
     
     
     def get_lpf_params(self):
-        return self.lpf_params
+        return self.lpf_params.copy()
     
     
     def get_wbf_params(self):
-        return self.wbf_params
+        return self.wbf_params.copy()
     
     
     def get_dict_type(self):
@@ -493,7 +494,7 @@ class NYFR:
     
     
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
 
     def get_all_params(self):
@@ -509,4 +510,4 @@ class NYFR:
             "adc_params": self.adc_params,
             "log_params": self.log_params,
         }
-        return all_params
+        return copy.deepcopy(all_params)

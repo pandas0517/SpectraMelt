@@ -184,14 +184,14 @@ class PulseGenerator:
         return self.config_name
 
     def get_pulse_params(self):
-        return self.pulse_params
+        return self.pulse_params.copy()
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
 
     def get_all_params(self):
         return {
-            "pulse_params": self.pulse_params,
+            "pulse_params": self.pulse_params.copy(),
             "config_name": self.config_name,
-            "log_params": self.log_params
+            "log_params": self.log_params.copy()
         }

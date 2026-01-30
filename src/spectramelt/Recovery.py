@@ -14,6 +14,7 @@ from .utils import(
 import pandas as pd
 import pickle
 from pathlib import Path
+import copy
 
 
 class Recovery:
@@ -25,8 +26,6 @@ class Recovery:
         "real_imag"
     }
     def __init__(self,
-                signal=None,
-                dictionary=None,
                 all_params=None,
                 freq_modes=None,
                 recovery_params=None,
@@ -50,10 +49,6 @@ class Recovery:
         
         if config_file_path is not None and self.logger is not None:
             self.logger.info(f"Loaded {self.__class__.__name__} configuration from file: {config_file_path}")
-                
-        self.recovered_coefs = None
-        if signal is not None and dictionary is not None:
-            self.recovered_coefs = self.recover_signal(signal, dictionary, num_waves)
 
     # -------------------------------
     # Setters
@@ -268,7 +263,6 @@ class Recovery:
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 
-        self.recovered_coefs = recovered_coef
         return recovered_coef
 
 
@@ -508,37 +502,28 @@ class Recovery:
 
         return rows
 
-
     # -------------------------------
     # Getters
     # -------------------------------
 
     def get_config_name(self):
         return self.config_name
-
-    
-    def get_recovered_coefs(self):
-        return self.recovered_coefs
     
     
     def get_freq_modes(self):
-        return self.freq_modes
+        return self.freq_modes.copy()
     
     
     def get_dataframe_params(self):
-        return self.dataframe_params
+        return copy.deepcopy(self.dataframe_params)
 
     
     def get_recovery_params(self):
-        return self.recovery_params
-    
-    
-    def get_valid_saved_freq_modes(cls):
-        return VALID_SAVED_FREQ_MODES
+        return self.recovery_params.copy()
 
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
     
     
     def get_all_params(self):
@@ -549,4 +534,4 @@ class Recovery:
             "dataframe_params": self.dataframe_params,
             "log_params": self.log_params
         }
-        return all_params
+        return copy.deepcopy(all_params)

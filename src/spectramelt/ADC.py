@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List, Tuple
+import copy
 from .utils import load_config_from_json, get_logger
 from .results import (
     ConditionedSignal,
@@ -76,17 +77,11 @@ class ADC:
             "v_ref_range": (0.0, 1.0),
             "num_bits": 8,
             "thermal_noise_std_dev": 0.0,
-            "non_linearity_mode": None,
-            "alpha": 0.0,
-            "threshold": 1.0,
             "jitter_std": 0.0,
-            "acquisition_time_constant": 0.0,
             "hold_noise_std": 0.0,
             "transient_mode": "fixed",
             "truncate_transients": True,
             "transient_fraction": 0.05,
-            "detection_window": 0.05,
-            "stability_threshold": 0.01,
             "seed": None
         }
         self.rng = np.random.default_rng(self.adc_params.get("seed"))
@@ -263,11 +258,11 @@ class ADC:
     # ============================================================
 
     def get_adc_params(self):
-        return self.adc_params
+        return copy.deepcopy(self.adc_params)
 
 
     def get_log_params(self):
-        return self.log_params
+        return self.log_params.copy()
 
 
     def get_config_name(self):
@@ -280,4 +275,4 @@ class ADC:
             "config_name": self.config_name,
             "log_params": self.log_params
             }
-        return all_params
+        return copy.deepcopy(all_params)
