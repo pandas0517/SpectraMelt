@@ -228,7 +228,7 @@ class NYFR:
     # Core functional methods
     # -------------------------------
     
-    def create_dictionary(self, lo_phase_mod_mid, wbf_time):
+    def create_dictionary(self, lo_phase_mod_mid, wbf_time) -> NYFRDictionary:
         """Create a real or complex dictionary matrix efficiently."""
 
         num_time_points = len(wbf_time)
@@ -333,7 +333,7 @@ class NYFR:
                              return_pulse=False,
                              return_mixed=False,
                              return_lpf=False,
-                             return_effects=False):
+                             return_effects=False) -> NYFRResult:
         
         return_wbf   = return_wbf   or return_internal
         return_lo    = return_lo    or return_internal

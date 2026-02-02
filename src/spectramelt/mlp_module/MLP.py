@@ -607,7 +607,7 @@ class MLP:
                          norm_h5_output_path=None,
                          mlp_model=None,
                          in_norm_type=None,
-                         out_norm_type=None):
+                         out_norm_type=None) -> np.array:
 
         if (norm_h5_input_path is not None and
             norm_h5_input_path.is_file() and 

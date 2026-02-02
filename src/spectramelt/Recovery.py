@@ -9,8 +9,11 @@ from .utils import(
     safe_min,
     safe_max,
     safe_mean,
-    filter_valid_names
+    filter_valid_names,
+    VALID_SAVED_FREQ_MODES
 )
+from typing import Optional
+from .protocols import RecoveryMLPProtocol
 import pandas as pd
 import pickle
 from pathlib import Path
@@ -195,6 +198,12 @@ class Recovery:
     # Core functional methods
     # -------------------------------
 
+    def is_valid_saved_freq_mode(self, name) -> bool:
+        if isinstance(name, str):
+            name = [name]
+        return all(n.lower() in VALID_SAVED_FREQ_MODES for n in name)
+
+
     def is_valid_recovery_method(self, name) -> bool:
         if isinstance(name, str):
             name = [name]
@@ -202,8 +211,9 @@ class Recovery:
 
 
     def recover_signal(self, signal, dictionary=None, num_waves=1,
-                       MLP=None, mlp_model=None, model_file_path=None,
-                       recovery_type=None, recovery_method=None):
+                       mlp: Optional[RecoveryMLPProtocol] = None,
+                       mlp_model=None, model_file_path=None,
+                       recovery_type=None, recovery_method=None) -> np.ndarray:
         sigma = self.recovery_params.get('sigma', 0.001)
         dict_mag_adj = self.recovery_params.get('dict_mag_adj', 1.0)
 
@@ -244,14 +254,14 @@ class Recovery:
                 signal_norm = np.linalg.norm(signal)
                 recovered_coef,_,_,_ = spgl1.spgl1(dict_mag_adj * dictionary, signal/signal_norm, sigma=sigma)
             case 'mlp':
-                if MLP is None:
+                if mlp is None:
                     self.logger.error("No MLP object given")
                     raise FileNotFoundError("No MLP object given")
                 elif model_file_path is not None:
                     if not model_file_path.exists():
                         self.logger.error(f"File not found: {model_file_path}")
                         raise FileNotFoundError(f"File not found: {model_file_path}")
-                    MLP.set_model_file_path(model_file_path)
+                    mlp.set_model_file_path(model_file_path)
                     
                 if premultiply:
                     pseudo = np.linalg.pinv(dict_mag_adj *dictionary)
@@ -259,7 +269,7 @@ class Recovery:
                 else:
                     init_guess = signal
                     
-                recovered_coef = MLP.model_prediction(init_guess, recovery_type, mlp_model=mlp_model)
+                recovered_coef = mlp.model_prediction(init_guess, recovery_type, mlp_model=mlp_model)
             case _:
                 self.logger.error(f"Recovery method {recovery_method} is not supported")
 
