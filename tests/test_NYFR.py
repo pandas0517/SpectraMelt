@@ -23,11 +23,13 @@ if __name__ == '__main__':
     show_wbf_signals = False
     show_LO_signals = False
     show_mixed_signals = False
-    show_lpf_signals = True
-    show_conditioned_signals = True
-    show_ADC_signals = True
+    show_lpf_signals = False
+    show_conditioned_signals = False
+    show_lpf_cond_signals = False
+    show_ADC_signals = False
+    show_premultiply_signals = False
     show_recovered_signals = False
-    show_premultiply_signals = True
+    show_pre_rec_signals = True
     
     analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
     analog_sig_1 = analog_1.create_analog()
@@ -64,6 +66,9 @@ if __name__ == '__main__':
         plt.show()
    
     nyfr_1 = NYFR(config_file_path=Path(getenv('NYFR_CONF')))
+    nyfr_1_adc_params = nyfr_1.get_adc_params()
+    nyfr_1_adc_params["v_ref_range"] = (-2.5, 2.5)
+    nyfr_1.set_adc_params(nyfr_1_adc_params)
     start = time.time()
     nyfr_signal_1 = nyfr_1.create_output_signal(real_input_time_1, real_time_1,
                                                 return_internal=True)
@@ -110,6 +115,7 @@ if __name__ == '__main__':
     samp_freq = nyfr_signal_1.adc_signal.quantized.sampled_frequency
 
     nyfr_lpf_waves = []
+    nyfr_cond_waves = []
     nyfr_adc_waves = []
 
     for input_wave in input_signal_1_waves:
@@ -119,16 +125,34 @@ if __name__ == '__main__':
         for folded_freq in (np.abs(base_fold), -np.abs(base_fold)):
 
             real_freq_idx = np.abs(real_freq_1 - folded_freq).argmin()
+            cond_freq_idx = np.abs(lpf_cond_freq_1 - folded_freq).argmin()
             samp_freq_idx = np.abs(samp_freq - folded_freq).argmin()
 
             nyfr_lpf_wave = input_wave.copy()
             nyfr_lpf_wave['amp'] = lpf_freq_1[real_freq_idx]
             nyfr_lpf_wave['freq'] = real_freq_1[real_freq_idx]
+            if folded_freq < 0:
+                nyfr_lpf_wave['orig_freq'] = int(-input_freq / 1000)
+            else:
+                nyfr_lpf_wave['orig_freq'] = int(input_freq / 1000)
             nyfr_lpf_waves.append(nyfr_lpf_wave)
+            
+            nyfr_cond_wave = input_wave.copy()
+            nyfr_cond_wave['amp'] = lpf_cond_sig_freq_1[cond_freq_idx]
+            nyfr_cond_wave['freq'] = lpf_cond_freq_1[cond_freq_idx]
+            if folded_freq < 0:
+                nyfr_cond_wave['orig_freq'] = int(-input_freq / 1000)
+            else:
+                nyfr_cond_wave['orig_freq'] = int(input_freq / 1000)
+            nyfr_cond_waves.append(nyfr_cond_wave)
 
             nyfr_adc_wave = input_wave.copy()
             nyfr_adc_wave['amp'] = quant_freq_nyfr_1[samp_freq_idx]
             nyfr_adc_wave['freq'] = samp_freq[samp_freq_idx]
+            if folded_freq < 0:
+                nyfr_adc_wave['orig_freq'] = int(-input_freq / 1000)
+            else:
+                nyfr_adc_wave['orig_freq'] = int(input_freq / 1000)
             nyfr_adc_waves.append(nyfr_adc_wave)
 
     if show_wbf_signals:
@@ -147,13 +171,13 @@ if __name__ == '__main__':
         fig, axes = plt.subplots(1, 3, figsize=(8,4))
         axes[0].plot(real_time_1, lo_signal_1)
         axes[0].plot(real_time_1, pulse_signal_1)
-        axes[0].set_title("Time (File)")
+        axes[0].set_title("Time (Ideal)")
         axes[0].set_xlim(-0.0000125, 0.0000125)
         axes[1].plot(real_freq_1, lo_freq_1)
-        axes[1].set_title("LO Frequency (File)")
+        axes[1].set_title("LO Frequency (Ideal)")
         axes[1].set_xlim(-120000, 120000)
         axes[2].plot(real_freq_1, pulse_freq_1)
-        axes[2].set_title("Pulse Frequency (File)")
+        axes[2].set_title("Pulse Frequency (Ideal)")
         axes[2].set_xlim(-120000, 120000)
         fig.suptitle("LO and Pulse Signals")
         fig.tight_layout()
@@ -163,17 +187,18 @@ if __name__ == '__main__':
         fig, axes = plt.subplots(1, 2, figsize=(8,4))
         axes[0].plot(real_time_1, mixed_signal_1, label="Mixed")
         axes[0].plot(real_time_1, wbf_signal_1, label="Wideband Filtered")
-        axes[0].set_title("Time (File)")
+        axes[0].set_title("Time (Ideal)")
         axes[0].set_xlim(-0.0001, 0.0001)
         axes[0].legend()
         axes[1].plot(real_freq_1, mixed_freq_1)
-        axes[1].set_title("Frequency (File)")
+        axes[1].set_title("Frequency (Ideal)")
         axes[1].set_xlim(-120000, 120000)
         fig.suptitle("NYFR Mixed Signals")
         fig.tight_layout()
         plt.show()
     
     if show_lpf_signals:
+        nyfr_orig_freqs = np.array([w['orig_freq'] for w in nyfr_lpf_waves])
         nyfr_freqs = np.array([w['freq'] for w in nyfr_lpf_waves])
         nyfr_amps  = np.array([w['amp']  for w in nyfr_lpf_waves])
         fig, axes = plt.subplots(1, 2, figsize=(8,4))
@@ -191,50 +216,155 @@ if __name__ == '__main__':
             s=100,
             label="NYFR Folded Waves"
         )
+        for f, a, og in zip(nyfr_freqs, nyfr_amps, nyfr_orig_freqs):
+            axes[1].annotate(
+                f"{og:.0f} KHz",
+                (f, a),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+                fontsize=8
+            )
         # fig.suptitle("NYFR Low Pass Filtered Signals")
         axes[1].legend()
         fig.tight_layout()
         plt.show()
  
     if show_conditioned_signals:
-        fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-        axes[0,0].plot(lpf_cond_time_1, lpf_cond_sig_1)
-        axes[0,0].set_title("Time (File)")
-        #axes[0,0].set_xlim(-0.0002, 0.0002)
-        axes[0,1].plot(lpf_cond_freq_1, lpf_cond_sig_freq_1)
-        axes[0,1].set_title("Frequency (File)")
-        axes[0,1].set_ylim(0, 1)
-        axes[0,1].set_xlim(-10000, 10000)
-        axes[1,0].plot(lpf_cond_time_2, lpf_cond_sig_2)
-        #axes[1,0].set_title("Time (Default)")
-        #axes[1,0].set_xlim(0, 0.04)
-        axes[1,1].plot(lpf_cond_freq_2, lpf_cond_sig_freq_2)
-        axes[1,1].set_title("Frequency (Default)")
-        axes[1,1].set_xlim(-130, 130)
+        nyfr_orig_freqs = np.array([w['orig_freq'] for w in nyfr_cond_waves])
+        nyfr_freqs = np.array([w['freq'] for w in nyfr_cond_waves])
+        nyfr_amps  = np.array([w['amp']  for w in nyfr_cond_waves])
+        fig, axes = plt.subplots(1, 2, figsize=(8,4))
+        axes[0].plot(lpf_cond_time_1, lpf_cond_sig_1, label="Conditioned")
+        axes[0].plot(real_time_1, lpf_signal_1, label="LPF")
+        axes[0].set_title("Time (File)")
+        axes[0].set_xlim(-0.0002, 0.0002)
+        axes[0].legend()
+        axes[1].plot(lpf_cond_freq_1, lpf_cond_sig_freq_1)
+        axes[1].set_title("Frequency Magnitude (File)")
+        # axes[1].set_ylim(0, 1)
+        axes[1].set_xlim(-75000, 75000)
+        axes[1].scatter(
+            nyfr_freqs,
+            nyfr_amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="NYFR Folded Waves"
+        )
+        for f, a, og in zip(nyfr_freqs, nyfr_amps, nyfr_orig_freqs):
+            axes[1].annotate(
+                f"{og:.0f} KHz",
+                (f, a),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+                fontsize=8
+            )
+        axes[1].legend()
         fig.suptitle("NYFR Conditioned Low Pass Filtered Signals")
+        fig.tight_layout()
+        plt.show()
+        
+    if show_lpf_cond_signals:
+        nyfr_orig_freqs = np.array([w['orig_freq'] for w in nyfr_lpf_waves])
+        nyfr_freqs = np.array([w['freq'] for w in nyfr_lpf_waves])
+        nyfr_amps  = np.array([w['amp']  for w in nyfr_lpf_waves])
+        fig, axes = plt.subplots(2, 2, figsize=(8,4))
+        axes[0,0].plot(real_time_1, lpf_signal_1, color='black')
+        axes[0,0].set_title(f"Time (Ideal)\nUsing filter mode {lpf_params_1['mode']}")
+        axes[0,0].set_xlim(-0.0002, 0.0002)
+        axes[0,1].plot(real_freq_1, lpf_freq_1, color='black')
+        axes[0,1].set_title("Frequency Magnitude (Ideal)")
+        axes[0,1].set_ylim(0, 0.00275)
+        axes[0,1].set_xlim(-75000, 75000)
+        axes[0,1].scatter(
+            nyfr_freqs,
+            nyfr_amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="NYFR Folded Waves"
+        )
+        for f, a, og in zip(nyfr_freqs, nyfr_amps, nyfr_orig_freqs):
+            axes[0,1].annotate(
+                f"{og:.0f} KHz",
+                (f, a),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+                fontsize=8
+            )
+        # fig.suptitle("NYFR Low Pass Filtered Signals")
+        axes[0,1].legend()
+
+        nyfr_orig_freqs = np.array([w['orig_freq'] for w in nyfr_cond_waves])
+        nyfr_freqs = np.array([w['freq'] for w in nyfr_cond_waves])
+        nyfr_amps  = np.array([w['amp']  for w in nyfr_cond_waves])
+        axes[1,0].plot(lpf_cond_time_1, lpf_cond_sig_1, label="Conditioned")
+        axes[1,0].plot(real_time_1, lpf_signal_1, color='black', label="LPF")
+        axes[1,0].set_title("Time (Ideal)")
+        axes[1,0].set_xlim(-0.0002, 0.0002)
+        axes[1,0].legend()
+        axes[1,1].plot(lpf_cond_freq_1, lpf_cond_sig_freq_1, label="Conditioned")
+        axes[1,1].set_title("Frequency Magnitude (Ideal)")
+        axes[1,1].set_ylim(0, 0.475)
+        axes[1,1].set_xlim(-75000, 75000)
+        axes[1,1].scatter(
+            nyfr_freqs,
+            nyfr_amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="NYFR Folded Waves"
+        )
+        for f, a, og in zip(nyfr_freqs, nyfr_amps, nyfr_orig_freqs):
+            axes[1,1].annotate(
+                f"{og:.0f} KHz",
+                (f, a),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+                fontsize=8
+            )
+        axes[1,1].legend()
         fig.tight_layout()
         plt.show()
     
     if show_ADC_signals:
-        fig, axes = plt.subplots(2, 3, figsize=(8,4))  # 2 rows, 2 columns
-        axes[0,0].plot(lpf_cond_time_1, lpf_cond_sig_1)
-        axes[0,0].plot(lpf_cond_time_1, sh_output_nyfr_1)
-        axes[0,0].set_title("Sample and Hold - Time (File)")
-        axes[0,0].set_xlim(-0.0003, 0.0003)
-        axes[0,1].step(mid_times_nyfr_1, quantized_nyfr_1, color='green', where='mid')
-        axes[0,1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (File)")
-        axes[0,2].plot(samp_freq_nyfr_1, quant_freq_nyfr_1)
-        axes[0,2].set_ylim(0, 0.2)
-        axes[0,2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (File)")
-        axes[1,0].plot(lpf_cond_time_2, lpf_cond_sig_2)
-        axes[1,0].plot(lpf_cond_time_2, sh_output_nyfr_2)
-        axes[1,0].set_title("Sample and Hold - Time (Default)")
-        axes[1,0].set_xlim(0, 0.04)
-        axes[1,1].step(mid_times_nyfr_2, quantized_nyfr_2, color='green', where='mid')
-        axes[1,1].set_title(f"{bits_nyfr_2}-bit quantizer - Time (Default)")
-        axes[1,2].plot(samp_freq_nyfr_2, quant_freq_nyfr_2)
-        axes[1,2].set_ylim(0, 0.2)
-        axes[1,2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (File)")
+        nyfr_orig_freqs = np.array([w['orig_freq'] for w in nyfr_adc_waves])
+        nyfr_freqs = np.array([w['freq'] for w in nyfr_adc_waves])
+        nyfr_amps  = np.array([w['amp']  for w in nyfr_adc_waves])
+        fig, axes = plt.subplots(1, 3, figsize=(8,4))  # 2 rows, 2 columns
+        axes[0].plot(lpf_cond_time_1, lpf_cond_sig_1, color='black', label="Conditioned")
+        axes[0].plot(lpf_cond_time_1, sh_output_nyfr_1, color='orange', label="Sample and Hold")
+        axes[0].set_title("Sample and Hold - Time (Ideal)")
+        axes[0].set_xlim(-0.0002, 0.0002)
+        axes[0].legend()
+        axes[1].step(mid_times_nyfr_1, quantized_nyfr_1, where='mid')
+        axes[1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (Ideal)")
+        axes[1].set_xlim(-0.0002, 0.0002)
+        axes[2].plot(samp_freq_nyfr_1, quant_freq_nyfr_1)
+        # axes[2].set_ylim(0, 0.2)
+        axes[2].scatter(
+            nyfr_freqs,
+            nyfr_amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="NYFR Folded Waves"
+        )
+        for f, a, og in zip(nyfr_freqs, nyfr_amps, nyfr_orig_freqs):
+            axes[2].annotate(
+                f"{og:.0f} KHz",
+                (f, a),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+                fontsize=8
+            )
+        axes[2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
+        axes[2].legend()
         fig.suptitle("NYFR ADC Signals")
         fig.tight_layout()
         plt.show()
@@ -245,12 +375,30 @@ if __name__ == '__main__':
     logger.info(f"NYFR dictionary creation time with file config: {end - start:.6f} seconds")  
 
     dictionary_1 = nyfr_dict_1.dictionary
+    col_norms = np.linalg.norm(dictionary_1, axis=0)
     start = time.time()
-    pinv_1 = np.linalg.pinv(100*dictionary_1)
+    # pinv_1 = np.linalg.pinv(dictionary_1 / col_norms)
+    pinv_1 = np.linalg.pinv(dictionary_1)
     premultiply_1 = pinv_1 @ quantized_nyfr_1
+    premult_mag_1 = fftshift(np.abs(fft(premultiply_1))) / len(premultiply_1)
     end = time.time()
     logger.info(f"Premultiplication Time: {end - start:.6f} seconds")
-
+    
+    if show_premultiply_signals:
+        fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 2 rows, 2 columns
+        axes[0].plot(real_freq_1, wbf_sig_freq_1)
+        axes[0].set_title("Input Frequency Magnitude (Ideal)")
+        axes[0].set_xlim(-200000, 200000)
+        axes[1].plot(wbf_freq_1, premult_mag_1)
+        axes[1].set_xlim(-200000, 200000)
+        axes[1].set_title("Premultiply Frequency Magnitude (Ideal)")
+        # axes[0].set_ylim(0, 1)
+        # axes[0].set_xlim(-50000, 50000)
+        #axes[0,0].set_xlim(-0.0002, 0.0002)
+        # fig.suptitle("Premultiply Signals")
+        fig.tight_layout()
+        plt.show()
+        
     recovery_1 = Recovery(config_file_path=Path(getenv('RECOVERY_CONF')))
     recovery_method_1 = "spgl1" 
     recovery_1.set_recovery_method(recovery_method_1)
@@ -264,47 +412,75 @@ if __name__ == '__main__':
     recovered_signal_1 = ifft(recovered_freq_1)
 
     if show_recovered_signals:
-        fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
-        axes[0,0].plot(real_freq_1, real_input_freq_1)
-        axes[0,0].set_title("Frequency (File)")
-        axes[0,0].set_ylim(0, 1)
-        axes[0,0].set_xlim(-50000, 50000)
+        pos_freqs = np.array([w['freq'] for w in input_signal_1_waves])
+        neg_freqs = np.array([-w['freq'] for w in input_signal_1_waves])
+        freqs = np.concatenate((neg_freqs, pos_freqs))
+        pos_amps  = np.array([(w['amp'] / 2) for w in input_signal_1_waves])
+        amps = np.concatenate((pos_amps, pos_amps))
+        fig, axes = plt.subplots(1, 2, figsize=(8,4))  # 2 rows, 2 columns
+        axes[0].plot(real_freq_1, real_input_freq_1)
+        axes[0].set_title("Frequency (File)")
+        # axes[0].set_ylim(0, 1)
+        axes[0].set_xlim(-200000, 200000)
         #axes[0,0].set_xlim(-0.0002, 0.0002)
-        axes[0,1].plot(wbf_freq_1, recovered_sig_freq_1)
-        axes[0,1].set_title(f"Frequency (File)\nRecovery Method: {recovery_method_1}")
-        axes[0,1].set_ylim(0, 1)
-        axes[0,1].set_xlim(-50000, 50000)
-        axes[1,0].plot(real_freq_2, real_input_freq_2)
-        axes[1,0].set_title(f"Time (Default)")
-        axes[1,0].set_xlim(0, 0.04)
-        axes[1,1].plot(wbf_freq_2, recovered_sig_freq_2)
-        axes[1,1].set_title(f"Frequency (Default)\nRecovery Method: {recovery_method_2}")
-        axes[1,1].set_xlim(-130, 130)
+        axes[1].plot(wbf_freq_1, recovered_sig_freq_1)
+        axes[1].set_title(f"Frequency (File)\nRecovery Method: {recovery_method_1}")
+        # axes[1].set_ylim(0, 1)
+        axes[1].set_xlim(-200000, 200000)
+        axes[1].scatter(
+            freqs,
+            amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="NYFR Folded Waves"
+        )
         fig.suptitle("NYFR Recovered Signals")
         fig.tight_layout()
         plt.show()
-    
-    if show_premultiply_signals:
-        premult_mag_1 = fftshift(np.abs(fft(premultiply_1))) / len(premultiply_1)
-        premult_mag_2 = fftshift(np.abs(fft(premultiply_2))) / len(premultiply_2)
+        
+    if show_pre_rec_signals:
+        pos_freqs = np.array([w['freq'] for w in input_signal_1_waves])
+        neg_freqs = np.array([-w['freq'] for w in input_signal_1_waves])
+        freqs = np.concatenate((neg_freqs, pos_freqs))
+        pos_amps  = np.array([(w['amp'] / 2) for w in input_signal_1_waves])
+        amps = np.concatenate((pos_amps, pos_amps))
+        
         fig, axes = plt.subplots(2, 2, figsize=(8,4))  # 2 rows, 2 columns
         axes[0,0].plot(real_freq_1, wbf_sig_freq_1)
-        axes[0,0].set_title("Frequency (File)")
-        axes[0,0].set_xlim(-160000, 160000)
+        axes[0,0].set_title("Input Frequency Magnitude (Ideal)")
+        axes[0,0].set_xlim(-200000, 200000)
         axes[0,1].plot(wbf_freq_1, premult_mag_1)
-        axes[0,1].set_title("Premultiply Frequency (File)")
-        # axes[0].set_ylim(0, 1)
-        # axes[0].set_xlim(-50000, 50000)
-        #axes[0,0].set_xlim(-0.0002, 0.0002)
-        axes[1,0].plot(real_freq_2, wbf_sig_freq_2)
-        axes[1,0].set_title("Frequency (File)")
-        axes[1,0].set_xlim(-1600, 1600)
-        axes[1,1].plot(wbf_freq_2, premult_mag_2)
-        axes[1,1].set_title("Premultiply Frequency (Default)")
-        # axes[1].set_ylim(0, 1)
-        # axes[1].set_xlim(-50000, 50000)
-        fig.suptitle("Premultiply Signals")
+        axes[0,1].set_xlim(-200000, 200000)
+        axes[0,1].set_title("Premultiply Frequency Magnitude (Ideal)")
+
+        axes[1,0].plot(wbf_freq_1, recovered_sig_freq_1)
+        axes[1,0].set_title(f"Frequency Magnitude (Ideal)\nRecovery Method: {recovery_method_1}")
+        axes[1,0].set_xlim(-200000, 200000)
+        axes[1,0].scatter(
+            freqs,
+            amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="Original Input Tones"
+        )
+        axes[1,0].legend()
+        axes[1,1].plot(wbf_freq_1, recovered_sig_freq_1)
+        axes[1,1].set_title(f"Frequency Magnitude (Ideal)\nRecovery Zoomed in")
+        axes[1,1].set_ylim(0,0.15)
+        axes[1,1].set_xlim(10000, 20000)
+        axes[1,1].scatter(
+            freqs,
+            amps,
+            marker="x",
+            color='red',
+            s=100,
+            label="Original Input Tones"
+        )
+        axes[1,1].legend()
+        fig.suptitle("NYFR Recovered Signals")
         fig.tight_layout()
-        plt.show()
+        plt.show()        
              
     atexit.register(logger.info, "Completed Test\n")
