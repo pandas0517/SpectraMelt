@@ -155,7 +155,7 @@ class InputSignal:
     # Core functional methods
     # -------------------------------
 
-    def create_input_signal(self, real_time, return_effects=False):
+    def create_input_signal(self, real_time, return_effects=False) -> InputSignalResult:
         """
         Generate composite signal with environmental effects and random wave generation.
         """

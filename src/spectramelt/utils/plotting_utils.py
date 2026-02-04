@@ -19,6 +19,7 @@ REQUIRED_AXIS_KEYS = {"time", "freq"}
 class PlotBlock:
     family: str              # "polar", "complex", or "time"
     label: str               # "mag", "ang", "real", "imag", "Time"
+    decibel: bool = False
     data: np.ndarray
     freqs_pos: np.ndarray = None
     pos_vals: np.ndarray  = None
@@ -212,7 +213,11 @@ def _split_mag_ang_sincos(arr, fft_shift_flag=False, normalize=False):
 # =========================
 
 def expand_freq_modes(freq_arrays, freq_modes, idx,
-                      fft_shift_flag=False, normalize=False, wp=None):
+                      fft_shift_flag=False, normalize=False, wp=None, decibels=False):
+    def to_db(arr):
+        # Voltage dB conversion with zero protection
+        return 20.0 * np.log10(np.maximum(np.abs(arr), 1e-12))
+    
     blocks = []
 
     if wp is not None:
@@ -224,28 +229,35 @@ def expand_freq_modes(freq_arrays, freq_modes, idx,
         neg_freqs   = -freqs
         neg_phases = -phases
         imag_neg   = -imags
+        
+        # ---- convert to dB if requested ----
+        if decibels:
+            amps  = 20 * np.log10(np.maximum(amps, 1e-12))
+            reals = 20 * np.log10(np.maximum(np.abs(reals), 1e-12))
+            imags = 20 * np.log10(np.maximum(np.abs(imags), 1e-12))
+            imag_neg = 20 * np.log10(np.maximum(np.abs(imag_neg), 1e-12))
     else:
         amps = phases = freqs = reals = imags = neg_freqs = neg_phases = imag_neg = np.array([])
 
     def add(fam, lbl, data, pos_f=None, pos=None,
-            neg_f=None, neg=None, src=None):
+            neg_f=None, neg=None, src=None, decibel=False):
         if data is not None:
             blocks.append(
                 PlotBlock(fam, lbl, data, freqs_pos=pos_f, pos_vals=pos,
-                          freqs_neg=neg_f, neg_vals=neg, source=src)
+                          freqs_neg=neg_f, neg_vals=neg, source=src, decibel=decibel)
             )
 
     # ---- Direct modes with shift/normalize ----
     if "mag" in freq_modes and freq_arrays.get("mag") is not None:
         arr = extract(freq_arrays["mag"], idx)
-        # arr = arr * 2
         if arr is not None:
-            if arr.ndim == 1:
-                if fft_shift_flag:
-                    arr = fftshift(arr)
-                if normalize:
-                    arr = arr / arr.size
-            add("polar", "mag", arr, freqs, amps, neg_freqs, amps, "mag")
+            if fft_shift_flag:
+                arr = fftshift(arr)
+            if normalize:
+                arr = arr / arr.size
+            if decibels:
+                arr = to_db(arr)
+            add("polar", "mag", arr, freqs, amps, neg_freqs, amps, "mag", decibels)
 
     if "ang" in freq_modes and freq_arrays.get("ang") is not None:
         arr = extract(freq_arrays["ang"], idx)
@@ -262,7 +274,10 @@ def expand_freq_modes(freq_arrays, freq_modes, idx,
                 arr = fftshift(arr)
             if normalize:
                 arr = arr / arr.size
-            add("complex", "real", arr, freqs, reals, neg_freqs, reals, "real")
+            if decibels:
+                arr = to_db(arr)
+            add("complex", "real", arr, freqs, reals, neg_freqs, reals, "real", decibels)
+
 
     if "imag" in freq_modes and freq_arrays.get("imag") is not None:
         arr = extract(freq_arrays["imag"], idx)
@@ -271,37 +286,41 @@ def expand_freq_modes(freq_arrays, freq_modes, idx,
                 arr = fftshift(arr)
             if normalize:
                 arr = arr / arr.size
-            add("complex", "imag", arr, freqs, imags, neg_freqs, imag_neg, "imag")
+            if decibels:
+                arr = to_db(arr)
+            add("complex", "imag", arr, freqs, imags, neg_freqs, imag_neg, "imag", decibels)
+
 
     # ---- real_imag ----
     if "real_imag" in freq_modes and freq_arrays.get("real_imag") is not None:
         arr = extract(freq_arrays["real_imag"], idx)
         if arr is not None:
             real, imag = _split_real_imag(arr, fft_shift_flag=fft_shift_flag, normalize=normalize)
-            add("complex", "real", real, freqs,
-                reals, neg_freqs, reals, "real_imag")
-            add("complex", "imag", imag, freqs,
-                imags, neg_freqs, imag_neg, "real_imag")
+            if decibels:
+                real = to_db(real)
+                imag = to_db(imag)
+            add("complex", "real", real, freqs, reals, neg_freqs, reals, "real_imag", decibels)
+            add("complex", "imag", imag, freqs, imags, neg_freqs, imag_neg, "real_imag", decibels)
 
     # ---- mag_ang ----
     if "mag_ang" in freq_modes and freq_arrays.get("mag_ang") is not None:
         arr = extract(freq_arrays["mag_ang"], idx)
         if arr is not None:
             mag, ang = _split_mag_ang(arr, fft_shift_flag=fft_shift_flag, normalize=normalize)
-            add("polar", "mag", mag, freqs,
-                amps, neg_freqs, amps, "mag_ang")
-            add("polar", "ang", ang, freqs,
-                phases, neg_freqs, neg_phases, "mag_ang")
+            if decibels:
+                mag = to_db(mag)
+            add("polar", "mag", mag, freqs, amps, neg_freqs, amps, "mag_ang", decibels)
+            add("polar", "ang", ang, freqs, phases, neg_freqs, neg_phases, "mag_ang")
 
     # ---- mag_ang_sincos ----
     if "mag_ang_sincos" in freq_modes and freq_arrays.get("mag_ang_sincos") is not None:
         arr = extract(freq_arrays["mag_ang_sincos"], idx)
         if arr is not None:
             mag, ang = _split_mag_ang_sincos(arr, fft_shift_flag=fft_shift_flag, normalize=normalize)
-            add("polar", "mag", mag, freqs,
-                amps, neg_freqs, amps, "mag_ang_sincos")
-            add("polar", "ang", ang, freqs,
-                phases, neg_freqs, neg_phases, "mag_ang_sincos")
+            if decibels:
+                mag = to_db(mag)
+            add("polar", "mag", mag, freqs, amps, neg_freqs, amps, "mag_ang_sincos", decibels)
+            add("polar", "ang", ang, freqs, phases, neg_freqs, neg_phases, "mag_ang_sincos")
 
     return blocks
 
@@ -367,6 +386,9 @@ def plot_column(axs, col_blocks, freq=None, time=None, freq_range=None):
             ax.plot(freq, block.data)
             ax.set_xlim(-freq_range[1], freq_range[1])
             overlay_markers(ax, block.freqs_pos, block.pos_vals, block.freqs_neg, block.neg_vals)
+        
+        if block.decibel:
+            ax.set_ylabel("Magnitude (dB)")
 
         ax.set_title(block.label)
 
@@ -387,6 +409,7 @@ def plot_dynamic_frequency_modes(
     base_title=None,
     normalize=False,
     fft_shift_flag=False,
+    decibels=False
 ):
 
     wave_params = None
@@ -398,14 +421,14 @@ def plot_dynamic_frequency_modes(
     if time_signal_file and time_signal_file.exists():
         time_signals = np.load(time_signal_file)
 
-    freq_arrays = load_and_prepare_arrays(freq_signal_file)
+    freq_arrays = load_and_prepare_arrays(freq_signal_file, decibels)
 
     for idx in range(signals_per_file):
         wp = wave_params[idx] if wave_params is not None else None
         time_signal = time_signals[idx] if time_signals is not None else None
 
         blocks = expand_freq_modes(freq_arrays, freq_modes, idx,
-                                   fft_shift_flag, normalize, wp)
+                                   fft_shift_flag, normalize, wp, decibels)
         columns = assign_columns(blocks, time_signal)
 
         ncols = len(columns)

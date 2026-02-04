@@ -11,6 +11,7 @@ if __name__ == '__main__':
     )
     from pathlib import Path
     from spectramelt.InputSignal import InputSignal
+    from spectramelt.Analog import Analog
     from spectramelt.DataSet import DataSet
     import atexit
     import numpy as np
@@ -22,23 +23,25 @@ if __name__ == '__main__':
     test_max_min = False
     update_input_waves = False
     display_signals = True
+    use_dB = True
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_signal = InputSignal(config_file_path=Path(getenv('INPUT_CONF')))
+    input_wave_params = input_signal.get_wave_params()
     dataset = DataSet(input_config_name=input_signal.get_config_name(), config_file_path=Path(getenv('DATASET_CONF')))
+    analog = Analog(config_file_path=Path(getenv('INPUT_CONF')))
 
     if create_set:
-        dataset.create_input_set(input_signal)
+        dataset.create_input_set(analog, input_signal)
         
     directories = dataset.get_directories()
-    input_dir = directories.get('inputs', "Inputs")
+    input_dir: Path = directories.get('inputs', "Inputs")
     filenames = dataset.get_filenames()
     input_time_signal_filename = filenames.get('time_signals', "time_signals.npy")
     input_freq_signal_filename = filenames.get('freq_signals', "freq_signals.npz")
     
     if test_max_min:
-        input_signal_params = input_signal.get_adc_params()
-        v_ref_range = tuple(input_signal_params.get('v_ref_range', (0, 5)))
+        v_ref_range = tuple(input_wave_params.get('v_ref_range', (0, 5)))
         for file_path in input_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
                 signals = np.load(file_path)
@@ -58,7 +61,7 @@ if __name__ == '__main__':
         amp_range = input_signal_wave_params.get('amp_range')
         input_wave_params_filename = filenames.get('input.wave_params', "wave_params.pkl")
         
-        freq_modes = dataset.get_freq_modes()
+        freq_modes = input_signal.get_freq_modes()
         input_freq_modes = freq_modes.get('input', [])
         
         time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
@@ -98,7 +101,8 @@ if __name__ == '__main__':
                     signals_per_file,
                     file_path,
                     wave_params_file,
-                    base_title
+                    base_title,
+                    decibels=use_dB
                 )
             
     atexit.register(logger.info, "Completed Test\n")

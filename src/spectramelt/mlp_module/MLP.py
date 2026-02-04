@@ -16,7 +16,8 @@ from keras import (
     backend,
     Sequential,
     optimizers,
-    Input
+    Input,
+    Model
 )
 from keras.callbacks import EarlyStopping
 from keras.activations import get as get_activation
@@ -273,7 +274,7 @@ class MLP:
         self.model_params["file_path"] = model_file_path
 
 
-    def set_recovery_stats_from_h5(self, norm_h5_path, dataset_name):
+    def set_recovery_stats_from_h5(self, norm_h5_path: Path, dataset_name: str):
         if norm_h5_path is None:
             raise ValueError("h5 file path cannot be None")
 
@@ -554,7 +555,7 @@ class MLP:
         return mlp_model
         
 
-    def load_model(self, model_file_path=None):
+    def load_model(self, model_file_path: Path | None) -> Model:
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
 

@@ -11,6 +11,22 @@ from .utils import (
     numeric_key,
     REQUIRED_AXIS_KEYS
 )
+from .protocols import (
+    InputSignalProtocol,
+    AnalogProtocol,
+    AllInputSetSignals,
+    SignalSet,
+    DUTProtocol,
+    WaveParams,
+    RecoveryProtocol,
+    MLPProtocol
+)
+from types import ModuleType
+from typing import (
+    cast,
+    Dict,
+    Any   
+)
 import numpy as np
 import pickle
 import time
@@ -49,13 +65,14 @@ class DataSet:
         if config_file_path is not None:
             dataset_params = load_config_from_json(config_file_path)
         elif dataset_params is None:
-            dataset_params = {}
-            dataset_params['filenames'] = filenames
-            dataset_params['directory_params'] = directory_params
-            dataset_params['config_name'] = dataset_config_name
-            dataset_params['log_params'] = log_params
-            dataset_params['dataframe_params'] = dataframe_params
-            dataframe_params['seed'] = seed
+            dataset_params = {
+                "filenames": filenames,
+                "directory_params": directory_params,
+                "config_name": dataset_config_name,
+                "log_params": log_params,
+                "dataframe_params": dataframe_params,
+                "seed": seed
+            }
             
         dataset_params['input_config_name'] = input_config_name
         dataset_params['DUT_config_name'] = DUT_config_name
@@ -257,7 +274,8 @@ class DataSet:
     # -------------------------------   
         
     def create_input_set(self,
-                         input_signal,
+                         analog: AnalogProtocol,
+                         input_signal: InputSignalProtocol,
                          normalize=None,
                          fft_shift=None,
                          overwrite=None):
@@ -289,7 +307,7 @@ class DataSet:
         if fft_shift is None:
             fft_shift = inputset_params.get('fft_shift', False)   
             
-        input_dirs = self.directories.get('inputs', "Inputs")
+        input_dirs: Path = self.directories.get('inputs', "Inputs")
         real_time_freq_filename = self.filenames.get("real_time_freq", "real_time_freq.npz")
         dataset_config_filename = self.filenames.get('dataset_config', "dataset_config.json")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
@@ -302,8 +320,9 @@ class DataSet:
         input_dirs.mkdir(parents=True, exist_ok=True)
         real_time_freq_file = input_dirs / real_time_freq_filename
         
-        real_time = input_signal.get_analog_time()
-        real_freq = input_signal.get_analog_frequency()
+        analog_signal = analog.create_analog()
+        real_time = analog_signal.time
+        real_freq = analog_signal.frequency
         if not real_time_freq_file.exists() or overwrite:
             np.savez(real_time_freq_file,
                      time=real_time,
@@ -350,7 +369,7 @@ class DataSet:
 
         # --- Generate all tone sets ---
         for tones in tones_per_sig:
-            all_inputset_signals = {
+            all_inputset_signals: AllInputSetSignals = {
                 "dataset": {
                     "time_path": input_dirs / f"{tones}_tone_{input_time_signals_filename}",
                     "freq_path": input_dirs / f"{tones}_tone_{input_freq_signals_filename}",
@@ -403,20 +422,21 @@ class DataSet:
 
                 input_signal_wave_params["waves"] = wave
                 input_signal.set_wave_params(input_signal_wave_params)
-                input_signal.create_input_signal()
+                input_signal_out = input_signal.create_input_signal(real_time)
 
                 
                 if input_sig == num_input_sigs:
                     inputset_type = "recovery"
                 
                 all_inputset_signals[inputset_type]["wave_set"].append(wave)
-                all_inputset_signals[inputset_type]["time_set"].append(input_signal.get_input_signal())
+                all_inputset_signals[inputset_type]["time_set"].append(input_signal_out.input_signal)
 
             stop = time.time()
             self.logger.info(f"{num_input_sigs} {tones}-Tone Signal Input Set Creation Time: {stop - start:.6f} seconds")
 
             # --- Save outputs ---
             for set_info in all_inputset_signals.values():
+                set_info = cast(SignalSet, set_info)
                 if not set_info.get('wave_path').exists() or overwrite:
                     with open(set_info.get('wave_path'), 'wb') as file:
                         pickle.dump(set_info.get('wave_set'), file)
@@ -449,8 +469,9 @@ class DataSet:
         self.logger.info("All Input Sets Created and Saved\n")
 
 
-    def create_output_set(self, DUT,
-                          input_signal=None,
+    def create_output_set(self, DUT: DUTProtocol,
+                          analog: AnalogProtocol | None,
+                          input_signal: InputSignalProtocol | None,
                           normalize=None,
                           fft_shift=None,
                           normalize_wbf=None,
@@ -465,19 +486,19 @@ class DataSet:
             self.set_input_config_name(input_signal.get_config_name())
             
         if normalize is None:
-            normalize = self.outputset_params.get('normalize', False)
+            normalize = outputset_params.get('normalize', False)
 
         if fft_shift is None:
-            fft_shift = self.outputset_params.get('fft_shift', False)
+            fft_shift = outputset_params.get('fft_shift', False)
             
         if normalize_wbf is None:
-            normalize_wbf = self.outputset_params.get('normalize_wbf', False)
+            normalize_wbf = outputset_params.get('normalize_wbf', False)
 
         if fft_shift_wbf is None:
-            fft_shift_wbf = self.outputset_params.get('fft_shift_wbf', False)
+            fft_shift_wbf = outputset_params.get('fft_shift_wbf', False)
             
         if overwrite is None:
-            overwrite = self.outputset_params.get('overwrite', False)
+            overwrite = outputset_params.get('overwrite', False)
 
         if DUT is None:
             self.logger.error("DUT Object not set")
@@ -485,7 +506,7 @@ class DataSet:
         else:
             self.set_DUT_config_name(DUT.get_config_name())
         
-        input_dir = self.directories.get('inputs', "Inputs")
+        input_dir: Path = self.directories.get('inputs', "Inputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
         freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
@@ -494,15 +515,15 @@ class DataSet:
         if real_time_freq_file.exists():
             real_time_freq = np.load(real_time_freq_file)
             real_time = real_time_freq["time"]
-        elif input_signal is not None:
-            real_time = input_signal.get_analog_time()
+        elif analog is not None:
+            real_time = analog.create_analog().time
         else:
             self.logger.error("No time file found and Input Signal Object not set")
             raise ValueError("No time file found and Input Signal Object Not Set")
         
-        output_dirs = self.directories.get('outputs', "Outputs")
+        output_dirs: Path = self.directories.get('outputs', "Outputs")
         output_dirs.mkdir(parents=True, exist_ok=True)
-        wideband_dir = self.directories.get('wideband', "Wideband")
+        wideband_dir: Path = self.directories.get('wideband', "Wideband")
         wideband_dir.mkdir(parents=True, exist_ok=True)
         
         dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
@@ -550,9 +571,10 @@ class DataSet:
                 self.logger.info(f"Starting Output Set Creation for {file_path}")
                 start = time.time()
                 for idx, signal in enumerate(input_signals):
-                    quantized_signals = DUT.create_output_signal(signal, real_time)
-                    wbf_signal = DUT.get_wbf_signal_sub()
-                    output_signal = quantized_signals.get('quantized_values')
+                    DUT_output_signals = DUT.create_output_signal(signal, real_time)
+                    quantized_signals = DUT_output_signals.adc_signal.quantized
+                    wbf_signal = DUT_output_signals.wbf_signal.wbf_sub_sig
+                    output_signal = quantized_signals.quantized_values
                     output_signal_list.append(output_signal)
                     wbf_signal_list.append(wbf_signal)
 
@@ -560,21 +582,21 @@ class DataSet:
                         if not dictionary_file.exists() or overwrite:
                             match DUT_type.lower():
                                 case "nyfr":               
-                                    lo_phase_mod_mid = DUT.get_lo_phase_mod_mid()
-                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid)
+                                    lo_phase_mod_mid = DUT_output_signals.lo_phase_mod_mid
+                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, )
                             np.save(dictionary_file, dictionary)
                             self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
                             
                         if not samp_time_freq_file.exists() or overwrite:
                             np.savez(samp_time_freq_file,
-                                     time=quantized_signals.get('mid_times'),
-                                     freq=quantized_signals.get('sampled_frequency'))
+                                     time=quantized_signals.mid_times,
+                                     freq=quantized_signals.sampled_frequency)
                             self.logger.info(f"DUT {DUT_type} sample time and frequency array saved to file {samp_time_freq_file}")
                             
                         if not wbf_time_freq_file.exists() or overwrite:
                             np.savez(wbf_time_freq_file,
-                                     time=DUT.get_wbf_time(),
-                                     freq=DUT.get_wbf_freq())
+                                     time=DUT_output_signals.wbf_signal.time,
+                                     freq=DUT_output_signals.wbf_signal.freq)
                             self.logger.info(f"DUT {DUT_type} Wideband Filter time and frequency array saved to file {wbf_time_freq_file}")
                         
                 stop = time.time()
@@ -633,7 +655,7 @@ class DataSet:
 
     def update_input_wave_params(self):
         self.logger.info(f"Updating input wave parameters...")
-        input_dir = self.directories.get('inputs', "Inputs")
+        input_dir: Path = self.directories.get('inputs', "Inputs")
         input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
         input_freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
@@ -693,7 +715,7 @@ class DataSet:
         self.logger.info(f"Completed updating input wave parameters...")
             
 
-    def create_nyfr_wave_params(self, nyfr):
+    def create_nyfr_wave_params(self, nyfr: DUTProtocol):
         self.logger.info(f"Starting NYFR folded wave parameter Creation...")
         
         outputset_params = nyfr.get_outputset_params()
@@ -713,13 +735,13 @@ class DataSet:
         
         LO_params = nyfr.get_lo_params()
         LO_freq = LO_params.get('freq')
-        input_dir = self.directories.get('inputs', "Inputs")
+        input_dir: Path = self.directories.get('inputs', "Inputs")
         input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
-        output_dir = self.directories.get('outputs', "Outputs")
+        output_dir: Path = self.directories.get('outputs', "Outputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
         samp_time_freq_filename = self.filenames.get('samp_time_freq', "sampled_time_freq.npz")
         samp_time_freq = np.load(output_dir / samp_time_freq_filename)
-        samp_freq = samp_time_freq["freq"]
+        samp_freq: np.ndarray = samp_time_freq["freq"]
         N = len(samp_freq)
         
         for file_path in input_dir.iterdir():
@@ -752,9 +774,10 @@ class DataSet:
                         nyfr_waves = []
                         
                         for input_wave in input_wave_param:
+                            input_wave = cast(WaveParams, input_wave)
                             nyfr_wave = input_wave
                             input_freq = input_wave.get('freq')
-                            folded_freq = np.abs(input_freq - LO_freq * round(input_freq/LO_freq))
+                            folded_freq: np.ndarray = np.abs(input_freq - LO_freq * round(input_freq/LO_freq))
                             freq_idx = np.abs(samp_freq - folded_freq).argmin()
                             nyfr_wave['amp'] = nyfr_signal_mag[freq_idx]
                             nyfr_wave['freq'] = samp_freq[freq_idx]
@@ -781,10 +804,10 @@ class DataSet:
     def create_wbf_wave_params(self):
         self.logger.info(f"Starting Wideband Filter wave parameter Creation...")
 
-        input_dir = self.directories.get('inputs', "Inputs")
+        input_dir: Path = self.directories.get('inputs', "Inputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
         input_wave_params_filename = self.filenames.get('wave_params', "wave_params.pkl")
-        wideband_dir = self.directories.get('wideband', "Wideband")
+        wideband_dir: Path = self.directories.get('wideband', "Wideband")
 
         wbf_time_freq_filename = self.filenames.get('wbf_time_freq', "wbf_time_freq.npz")      
         wbf_time_freq_file = wideband_dir / wbf_time_freq_filename
@@ -793,7 +816,7 @@ class DataSet:
             self.logger.error(f"{wbf_time_freq_file} does not exist")
             raise ValueError(f"{wbf_time_freq_file} does not exist")
         wbf_time_freq = np.load(wbf_time_freq_file)
-        wbf_freq = wbf_time_freq["freq"]
+        wbf_freq: np.ndarray = wbf_time_freq["freq"]
         N = len(wbf_freq)
 
         for file_path in input_dir.iterdir():
@@ -825,6 +848,7 @@ class DataSet:
                         wbf_waves = []
                         
                         for input_wave in input_wave_param:
+                            input_wave = cast(WaveParams, input_wave)
                             wbf_wave = input_wave
                             input_freq = input_wave.get('freq')
                             freq_idx = np.abs(wbf_freq - input_freq).argmin()
@@ -846,7 +870,8 @@ class DataSet:
         self.logger.info("Wideband filtered DUT wave parameter creation complete\n")
         
     
-    def create_premultiply_set(self,
+    def create_premultiply_set(self, DUT: DUTProtocol,
+                               recovery: RecoveryProtocol | None,
                                dictionary_path=None,
                                input_config_name=None,
                                DUT_config_name=None,
@@ -861,20 +886,25 @@ class DataSet:
         if DUT_config_name is not None:
             self.set_DUT_config_name(DUT_config_name)
             
+        premultiply_params = {}
+        if recovery is not None:
+            premultiply_params = recovery.get_premultiply_params()
+            
         if normalize is None:
-            normalize = self.premultiply_params.get('normalize', False)
+            normalize = premultiply_params.get('normalize', False)
             
         if apply_fft is None:
-            apply_fft = self.premultiply_params.get('apply_fft', False)
+            apply_fft = premultiply_params.get('apply_fft', False)
 
         if overwrite is None:
-            overwrite = self.premultiply_params.get('overwrite', False)
+            overwrite = premultiply_params.get('overwrite', False)
 
         if fft_shift is None:
-            fft_shift = self.premultiply_params.get('fft_shift', False) 
-            
-        wideband_freq_modes = self.freq_modes.get('wideband', [])
-        output_dir = self.directories.get('outputs', "Outputs")
+            fft_shift = premultiply_params.get('fft_shift', False) 
+        
+        freq_modes = DUT.get_freq_modes()
+        wideband_freq_modes = freq_modes.get('wideband', [])
+        output_dir: Path = self.directories.get('outputs', "Outputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")    
         if dictionary_path is None:
             dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
@@ -884,14 +914,16 @@ class DataSet:
             raise ValueError("Dictionary File Does Not Exist")
         dictionary = np.load(dictionary_path)
             
-        premultiply_dir = self.directories.get('premultiply', "Premultiply")
+        premultiply_dir: Path = self.directories.get('premultiply', "Premultiply")
         premultiply_dir.mkdir(parents=True, exist_ok=True)
         premultiply_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
-        scale_dict = self.premultiply_params.get('scale_dict', 1.0)
+        scale_dict = premultiply_params.get('scale_dict', 1.0)
         scaled_dictionary = scale_dict * dictionary
 
-        cp = import_module("cupy")
+
+        cp: ModuleType = import_module("cupy")
+            
         Scaled_Dictionary = cp.asarray(scaled_dictionary, dtype=cp.complex64)
         Pinv_Dict = cp.linalg.pinv(Scaled_Dictionary)
         
@@ -943,16 +975,16 @@ class DataSet:
 
 
     def create_recovery_set(self,
-                            recovery,
-                            mlp=None,
+                            recovery: RecoveryProtocol,
+                            mlp: MLPProtocol | None,
                             dictionary_path=None,
                             input_config_name=None,
                             DUT_config_name=None):
         self.logger.info(f"Starting Recovery Set Creation...")
         
-        output_dir = self.directories.get('outputs', "Outputs")
-        premultiply_dir = self.directories.get('premultiply', "Premultiply")
-        wideband_dir = self.directories.get('wideband', "Wideband")    
+        output_dir: Path = self.directories.get('outputs', "Outputs")
+        premultiply_dir: Path = self.directories.get('premultiply', "Premultiply")
+        wideband_dir: Path = self.directories.get('wideband', "Wideband")    
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
         freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
         
@@ -962,7 +994,7 @@ class DataSet:
             self.set_DUT_config_name(DUT_config_name)
             
         if dictionary_path is None:
-            output_dirs = self.directories.get('outputs', "Outputs")
+            output_dirs: Path = self.directories.get('outputs', "Outputs")
             dictionary_filename = self.filenames.get('dictionary',"dictionary.npy")
             dictionary_path = output_dirs / dictionary_filename
         if not dictionary_path.exists():
@@ -977,7 +1009,7 @@ class DataSet:
         else:
             self.set_recovery_config_name(recovery.get_config_name())
     
-        recovery_dirs = self.directories.get('recovery', "Recovery")
+        recovery_dirs: Path = self.directories.get('recovery', "Recovery")
         recovery_dirs.mkdir(parents=True, exist_ok=True)
         
         # --- Config file ---     
@@ -1003,6 +1035,7 @@ class DataSet:
                     "recovery" in file_path.name.lower()):
                     
                     output_signals = np.load(file_path)
+                    recovered_sig_list = []
 
                     self.logger.info(f"Starting Recovery Set Creation for {file_path}")
                     start = time.time() 
@@ -1015,7 +1048,7 @@ class DataSet:
                     np.save(recovery_file, np.array(recovered_sig_list))
                     self.logger.info(f"Recovery Set Creation Complete for Output Set {file_path} using Recovery Method {recovery_method}")
         elif freq_modes:
-            ml_models_dir = self.directories.get('ml_models', "ML_Models")
+            ml_models_dir: Path = self.directories.get('ml_models', "ML_Models")
             ml_model_filename = self.filenames.get('ml_model', "ml_model.keras")
 
             for mode in freq_modes:
@@ -1129,7 +1162,7 @@ class DataSet:
 
                 # Priority 1: real_imag
                 if 'real_imag' in keys:
-                    arr = freq_data['real_imag']
+                    arr: np.ndarray = freq_data['real_imag']
                     arr = arr.reshape(-1, 2)  # shape (N, 2)
                     real = arr[:, 0]
                     imag = arr[:, 1]
@@ -1137,7 +1170,7 @@ class DataSet:
 
                 # Priority 2: mag_ang
                 elif 'mag_ang' in keys:
-                    arr = freq_data['mag_ang']
+                    arr: np.ndarray = freq_data['mag_ang']
                     arr = arr.reshape(-1, 2)  # shape (N, 2)
                     mag = arr[:, 0]
                     ang = arr[:, 1]
@@ -1146,7 +1179,7 @@ class DataSet:
 
                 # Priority 3: mag_ang_sincos
                 elif 'mag_ang_sincos' in keys:
-                    arr = freq_data['mag_ang_sincos']
+                    arr: np.ndarray = freq_data['mag_ang_sincos']
                     arr = arr.reshape(-1, 3)  # shape (N, 3)
                     mag = arr[:, 0]
                     sin_comp = arr[:, 1]
@@ -1164,19 +1197,20 @@ class DataSet:
                 self.logger.info(f"Saved time-domain signal: {recovery_time_file}")
 
         
-    def create_recovery_dataframe(self, recovery=None):
+    def create_recovery_dataframe(self, recovery: RecoveryProtocol | None):
         if recovery is None:
             self.logger.error("No recovery object provided")
             raise ValueError("No recovery object provided")
         
         self.logger.info("Creating Dataframe for recovery signals")
         # --- Config file ---
-        input_dirs = self.directories.get('inputs', "Inputs")
+        input_dirs: Path = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.flat_filenames.get('input.config', "inputset_config.json")
-        inputset_config_file = input_dirs.parent / inputset_config_filename
+        inputset_config_file: Path = input_dirs.parent / inputset_config_filename
         
-        recovery_dirs = self.directories.get('recovery', "Recovery")
-        recovery_df_filename = self.dataframe_params.get('file_path', "recovery_df.pkl")
+        recovery_dirs: Path = self.directories.get('recovery', "Recovery")
+        dataframe_params = recovery.get_dataframe_params()
+        recovery_df_filename = dataframe_params.get('file_path', "recovery_df.pkl")
         recovery_df_file_path = recovery_dirs / recovery_df_filename
 
         if recovery_df_file_path.exists():
@@ -1190,21 +1224,21 @@ class DataSet:
                                recovery_df_file_path)
             
             
-    def set_recovery_dataframe(self, recovery=None):
+    def set_recovery_dataframe(self, recovery: RecoveryProtocol | None):
         if recovery is None:
             self.logger.error("No recovery object provided")
             raise ValueError("No recovery object provided")
 
         dataframe_params = recovery.get_dataframe_params()
            
-        input_dir = self.directories.get('inputs', "Inputs")
+        input_dir: Path = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
         freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz",)
         wave_params_filename = self.flat_filenames.get('wave_params', "wave_params.pkl")
         inputset_config_file = input_dir.parent / inputset_config_filename
         
-        wideband_dir = self.directories.get('wideband', "Wideband")
+        wideband_dir: Path = self.directories.get('wideband', "Wideband")
         wbf_time_freq_filename = self.filenames.get('wbf_time_freq', "wbf_time_freq.npz")
         time_freq_file = wideband_dir / wbf_time_freq_filename
         with np.load(time_freq_file) as time_freq:
@@ -1217,11 +1251,11 @@ class DataSet:
         dataset_config_filename = self.filenames.get('dataset_config', "dataset_config.json")
         dataset_config_file = input_dir.parent.parent / dataset_config_filename
 
-        output_dir = self.directories.get('outputs', "Outputs")
+        output_dir: Path = self.directories.get('outputs', "Outputs")
         DUT_config_filename = self.filenames.get('DUT_config', "DUT_config.json")
         DUT_config_file = output_dir.parent / DUT_config_filename
         
-        recovery_dir = self.directories.get('recovery', "Recovery")
+        recovery_dir: Path = self.directories.get('recovery', "Recovery")
         recovery_config_filename = self.filenames.get('recovery_config', "recovery_config.json")
         recovery_config_file = recovery_dir.parent / recovery_config_filename
 
@@ -1240,7 +1274,7 @@ class DataSet:
         else:
             recovery_config = load_config_from_json(recovery_config_file)
         
-        recovery_recovery = recovery_config.get('recovery')
+        recovery_recovery: Dict[str, Any] = recovery_config.get('recovery')
         recovery_config_name = recovery_recovery.get('config_name')
 
         if not dataset_config_file.exists():
@@ -1256,10 +1290,10 @@ class DataSet:
             raise ValueError(f"{inputset_config_file} does not exist")
         else:
             inputset_config = load_config_from_json(inputset_config_file)
-        inputset_input = inputset_config.get('input')
+        inputset_input: Dict[str, Any] = inputset_config.get('input')
         inputset_config_name = inputset_input.get('config_name')
-        inputset_params = inputset_config.get('inputset')
-        num_recovery_sigs = inputset_params.get('num_recovery_sigs')
+        inputset_params: Dict[str, Any] = inputset_config.get('inputset')
+        num_recovery_sigs: int = inputset_params.get('num_recovery_sigs')
 
         if not DUT_config_file.exists():
             self.logger.error(f"{DUT_config_file} does not exist")

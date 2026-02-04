@@ -13,7 +13,7 @@ from .utils import(
     VALID_SAVED_FREQ_MODES
 )
 from typing import Optional
-from .protocols import RecoveryMLPProtocol
+from .protocols import MLPProtocol
 import pandas as pd
 import pickle
 from pathlib import Path
@@ -31,6 +31,7 @@ class Recovery:
     def __init__(self,
                 all_params=None,
                 freq_modes=None,
+                premultiply_params=None,
                 recovery_params=None,
                 dataframe_params=None,
                 log_params=None,
@@ -42,6 +43,7 @@ class Recovery:
         elif all_params is None:
             all_params = {
                 "freq_modes": freq_modes,
+                "premultiply_params": premultiply_params,
                 "recovery_params": recovery_params,
                 "dataframe_params": dataframe_params,
                 "log_params": log_params,
@@ -65,6 +67,7 @@ class Recovery:
         recovery_params = all_params.get('recovery_params', None)
         dataframe_params = all_params.get('dataframe_params', None)
         log_params = all_params.get('log_params', None)
+        premultiply_params = all_params.get('premultiply_params', None)
         
         config_name = all_params.get('config_name', "Recovery_Config_1")
         if recovery_params is None:
@@ -83,6 +86,20 @@ class Recovery:
         self.set_dataframe_params(dataframe_params)
         self.set_recovery_params(recovery_params)
         self.set_config_name(config_name)
+        self.set_premultiply_params(premultiply_params)
+
+
+    def set_premultiply_params(self, premultiply_params):
+        if premultiply_params is None:
+            premultiply_params = {
+                "scale_dict": 1.0,
+                "normalize": True,
+                "apply_fft": False,
+                "fft_shift": True,
+                "overwrite": True
+            }
+                    
+        self.premultiply_params = premultiply_params
 
 
     def set_freq_modes(self, freq_modes=None):
@@ -173,7 +190,7 @@ class Recovery:
         self.set_recovery_method(recovery_params.get('method', None))
         
         
-    def set_recovery_type(self, recovery_type):
+    def set_recovery_type(self, recovery_type: str):
         if recovery_type is None:
             self.logger.error("Recovery type can not be None")
             raise ValueError("Recovery type can not be None")
@@ -211,7 +228,7 @@ class Recovery:
 
 
     def recover_signal(self, signal, dictionary=None, num_waves=1,
-                       mlp: Optional[RecoveryMLPProtocol] = None,
+                       mlp: Optional[MLPProtocol] = None,
                        mlp_model=None, model_file_path=None,
                        recovery_type=None, recovery_method=None) -> np.ndarray:
         sigma = self.recovery_params.get('sigma', 0.001)
@@ -277,8 +294,8 @@ class Recovery:
 
 
     def create_rec_df(self,
-                      inputset_config_file=None,
-                      recovery_df_file_path=None):
+                      inputset_config_file: Path | None,
+                      recovery_df_file_path: Path | None):
         inputset_config = load_config_from_json(inputset_config_file)
                         
         meta_column_names = self.dataframe_params.get('meta_column_names')
@@ -534,6 +551,10 @@ class Recovery:
 
     def get_log_params(self):
         return self.log_params.copy()
+    
+    
+    def get_premultiply_params(self):
+        return self.premultiply_params.copy()
     
     
     def get_all_params(self):
