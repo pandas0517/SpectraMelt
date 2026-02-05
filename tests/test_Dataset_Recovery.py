@@ -19,14 +19,15 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_recovery_set = False
-    use_mlp = False
+    create_recovery_set = True
+    use_mlp = True
     decode_recovery_to_time = False
 
     create_recovery_dataframe = True
     set_recovery_dataframe = True
 
-    display_recovered_signals = False
+    display_recovered_signals = True
+    use_dB = True
     DUT_type = "NYFR"
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -45,13 +46,12 @@ if __name__ == '__main__':
     filenames = dataset.get_filenames()
     wave_params_filename = filenames.get('wave_params', "wave_params.pkl")
     freq_signal_filename = filenames.get('freq_signals', "freq_signals.npz")
-    
-    freq_modes = dataset.get_freq_modes()
+
     input_wave_params = input_config.get('wave_params')
     freq_range = input_wave_params.get('freq_range')
     amp_range = input_wave_params.get('amp_range')
     
-    recovery_freq_modes = freq_modes.get('recovery', [])
+    recovery_freq_modes = recovery.get_freq_modes()
     selected_freq_modes = recovery_freq_modes
     # selected_freq_modes = recovery_freq_modes[0:1]
 
@@ -126,7 +126,8 @@ if __name__ == '__main__':
                     recovery_time_file,
                     wave_file,
                     base_title,
-                    fft_shift_flag=True
+                    fft_shift_flag=True,
+                    decibels=use_dB
                 )
                      
     atexit.register(logger.info, "Completed Test\n")

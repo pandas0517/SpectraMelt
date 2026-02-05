@@ -33,7 +33,7 @@
         "console": true
     },
     "wavelet_params": {
-        "center_freq": 1e6,
+        "center_freq": 40e3,
         "amp_noise_std": 0.0,
         "freq_drift_ppm": 0.0,
         "harmonic_distortion": 0.0,
@@ -132,7 +132,7 @@
     "lpf_2_params": {
         "filter_type": "butter",
         "order": 6,
-        "cutoff_freq": 50000,
+        "cutoff_freq": 40e3,
         "mode": "lfilter",
         "ripple_db": 1.0,
         "atten_db": 40.0,
@@ -140,7 +140,7 @@
         "seed": null
     },
     "pulse_2_params": {
-        "pulse_width": 1e-6,
+        "pulse_width": 100e-6,
         "amplitude": 1.0,
         "jitter_std": 0.0,
         "amp_noise_std": 0.0,

@@ -10,6 +10,8 @@ from .utils import(
     safe_max,
     safe_mean,
     filter_valid_names,
+    snr_db,
+    enob_from_snr,
     VALID_SAVED_FREQ_MODES
 )
 from typing import Optional
@@ -332,6 +334,8 @@ class Recovery:
     def process_signal_file(
         self,
         recovery_file: Path,
+        rec_time_file: Path,
+        wbf_file: Path,
         wbf_wave_file: Path,
         input_file: Path,
         num_recovery_sigs: int,
@@ -363,6 +367,10 @@ class Recovery:
             if missing:
                 print(f"Warning: Missing recovery modes in {recovery_file}: {missing}")
             recovery = {m: recovery_npz[m] for m in valid}
+        
+        # Time domain signals for SNR calculation
+        rec_time_signals = np.load(rec_time_file)
+        wbf_time_signals = np.load(wbf_file)
 
         # Split real_imag if present
         if "real_imag" in recovery:
@@ -428,6 +436,9 @@ class Recovery:
 
                 all_bins = np.arange(wbf_freq.size)
                 non_rec_bins = np.setdiff1d(all_bins, rec_bins)
+                
+                snr = snr_db(wbf_time_signals[idx_sig],
+                             rec_time_signals[idx_sig])
 
                 # ========================================================
                 # MAG MODE
@@ -488,6 +499,11 @@ class Recovery:
 
                 # ---- write per-signal columns ----
                 meta = create_meta_data_dictionary(idx_sig)
+                meta["snr_db"]["value"] = snr
+                meta["enob"]["value"] = enob_from_snr(snr)
+                meta["rms_util"]["value"] = (
+                    np.sqrt(np.mean(wbf_time_signals[idx_sig]**2)) / 10.0
+                )
                 (
                     meta["num_rec_freq"]["value"],
                     meta["num_spur_freq"]["value"],
@@ -517,6 +533,9 @@ class Recovery:
                 if row["ave_num_rec"] != -1 else -1
             )
 
+            row["ave_rms_util"]    = safe_mean([row[f"rms_util_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_snr_db"]      = safe_mean([row[f"snr_db_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_enob"]        = safe_mean([row[f"enob_{i}"] for i in range(num_recovery_sigs)])
             row["ave_rec_mag_err"] = safe_mean([row[f"ave_rec_mag_err_{i}"] for i in range(num_recovery_sigs)])
             row["ave_rec_mag"]     = safe_mean([row[f"ave_rec_mag_{i}"] for i in range(num_recovery_sigs)])
             row["max_rec_mag"]     = safe_max([row[f"max_rec_mag_{i}"] for i in range(num_recovery_sigs)])

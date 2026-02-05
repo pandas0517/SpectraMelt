@@ -16,6 +16,16 @@ VALID_SAVED_FREQ_MODES = {
 }
 
 
+def snr_db(x_ref, x_rec, eps=1e-12):
+    signal_power = np.mean(x_ref**2)
+    noise_power  = np.mean((x_ref - x_rec)**2)
+    return 10 * np.log10((signal_power + eps) / (noise_power + eps))
+
+
+def enob_from_snr(snr_db):
+    return (snr_db - 1.76) / 6.02
+
+
 def filter_valid_names(names, valid_set=None):
     if valid_set is None:
         valid_set = VALID_SAVED_FREQ_MODES
@@ -400,6 +410,18 @@ def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
 
 def create_meta_data_dictionary(idx):
     meta_data = {
+        'rms_util': {
+            'col_name': "rms_util_" + str(idx),
+            'value': 0            
+        },
+        'snr_db': {
+            'col_name': "snr_db_" + str(idx),
+            'value': 0            
+        },
+        'enob': {
+            'col_name': "enob_" + str(idx),
+            'value': 0            
+        },
         'num_rec_freq': {
             'col_name': "num_rec_freq_" + str(idx),
             'value': 0

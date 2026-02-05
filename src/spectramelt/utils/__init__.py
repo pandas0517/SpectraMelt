@@ -28,6 +28,8 @@ from .file_utils import (
 # From signal_utils.py
 from .signal_utils import (
     VALID_SAVED_FREQ_MODES,
+    enob_from_snr,
+    snr_db,
     filter_valid_names,
     sparse_fft,
     fft_encode_signals,
@@ -50,6 +52,8 @@ from .plotting_utils import (
 
 # Optional: define __all__ for clean "from utils import *"
 __all__ = [
+    "snr_db",
+    "enob_from_snr",
     "get_logger",
     "load_config_from_json",
     "save_to_json",

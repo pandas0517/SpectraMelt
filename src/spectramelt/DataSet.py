@@ -206,8 +206,7 @@ class DataSet:
         # Default structure
         if directory_params is None:
             directory_params = {}
-        # directory_params.setdefault('dataset_dir', "Data_Set")
-        directory_params['dataset_dir'] = self.config_name
+        directory_params.setdefault('dataset_dir', "Data_Set")
         directory_params.setdefault('paths', [
             "inputs",
             "outputs",
@@ -288,12 +287,6 @@ class DataSet:
                        10 → 0.1 Hz steps
                        100 → 0.01 Hz steps
         """
-        def stringify_directories(dataset_params: dict) -> None:
-            dirs = dataset_params.get("directories", {})
-            for key, value in dirs.items():
-                if isinstance(value, Path):
-                    dirs[key] = str(value)
-
         self.logger.info("Starting Input Set Creation...")
         
         # --- Setup and pre-saves ---
@@ -339,7 +332,6 @@ class DataSet:
         # --- Dataset Config file ---
         dataset_config_file = input_dirs.parent.parent / dataset_config_filename
         dataset_params = self.get_all_params()
-        stringify_directories(dataset_params)
         
         if not dataset_config_file.exists() or overwrite:
             save_to_json(dataset_params, dataset_config_file)
@@ -478,8 +470,8 @@ class DataSet:
 
 
     def create_output_set(self, DUT: DUTProtocol,
-                          analog: AnalogProtocol | None = None,
-                          input_signal: InputSignalProtocol | None = None,
+                          analog: AnalogProtocol | None,
+                          input_signal: InputSignalProtocol | None,
                           normalize=None,
                           fft_shift=None,
                           normalize_wbf=None,
@@ -592,8 +584,7 @@ class DataSet:
                             match DUT_type.lower():
                                 case "nyfr":               
                                     lo_phase_mod_mid = DUT_output_signals.lo_phase_mod_mid
-                                    wbf_time = DUT_output_signals.wbf_signal.time
-                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, wbf_time)
+                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, )
                             np.save(dictionary_file, dictionary)
                             self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
                             
@@ -1329,7 +1320,15 @@ class DataSet:
             and p.name.endswith(freq_signals_filename)
             and "recovery" in p.name.lower()
         }
-
+        
+        rec_time_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in recovery_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(input_time_signal_filename)
+            and "recovery" in p.name.lower()
+        }
+        
         wbf_wave_dict = {
             get_prefix_before_recovery(p.name): p
             for p in wideband_dir.iterdir()
@@ -1338,13 +1337,31 @@ class DataSet:
             and "recovery" in p.name.lower()
         }
         
-        missing_in_wbf = recovery_dict.keys() - wbf_wave_dict.keys()
+        wbf_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in wideband_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(input_time_signal_filename)
+            and "recovery" in p.name.lower()
+        }
+        
+        missing_in_wbf_wave = recovery_dict.keys() - wbf_wave_dict.keys()
+        missing_in_rec_time = recovery_dict.keys() - rec_time_dict.keys()
+        missing_in_wbf = recovery_dict.keys() - wbf_dict.keys()
         missing_in_recovery = wbf_wave_dict.keys() - recovery_dict.keys()
         missing_in_input = recovery_dict.keys() - input_dict.keys()
 
+        if missing_in_rec_time:
+            self.logger.error("Files missing in recovered time:", missing_in_rec_time)
+            raise ValueError("Files missing in recovered time:", missing_in_rec_time)
+
+        if missing_in_wbf_wave:
+            self.logger.error("Files missing in wideband filtered waves:", missing_in_wbf_wave)
+            raise ValueError("Files missing in wideband filtered waves:", missing_in_wbf_wave)
+        
         if missing_in_wbf:
-            self.logger.error("Files missing in wideband filtered input:", missing_in_wbf)
-            raise ValueError("Files missing in wideband filtered input:", missing_in_wbf)
+            self.logger.error("Files missing in wideband filtered frequency:", missing_in_wbf)
+            raise ValueError("Files missing in wideband filtered frequency:", missing_in_wbf)
 
         if missing_in_recovery:
             self.logger.error("Files missing in recovery:", missing_in_recovery)
@@ -1356,7 +1373,9 @@ class DataSet:
         
         sorted_keys = sorted(recovery_dict.keys(), key=numeric_key)
         matched_recovery_files = [recovery_dict[k] for k in sorted_keys]
+        matched_rec_time_files = [rec_time_dict[k] for k in sorted_keys]
         matched_wave_files     = [wbf_wave_dict[k] for k in sorted_keys]
+        matched_wbf_files      = [wbf_dict[k] for k in sorted_keys]
         input_files            = [input_dict[k] for k in sorted_keys]
 
         all_rows = []
@@ -1364,6 +1383,8 @@ class DataSet:
         for idx_file, recovery_file in enumerate(matched_recovery_files):
             rows = recovery.process_signal_file(
                 recovery_file=recovery_file,
+                rec_time_file=matched_rec_time_files[idx_file],
+                wbf_file=matched_wbf_files[idx_file],
                 wbf_wave_file=matched_wave_files[idx_file],
                 input_file=input_files[idx_file],
                 num_recovery_sigs=num_recovery_sigs,

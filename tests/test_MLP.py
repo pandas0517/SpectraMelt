@@ -38,10 +38,10 @@ if __name__ == '__main__':
         dataset.create_premultiply_set(mlp.get_premultiply_params())
     
     directories = dataset.get_directories()
-    premultiply_dir = directories.get('premultiply', "Premultiply")
-    ml_models_dir = directories.get('ml_models', "ML_Models")
+    premultiply_dir = Path(directories.get('premultiply', "Premultiply"))
+    ml_models_dir = Path(directories.get('ml_models', "ML_Models"))
     ml_models_dir.mkdir(parents=True, exist_ok=True)
-    wideband_dir = directories.get('wideband', "Wideband")
+    wideband_dir = Path(directories.get('wideband', "Wideband"))
     
     filenames = dataset.get_filenames()
     input_freq_signal_filename = filenames.get('freq_signals', "freq_signals.npz")
