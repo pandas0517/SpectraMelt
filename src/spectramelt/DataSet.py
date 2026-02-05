@@ -136,6 +136,11 @@ class DataSet:
         
     def set_config_name(self, config_name):
         self.config_name = config_name
+        
+        if hasattr(self, "internal_directory_params"):
+            self.directory_params['dataset_dir'] = config_name
+            self.internal_directory_params['dataset_dir'] = config_name
+            self.directories = build_flat_paths(self.internal_directory_params)
                
 
     def set_input_config_name(self, input_config_name):
@@ -206,7 +211,7 @@ class DataSet:
         # Default structure
         if directory_params is None:
             directory_params = {}
-        directory_params.setdefault('dataset_dir', "Data_Set")
+        directory_params['dataset_dir'] = self.config_name
         directory_params.setdefault('paths', [
             "inputs",
             "outputs",
