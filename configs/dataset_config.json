@@ -8,7 +8,6 @@
         "console": true
     },
     "directory_params": {
-        "dataset_dir": "Dataset_Config_1",
         "paths": [
             "inputs",
             "outputs",

@@ -19,14 +19,13 @@ REQUIRED_AXIS_KEYS = {"time", "freq"}
 class PlotBlock:
     family: str              # "polar", "complex", or "time"
     label: str               # "mag", "ang", "real", "imag", "Time"
-    decibel: bool = False
     data: np.ndarray
     freqs_pos: np.ndarray = None
     pos_vals: np.ndarray  = None
     freqs_neg: np.ndarray = None
     neg_vals: np.ndarray  = None
     source: str = None       # original freq mode name
-
+    decibel: bool = False
 
 # =========================
 # Utilities
@@ -240,11 +239,11 @@ def expand_freq_modes(freq_arrays, freq_modes, idx,
         amps = phases = freqs = reals = imags = neg_freqs = neg_phases = imag_neg = np.array([])
 
     def add(fam, lbl, data, pos_f=None, pos=None,
-            neg_f=None, neg=None, src=None, decibel=False):
+            neg_f=None, neg=None, src=None, decibels=False):
         if data is not None:
             blocks.append(
                 PlotBlock(fam, lbl, data, freqs_pos=pos_f, pos_vals=pos,
-                          freqs_neg=neg_f, neg_vals=neg, source=src, decibel=decibel)
+                          freqs_neg=neg_f, neg_vals=neg, source=src, decibel=decibels)
             )
 
     # ---- Direct modes with shift/normalize ----
@@ -421,7 +420,7 @@ def plot_dynamic_frequency_modes(
     if time_signal_file and time_signal_file.exists():
         time_signals = np.load(time_signal_file)
 
-    freq_arrays = load_and_prepare_arrays(freq_signal_file, decibels)
+    freq_arrays = load_and_prepare_arrays(freq_signal_file)
 
     for idx in range(signals_per_file):
         wp = wave_params[idx] if wave_params is not None else None

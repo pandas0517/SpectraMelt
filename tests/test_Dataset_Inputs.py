@@ -60,9 +60,8 @@ if __name__ == '__main__':
         freq_range = input_signal_wave_params.get('freq_range')
         amp_range = input_signal_wave_params.get('amp_range')
         input_wave_params_filename = filenames.get('input.wave_params', "wave_params.pkl")
-        
-        freq_modes = input_signal.get_freq_modes()
-        input_freq_modes = freq_modes.get('input', [])
+
+        input_freq_modes = input_signal.get_freq_modes()
         
         time_freq_filename = filenames.get('real_time_freq', "real_time_freq.npz")
         time_freq_file = input_dir / time_freq_filename

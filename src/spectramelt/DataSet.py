@@ -206,7 +206,8 @@ class DataSet:
         # Default structure
         if directory_params is None:
             directory_params = {}
-        directory_params.setdefault('dataset_dir', "Data_Set")
+        # directory_params.setdefault('dataset_dir', "Data_Set")
+        directory_params['dataset_dir'] = self.config_name
         directory_params.setdefault('paths', [
             "inputs",
             "outputs",
@@ -287,6 +288,12 @@ class DataSet:
                        10 → 0.1 Hz steps
                        100 → 0.01 Hz steps
         """
+        def stringify_directories(dataset_params: dict) -> None:
+            dirs = dataset_params.get("directories", {})
+            for key, value in dirs.items():
+                if isinstance(value, Path):
+                    dirs[key] = str(value)
+
         self.logger.info("Starting Input Set Creation...")
         
         # --- Setup and pre-saves ---
@@ -332,6 +339,7 @@ class DataSet:
         # --- Dataset Config file ---
         dataset_config_file = input_dirs.parent.parent / dataset_config_filename
         dataset_params = self.get_all_params()
+        stringify_directories(dataset_params)
         
         if not dataset_config_file.exists() or overwrite:
             save_to_json(dataset_params, dataset_config_file)

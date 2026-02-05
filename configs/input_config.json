@@ -45,7 +45,7 @@
         "freq_range": [1, 200000],
         "amp_range": [0.7, 1.0],
         "phase_range": [0.25,0.75],
-        "v_ref_range": [0, 1],
+        "v_ref_range": [-10, 10],
         "allow_clipping": true,
         "waves": [
             {"amp": 0.25,

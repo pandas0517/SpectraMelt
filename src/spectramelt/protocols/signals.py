@@ -6,12 +6,16 @@ from typing import(
     Dict,
     Any,
     Literal,
-    NotRequired
+    NotRequired,
+    TYPE_CHECKING
 )
-from keras import Model
 from pathlib import Path
 import numpy as np
 
+if TYPE_CHECKING:
+    from keras import Model
+else:
+    Model = object # runtime placeholder
 
 class SignalSet(TypedDict):
     time_path: Path
