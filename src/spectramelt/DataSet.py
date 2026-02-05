@@ -478,8 +478,8 @@ class DataSet:
 
 
     def create_output_set(self, DUT: DUTProtocol,
-                          analog: AnalogProtocol | None,
-                          input_signal: InputSignalProtocol | None,
+                          analog: AnalogProtocol | None = None,
+                          input_signal: InputSignalProtocol | None = None,
                           normalize=None,
                           fft_shift=None,
                           normalize_wbf=None,
@@ -579,7 +579,8 @@ class DataSet:
                 self.logger.info(f"Starting Output Set Creation for {file_path}")
                 start = time.time()
                 for idx, signal in enumerate(input_signals):
-                    DUT_output_signals = DUT.create_output_signal(signal, real_time)
+                    DUT_output_signals = DUT.create_output_signal(signal, real_time,
+                                                                  return_wbf=True)
                     quantized_signals = DUT_output_signals.adc_signal.quantized
                     wbf_signal = DUT_output_signals.wbf_signal.wbf_sub_sig
                     output_signal = quantized_signals.quantized_values
@@ -591,7 +592,8 @@ class DataSet:
                             match DUT_type.lower():
                                 case "nyfr":               
                                     lo_phase_mod_mid = DUT_output_signals.lo_phase_mod_mid
-                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, )
+                                    wbf_time = DUT_output_signals.wbf_signal.time
+                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, wbf_time)
                             np.save(dictionary_file, dictionary)
                             self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
                             

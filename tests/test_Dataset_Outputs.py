@@ -20,13 +20,14 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = False
+    create_output_set = True
 
     create_wbf_wave_params = False
     create_nyfr_wave_params = False
 
     display_output_signals = False
     display_wbf_signals = False
+    use_dB = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
@@ -37,8 +38,6 @@ if __name__ == '__main__':
 
     if create_output_set:
         dataset.create_output_set(nyfr)
-
-
         
     if create_wbf_wave_params:
         dataset.create_wbf_wave_params()
@@ -48,7 +47,7 @@ if __name__ == '__main__':
 
     directories = dataset.get_directories()
     input_dir = directories.get('inputs', "Inputs")
-    output_dir = directories.get('outputs', "Outputs")
+    output_dir: Path = directories.get('outputs', "Outputs")
     wideband_dir = directories.get('wideband', "Wideband")    
     
     filenames = dataset.get_filenames()
@@ -112,6 +111,7 @@ if __name__ == '__main__':
                     file_path,
                     wave_file,
                     base_title,
+                    decibels=use_dB
                 )
             
     if display_wbf_signals:
@@ -153,7 +153,8 @@ if __name__ == '__main__':
                     file_path,
                     wave_file,
                     base_title,
-                    fft_shift_flag=True
+                    fft_shift_flag=True,
+                    decibels=use_dB
                 )
 
     atexit.register(logger.info, "Completed Test\n")
