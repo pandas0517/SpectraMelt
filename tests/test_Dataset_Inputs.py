@@ -19,9 +19,9 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    create_set = False
-    test_max_min = False
-    update_input_waves = False
+    create_set = True
+    test_max_min = True
+    update_input_waves = True
     display_signals = True
     use_dB = True
 
