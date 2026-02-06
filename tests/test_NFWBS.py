@@ -24,12 +24,12 @@ if __name__ == '__main__':
     display_LO_1_signals = False
     display_mixed_1_signals = False
     display_lpf_1_signals = False
-    display_LO_2_signals = False
+    display_LO_2_signals = True
     display_wavelet_signals = True
     display_mixed_2_signals = True
     display_lpf_2_signals = True
     display_conditioned_signals = True
-    display_ADC_signals = False
+    display_ADC_signals = True
     display_recovered_signals = False
     display_premultiply_signals = False
     
@@ -318,7 +318,7 @@ if __name__ == '__main__':
         axes[0].plot(t_plot, y_plot_1, label="Low-pass Filtered")
         axes[0].set_title("Time (Low-pass Filtered)")
         axes[0].set_xlim(tmin, tmax)
-        axes[1].plot(t_plot, y_plot_2, label="Mixed Signal")
+        axes[1].plot(t_plot, y_plot_2.real, label="Mixed Signal")
         axes[1].set_title("Time (Mixed Signal)")
         axes[1].set_xlim(tmin, tmax)
         axes[2].plot(f_plot, Y_plot_1)
@@ -343,36 +343,36 @@ if __name__ == '__main__':
         Y_plot = lpf_2_freq_1[mask_f]
         
         fig, axes = plt.subplots(1, 2, figsize=(8,4))
-        axes[0].plot(t_plot, y_plot)
-        axes[0].set_title("Time (File)")
+        axes[0].plot(t_plot, y_plot.real)
+        axes[0].set_title("Time (Ideal)")
         axes[0].set_xlim(tmin, tmax)
         axes[1].plot(f_plot, Y_plot)
-        axes[1].set_title("Frequency (File)")
+        axes[1].set_title("Frequency (Ideal)")
         axes[1].set_xlim(fmin, fmax)
-        fig.suptitle("NYFR Stage Low Pass Filtered Signals")
+        fig.suptitle("NFWBS Stage Low Pass Filtered Signals")
         fig.tight_layout()
         plt.show()
         plt.close(fig)
  
     if display_conditioned_signals:
-        tmin, tmax = -20e-6, 20e-6
+        tmin, tmax = -200e-6, 200e-6
         mask_t = (lpf_cond_time_1 >= tmin) & (lpf_cond_time_1 <= tmax)
 
         t_plot = lpf_cond_time_1[mask_t]
         y_plot = lpf_cond_sig_1[mask_t]
         
-        fmin, fmax = -10_000, 10_000
+        fmin, fmax = -40_000, 40_000
         mask_f = (lpf_cond_freq_1 >= fmin) & (lpf_cond_freq_1 <= fmax)
 
-        f_plot = real_freq_1[mask_f]
+        f_plot = lpf_cond_freq_1[mask_f]
         Y_plot = lpf_cond_sig_freq_1[mask_f]
         
         fig, axes = plt.subplots(1, 2, figsize=(8,4))
         axes[0].plot(t_plot, y_plot)
-        axes[0].set_title(f"Time (File)\nUsing filter mode {lpf_2_params_1['mode']}")
+        axes[0].set_title(f"Time (Ideal)")
         axes[0].set_xlim(tmin, tmax)
         axes[1].plot(f_plot, Y_plot)
-        axes[1].set_title("Frequency (File)")
+        axes[1].set_title("Frequency (Ideal)")
         axes[1].set_xlim(fmin, fmax)
         fig.suptitle("NFWBS Conditioned Low Pass Filtered Signals")
         fig.tight_layout()
@@ -383,13 +383,14 @@ if __name__ == '__main__':
         fig, axes = plt.subplots(1, 3, figsize=(8,4))
         axes[0].plot(lpf_cond_time_1, lpf_cond_sig_1)
         axes[0].plot(lpf_cond_time_1, sh_output_nfwbs_1)
-        axes[0].set_title("Sample and Hold - Time (File)")
-        axes[0].set_xlim(-0.0003, 0.0003)
+        axes[0].set_title("Sample and Hold - Time (Ideal)")
+        axes[0].set_xlim(0, 0.00015)
         axes[1].step(mid_times_nfwbs_1, quantized_nfwbs_1, color='green', where='mid')
-        axes[1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (File)")
+        axes[1].set_xlim(-.0001, 0.0003)
+        axes[1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (Ideal)")
         axes[2].plot(samp_freq_nfwbs_1, quant_freq_nfwbs_1)
-        axes[2].set_ylim(0, 0.2)
-        axes[2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (File)")
+        axes[2].set_ylim(0, 0.00025)
+        axes[2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
         fig.suptitle("NFWBS ADC Signals")
         fig.tight_layout()
         plt.show()
