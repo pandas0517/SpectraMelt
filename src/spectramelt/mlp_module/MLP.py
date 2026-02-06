@@ -135,7 +135,7 @@ class MLP:
             self.logger.warning(f"Invalid modes removed from frequency mode list: {removed_modes}")
         self.freq_modes = valid_modes
                         
-    def set_premultiplty_params(self, premultiply_params=None):
+    def set_premultiply_params(self, premultiply_params=None):
         if premultiply_params is None:
             premultiply_params = {
                 "scale_dict": 0.5,
@@ -550,6 +550,7 @@ class MLP:
             loss=loss_fn
         )
 
+        self.logger.info(f"MLP Model created and saved at {model_file_path}")
         mlp_model.save(model_file_path, overwrite=True)
 
         return mlp_model

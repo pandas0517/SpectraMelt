@@ -22,20 +22,21 @@ if __name__ == '__main__':
     create_premultiply_set = False
     display_premultiply_signals = False
     
-    create_mlp_model = False
-    prepare_large_dataset = False
-    train_mlp_model = False
+    create_mlp_model = True
+    prepare_large_dataset = True
+    train_mlp_model = True
     
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
     input_config = load_config_from_json(Path(getenv('INPUT_CONF')))
     nyfr_config = load_config_from_json(Path(getenv('NYFR_CONF')))
+    recovery_config = load_config_from_json(Path(getenv('RECOVERY_CONF')))
     dataset = DataSet(input_config_name=input_config.get('config_name'),
                       DUT_config_name=nyfr_config.get('config_name'),
                       config_file_path=Path(getenv('DATASET_CONF')))
     mlp = MLP(config_file_path=Path(getenv('MLP_CONF')))
 
     if create_premultiply_set:
-        dataset.create_premultiply_set(mlp.get_premultiply_params())
+        dataset.create_premultiply_set(nyfr_config, mlp.get_premultiply_params())
     
     directories = dataset.get_directories()
     premultiply_dir = Path(directories.get('premultiply', "Premultiply"))
@@ -102,7 +103,8 @@ if __name__ == '__main__':
             for file_path in premultiply_dir.iterdir():
                 if (file_path.is_file() and
                     file_path.name.endswith(freq_signal_filename) and 
-                    "recovery" not in file_path.name.lower()):
+                    "recovery" not in file_path.name.lower() and
+                    "centered" in file_path.name.lower()):
                     premultiply_file_list.append(file_path)
                     if get_test_signal:
                         premultiply_test_signals = np.load(file_path)

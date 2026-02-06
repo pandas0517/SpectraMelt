@@ -33,7 +33,6 @@ class Recovery:
     def __init__(self,
                 all_params=None,
                 freq_modes=None,
-                premultiply_params=None,
                 recovery_params=None,
                 dataframe_params=None,
                 log_params=None,
@@ -45,7 +44,6 @@ class Recovery:
         elif all_params is None:
             all_params = {
                 "freq_modes": freq_modes,
-                "premultiply_params": premultiply_params,
                 "recovery_params": recovery_params,
                 "dataframe_params": dataframe_params,
                 "log_params": log_params,
@@ -88,20 +86,6 @@ class Recovery:
         self.set_dataframe_params(dataframe_params)
         self.set_recovery_params(recovery_params)
         self.set_config_name(config_name)
-        self.set_premultiply_params(premultiply_params)
-
-
-    def set_premultiply_params(self, premultiply_params):
-        if premultiply_params is None:
-            premultiply_params = {
-                "scale_dict": 1.0,
-                "normalize": True,
-                "apply_fft": False,
-                "fft_shift": True,
-                "overwrite": True
-            }
-                    
-        self.premultiply_params = premultiply_params
 
 
     def set_freq_modes(self, freq_modes=None):

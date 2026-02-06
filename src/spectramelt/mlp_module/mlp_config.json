@@ -11,7 +11,7 @@
         "console": true
     },
     "premultiply_params": {
-        "scale_dict": 0.5,
+        "scale_dict": 1.0,
         "normalize": true,
         "apply_fft": false,
         "fft_shift": false,

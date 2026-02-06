@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = False
+    create_output_set = True
 
     create_wbf_wave_params = False
     create_nyfr_wave_params = False

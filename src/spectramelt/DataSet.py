@@ -475,8 +475,8 @@ class DataSet:
 
 
     def create_output_set(self, DUT: DUTProtocol,
-                          analog: AnalogProtocol | None,
-                          input_signal: InputSignalProtocol | None,
+                          analog: AnalogProtocol | None = None,
+                          input_signal: InputSignalProtocol | None = None,
                           normalize=None,
                           fft_shift=None,
                           normalize_wbf=None,
@@ -580,6 +580,7 @@ class DataSet:
                                                                   return_wbf=True)
                     quantized_signals = DUT_output_signals.adc_signal.quantized
                     wbf_signal = DUT_output_signals.wbf_signal.wbf_sub_sig
+                    wbf_time = DUT_output_signals.wbf_signal.time
                     output_signal = quantized_signals.quantized_values
                     output_signal_list.append(output_signal)
                     wbf_signal_list.append(wbf_signal)
@@ -589,8 +590,8 @@ class DataSet:
                             match DUT_type.lower():
                                 case "nyfr":               
                                     lo_phase_mod_mid = DUT_output_signals.lo_phase_mod_mid
-                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, )
-                            np.save(dictionary_file, dictionary)
+                                    dictionary = DUT.create_dictionary(lo_phase_mod_mid, wbf_time=wbf_time)
+                            np.save(dictionary_file, dictionary.dictionary)
                             self.logger.info(f"DUT {DUT_type} Dictionary saved to file {dictionary_file}")
                             
                         if not samp_time_freq_file.exists() or overwrite:
@@ -876,25 +877,27 @@ class DataSet:
         self.logger.info("Wideband filtered DUT wave parameter creation complete\n")
         
     
-    def create_premultiply_set(self, DUT: DUTProtocol,
-                               recovery: RecoveryProtocol | None,
+    def create_premultiply_set(self, 
+                               DUT_params=None,
+                               premultiply_params=None,
                                dictionary_path=None,
                                input_config_name=None,
-                               DUT_config_name=None,
                                normalize=None,
                                apply_fft=None,
                                fft_shift=None,
                                overwrite=None):
         self.logger.info(f"Starting Premultiply Set Creation...")
         
+        freq_modes = {}
+
         if input_config_name is not None:
             self.set_input_config_name(input_config_name)
-        if DUT_config_name is not None:
-            self.set_DUT_config_name(DUT_config_name)
+        if DUT_params is not None:
+            self.set_DUT_config_name(DUT_params["config_name"])
+            freq_modes = DUT_params.get('freq_modes', {})
             
-        premultiply_params = {}
-        if recovery is not None:
-            premultiply_params = recovery.get_premultiply_params()
+        if premultiply_params is None:
+            premultiply_params = {}
             
         if normalize is None:
             normalize = premultiply_params.get('normalize', False)
@@ -908,7 +911,6 @@ class DataSet:
         if fft_shift is None:
             fft_shift = premultiply_params.get('fft_shift', False) 
         
-        freq_modes = DUT.get_freq_modes()
         wideband_freq_modes = freq_modes.get('wideband', [])
         output_dir: Path = self.directories.get('outputs', "Outputs")
         input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")    

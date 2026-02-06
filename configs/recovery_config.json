@@ -17,13 +17,6 @@
         "sigma": 0.001,
         "dict_mag_adj": 1.0
     },
-    "premultiply_params": {
-        "scale_dict": 0.5,
-        "normalize": true,
-        "apply_fft": false,
-        "fft_shift": false,
-        "overwrite": true
-    },
     "dataframe_params": {
         "file_path": "recovery_df.pkl",
         "save_as_csv": true,
