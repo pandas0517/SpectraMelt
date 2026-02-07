@@ -16,6 +16,35 @@ VALID_SAVED_FREQ_MODES = {
 }
 
 
+def enforce_hermitian(X: np.ndarray) -> np.ndarray:
+    """
+    Enforce Hermitian symmetry so that IFFT yields a real-valued signal.
+    Assumes standard FFT ordering:
+        X[0]        -> DC
+        X[1:N//2]   -> positive frequencies
+        X[N//2]     -> Nyquist (if N even)
+        X[N//2+1:]  -> negative frequencies
+    """
+    X = X.copy()
+    N = len(X)
+
+    if N < 2:
+        return X
+
+    # Positive frequencies (exclude DC and Nyquist)
+    pos = slice(1, N // 2)
+    neg = slice(N // 2 + 1, None)
+
+    X[neg] = np.conj(X[pos][::-1])
+
+    # Enforce real DC and Nyquist
+    X[0] = np.real(X[0])
+    if N % 2 == 0:
+        X[N // 2] = np.real(X[N // 2])
+
+    return X
+
+
 def snr_db(x_ref, x_rec, eps=1e-12):
     signal_power = np.mean(x_ref**2)
     noise_power  = np.mean((x_ref - x_rec)**2)

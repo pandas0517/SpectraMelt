@@ -41,7 +41,8 @@ from .signal_utils import (
     create_meta_data_dictionary,
     safe_mean,
     safe_max,
-    safe_min
+    safe_min,
+    enforce_hermitian
 )
 
 # From plotting_utils.py
@@ -52,6 +53,7 @@ from .plotting_utils import (
 
 # Optional: define __all__ for clean "from utils import *"
 __all__ = [
+    "enforce_hermitian",
     "snr_db",
     "enob_from_snr",
     "get_logger",

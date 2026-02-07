@@ -8,6 +8,7 @@ from .utils import (
     fft_encode_signals,
     update_npz,
     get_prefix_before_recovery,
+    enforce_hermitian,
     numeric_key,
     REQUIRED_AXIS_KEYS
 )
@@ -1120,7 +1121,7 @@ class DataSet:
                         start = time.time() 
                         
                         for signal in output_signals:
-                                recovered_sig_list.append(recovery.recover_signal(signal, MLP=mlp, mlp_model=mlp_model))
+                                recovered_sig_list.append(recovery.recover_signal(signal, mlp=mlp, mlp_model=mlp_model))
 
                         stop = time.time()
                         self.logger.info(f"{len(output_signals)} Signal Recovery Set Creation Time: {stop - start:.6f} seconds")
@@ -1137,15 +1138,13 @@ class DataSet:
         self.logger.info("Recovery Set Creation Complete\n")
 
 
-    def decode_time_signals(self):
+    def decode_time_signals(self, assume_zero_phase=False):
         """
         Decode all frequency-domain .npz files in the recovery directory
         into time-domain signals and save them as .npy files.
 
-        Priority for reconstruction:
-            1. 'real_imag'  -> concatenated [real0, imag0, real1, imag1, ...]
-            2. 'mag_ang'    -> concatenated [mag0, ang0, mag1, ang1, ...]
-            3. 'mag_ang_sincos' -> concatenated [mag0, sin0, cos0, mag1, sin1, cos1, ...]
+        If assume_zero_phase=True and 'mag' is present, uses magnitude-only reconstruction
+        as the first priority.
 
         Signals are assumed Physics-normalized (denormalize by multiplying by signal length).
         """
@@ -1160,48 +1159,59 @@ class DataSet:
                 continue
 
             # Key for saving
-            stem = file_path.stem
-            key_part = stem.split(freq_signals_filename)[0]
+            stem = file_path.name
+            key_part = stem.replace(freq_signals_filename, "")
             recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename}"
 
             with np.load(file_path) as freq_data:
                 keys = freq_data.files
                 time_signal = None
 
-                # Priority 1: real_imag
-                if 'real_imag' in keys:
-                    arr: np.ndarray = freq_data['real_imag']
-                    arr = arr.reshape(-1, 2)  # shape (N, 2)
-                    real = arr[:, 0]
-                    imag = arr[:, 1]
-                    time_signal = np.fft.ifft(real + 1j*imag) * arr.shape[0]
+                # --- Priority reconstruction ---
+                if assume_zero_phase and 'mag' in keys:
+                    arr = freq_data['mag']
+                    complex_freq = arr * np.exp(0j)  # zero-phase assumption
+                    complex_freq = enforce_hermitian(complex_freq)
+                    time_signal = np.fft.ifft(complex_freq) * len(arr)
 
-                # Priority 2: mag_ang
-                elif 'mag_ang' in keys:
-                    arr: np.ndarray = freq_data['mag_ang']
-                    arr = arr.reshape(-1, 2)  # shape (N, 2)
-                    mag = arr[:, 0]
-                    ang = arr[:, 1]
-                    complex_freq = mag * np.exp(1j * ang)
+                elif 'real_imag' in keys:
+                    arr = freq_data['real_imag'].reshape(-1, 2)
+                    real, imag = arr[:, 0], arr[:, 1]
+                    complex_freq = real + 1j * imag
+                    complex_freq = enforce_hermitian(complex_freq)
                     time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
 
-                # Priority 3: mag_ang_sincos
+                elif 'mag_ang' in keys:
+                    arr = freq_data['mag_ang'].reshape(-1, 2)
+                    mag, ang = arr[:, 0], arr[:, 1]
+                    complex_freq = mag * np.exp(1j * ang)
+                    complex_freq = enforce_hermitian(complex_freq)
+                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+
                 elif 'mag_ang_sincos' in keys:
-                    arr: np.ndarray = freq_data['mag_ang_sincos']
-                    arr = arr.reshape(-1, 3)  # shape (N, 3)
-                    mag = arr[:, 0]
-                    sin_comp = arr[:, 1]
-                    cos_comp = arr[:, 2]
+                    arr = freq_data['mag_ang_sincos'].reshape(-1, 3)
+                    mag, sin_comp, cos_comp = arr[:, 0], arr[:, 1], arr[:, 2]
                     ang = np.arctan2(sin_comp, cos_comp)
                     complex_freq = mag * np.exp(1j * ang)
+                    complex_freq = enforce_hermitian(complex_freq)
                     time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
 
                 else:
                     self.logger.warning(f"Cannot reconstruct time signal from {file_path}")
                     continue
 
-                # Save the time-domain signal
-                np.save(recovery_time_file, time_signal)
+                # --- Energy check for imaginary residuals ---
+                imag_energy = np.mean(np.abs(np.imag(time_signal))**2)
+                real_energy = np.mean(np.real(time_signal)**2)
+
+                if imag_energy > 1e-6 * real_energy:
+                    self.logger.warning(
+                        f"Large imaginary residual in {file_path}: "
+                        f"{10*np.log10(imag_energy/real_energy):.2f} dB"
+                    )
+
+                # --- Save real-valued time signal ---
+                np.save(recovery_time_file, np.real(time_signal))
                 self.logger.info(f"Saved time-domain signal: {recovery_time_file}")
 
         
