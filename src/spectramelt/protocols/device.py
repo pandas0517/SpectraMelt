@@ -3,6 +3,7 @@ from typing import(
     TypedDict,
     # NotRequired
 )
+# Use typing_extensions.NotRequired for backward compatibility with Python <3.11
 from typing_extensions import NotRequired
 from .components import (
     ADCResultProtocol,

@@ -9,6 +9,7 @@ from typing import(
     # NotRequired,
     TYPE_CHECKING
 )
+# Use typing_extensions.NotRequired for backward compatibility with Python <3.11
 from typing_extensions import NotRequired
 from pathlib import Path
 import numpy as np
