@@ -289,38 +289,39 @@ class NFWBS:
     # -------------------------------
     # Core functional methods
     # -------------------------------
-    
-    def create_dictionary(self, lo_phase_mod_mid, wbf_time):
-        """Create a real or complex dictionary matrix efficiently."""
+
+    def create_dictionary(self, lo_phase_mod_mid, lo_phase_mod_wavelet, wbf_time):
+        """Create real or complex NFWBS dictionary matrix."""
 
         num_time_points = len(wbf_time)
         time_step = wbf_time[1] - wbf_time[0]
-        
+
         adc_clock_freq = self.adc_params.get('adc_samp_freq', 100)
 
-        # Core band and zone parameters
         K_band = round(num_time_points * adc_clock_freq * time_step)
-        if K_band <= 0:
-            self.logger.error("Invalid K_band computed for dictionary construction")
-            raise ValueError("Invalid K_band computed for dictionary construction")
         Zones = int(num_time_points / K_band)
 
         R_init = np.eye(K_band, dtype=complex)
         dft_matrix = dft(K_band)
 
-        # Build M_index pattern vectorized
         positive_half_zones = Zones
-        M_index = [x for i in range(positive_half_zones) for x in (i, -(i+1))]
+        M_index = [x for i in range(positive_half_zones) for x in (i, -(i + 1))]
 
-        # Choose real or complex dictionary construction
         if self.dict_type == 'complex':
-            R, S, PSI = self._create_complex_dict(R_init, M_index, dft_matrix, lo_phase_mod_mid, K_band, Zones)
+            raise NotImplementedError("Wavelet extension currently implemented for real dictionary only.")
         else:
-            R, S, PSI = self._create_real_dict(R_init, M_index, dft_matrix, lo_phase_mod_mid, K_band, Zones)
-
+            R, S, W, PSI = self._create_real_dict_nfwbs(
+                R_init,
+                M_index,
+                dft_matrix,
+                lo_phase_mod_mid,
+                lo_phase_mod_wavelet,
+                K_band,
+                Zones
+            )
         # Final dictionary multiplication
         return NFWBSDictionary(
-            dictionary=R @ S @ PSI,
+            dictionary=R @ S @ W @ PSI,
             zones=Zones,
             k_bands=K_band
         )
@@ -329,36 +330,48 @@ class NFWBS:
     def _create_complex_dict(self, R_init, M_index,
                              dft_matrix, lo_phase_mod_mid,
                              K_band, Zones):
-        """
-        Vectorized complex dictionary creation.
-        This version has not been tested yet
-        """
-        lo_mod = lo_phase_mod_mid[:len(M_index)]
+        pass
+        # """
+        # Vectorized complex dictionary creation.
+        # This version has not been tested yet
+        # """
+        # lo_mod = lo_phase_mod_mid[:len(M_index)]
 
-        idft_norm = np.conjugate(dft_matrix.T) / (Zones * K_band)
-        R = np.tile(R_init, (1, Zones))
-        R_row, R_col = R.shape
+        # idft_norm = np.conjugate(dft_matrix.T) / (Zones * K_band)
+        # R = np.tile(R_init, (1, Zones))
+        # R_row, R_col = R.shape
 
-        # Vectorized exponential diagonal blocks
-        exp_factors = np.exp(1j * np.multiply(M_index, lo_mod))
-        exp_blocks = np.repeat(exp_factors, K_band)
+        # # Vectorized exponential diagonal blocks
+        # exp_factors = np.exp(1j * np.multiply(M_index, lo_mod))
+        # exp_blocks = np.repeat(exp_factors, K_band)
 
-        S = np.eye(R_col, dtype=complex)
-        S *= np.tile(exp_blocks, int(R_col / len(exp_blocks)))[:R_col]
+        # S = np.eye(R_col, dtype=complex)
+        # S *= np.tile(exp_blocks, int(R_col / len(exp_blocks)))[:R_col]
 
-        PSI = np.kron(np.eye(Zones, dtype=complex), idft_norm)
-        return R, S, PSI
+        # PSI = np.kron(np.eye(Zones, dtype=complex), idft_norm)
+        # return R, S, PSI
 
 
-    def _create_real_dict(self, R_init, M_index,
-                          dft_matrix, lo_phase_mod_mid,
-                          K_band, Zones):
-        """Vectorized real dictionary creation."""
+    def _create_real_dict_nfwbs(
+        self,
+        R_init,
+        M_index,
+        dft_matrix,
+        lo_phase_mod_mid,
+        lo_phase_mod_wavelet,
+        K_band,
+        Zones
+    ):
+        """Real-valued NYFR + Wavelet Bandpass dictionary construction."""
+
+        K_band = K_band
+        Zones = Zones
+
         idft_norm = np.conjugate(dft_matrix.T) / (2 * Zones * K_band)
         R = np.tile(R_init, (1, 2 * Zones))
         R_row, R_col = R.shape
 
-        # Build UL_idft matrix (upper/lower split)
+        # ---- UL-IDFT block ----
         idft_split = np.hsplit(idft_norm, 2)
         zero_fill = np.zeros_like(idft_split[0])
         UL_idft = np.block([
@@ -366,26 +379,42 @@ class NFWBS:
             [zero_fill, idft_split[1]]
         ])
 
-        # Precompute modulation terms
+        # ---- Index symmetry ----
         M_index_rev = [-m for m in reversed(M_index)]
         double_M_index = np.array(M_index + M_index_rev)
-        lo_mod_concat = np.tile(lo_phase_mod_mid, Zones)
-        double_lo_mod = np.tile(lo_mod_concat, 2)
 
-        # Vectorized block-diagonal exponential construction
+        # ---- LO phase signals ----
+        lo_mid_concat = np.tile(lo_phase_mod_mid, Zones)
+        lo_wavelet_concat = np.tile(lo_phase_mod_wavelet, Zones)
+
+        double_lo_mid = np.tile(lo_mid_concat, 2)
+        double_lo_wavelet = np.tile(lo_wavelet_concat, 2)
+
+        # ---- Allocate matrices ----
         S = np.zeros((R_col, R_col), dtype=complex)
+        W = np.zeros((R_col, R_col), dtype=complex)
         PSI = np.zeros((R_col, R_col // 2), dtype=complex)
 
         block_indices = np.arange(0, R_col, K_band)
-        for idx, i in enumerate(block_indices[:len(double_M_index)]):
-            LO_mod = double_lo_mod[i:i + R_row]
-            exp_diag = np.exp(1j * double_M_index[idx] * LO_mod)
-            S[i:i + R_row, i:i + R_row] = np.diag(exp_diag)
 
+        # ---- Build S and W (same structure, different LO) ----
+        for idx, i in enumerate(block_indices[:len(double_M_index)]):
+            lo_mid = double_lo_mid[i:i + R_row]
+            lo_wave = double_lo_wavelet[i:i + R_row]
+
+            S[i:i + R_row, i:i + R_row] = np.diag(
+                np.exp(1j * double_M_index[idx] * lo_mid)
+            )
+
+            W[i:i + R_row, i:i + R_row] = np.diag(
+                np.exp(1j * double_M_index[idx] * lo_wave)
+            )
+
+        # ---- PSI placement ----
         for i in range(0, R_col, 2 * K_band):
             PSI[i:i + 2 * K_band, i // 2:i // 2 + K_band] = UL_idft
 
-        return R, S, PSI
+        return R, S, W, PSI
     
     
     def create_output_signal(self, input_signal, real_time,
@@ -477,6 +506,11 @@ class NFWBS:
         wavelet_sig = wavelet_gen.generate_wavelet_train(pulse_signal_2.pulses, real_time,
                                                          return_effects=return_effects,
                                                          device=device)
+        # Continuous-time phase ramp for wavelet LO
+        # This is a good area to increase realism by
+        # replacing below with real circuit implementations
+        fc_wavelet = self.wavelet_params['center_freq']
+        lo_phase_wavelet_cont = 2 * np.pi * fc_wavelet * real_time
         
         mixed_2 = Mixer(mixer_params=self.mixer_2_params)
         if self.mixer_2_params is None:
@@ -551,6 +585,15 @@ class NFWBS:
             # Extract the corresponding lo_phase_mod values
             lo_phase_mod_mid = lo_phase_mod[sampled_indicies]
 
+        lo_phase_mod_wavelet = None
+        if isinstance(lo_phase_wavelet_cont, np.ndarray):
+            sampled_indices = np.clip(
+                np.searchsorted(real_time, adc_signal.quantized.mid_times),
+                0,
+                len(lo_phase_wavelet_cont) - 1
+            )
+            lo_phase_mod_wavelet = lo_phase_wavelet_cont[sampled_indices]
+
         return NFWBSResult(
             adc_signal=adc_signal,
             wbf_signal=all_wbf_signals if return_wbf else None,
@@ -563,7 +606,8 @@ class NFWBS:
             wavelet_signal=wavelet_sig if return_wavelet else None,
             mixed_2_signal=mixed_signal_2 if return_mixed_2 else None,
             lpf_2_signal=lpf_signal_2 if return_lpf_2 else None,
-            lo_phase_mod_mid=lo_phase_mod_mid
+            lo_phase_mod_mid=lo_phase_mod_mid,
+            lo_phase_mod_wavelet=lo_phase_mod_wavelet
         )
     
     # -------------------------------

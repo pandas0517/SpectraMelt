@@ -24,14 +24,14 @@ if __name__ == '__main__':
     display_LO_1_signals = False
     display_mixed_1_signals = False
     display_lpf_1_signals = False
-    display_LO_2_signals = True
-    display_wavelet_signals = True
-    display_mixed_2_signals = True
-    display_lpf_2_signals = True
-    display_conditioned_signals = True
-    display_ADC_signals = True
-    display_recovered_signals = False
-    display_premultiply_signals = False
+    display_LO_2_signals = False
+    display_wavelet_signals = False
+    display_mixed_2_signals = False
+    display_lpf_2_signals = False
+    display_conditioned_signals = False
+    display_ADC_signals = False
+    display_recovered_signals = True
+    display_premultiply_signals = True
     
     use_gpu = False
     use_device_message = "CPU"
@@ -39,11 +39,14 @@ if __name__ == '__main__':
         use_device_message = "GPU"
     
     nfwbs_1 = NFWBS(config_file_path=Path(getenv('NFWBS_CONF')))
+    nfwbs_1_lo2_params = nfwbs_1.get_lo_2_params()
+    nfwbs_1_lo2_params["freq"] = 1000
+    nfwbs_1.set_lo_2_params(nfwbs_1_lo2_params)
     nfwbs_1_adc_params = nfwbs_1.get_adc_params()
     
     analog_1 = Analog(config_file_path=Path(getenv('INPUT_CONF')))
     analog_1_time_params = analog_1.get_time_params()
-    analog_1_time_params["time_range"] = (-2, 2)
+    analog_1_time_params["time_range"] = (-0.01, 0.01)
     # analog_1_time_params["sim_freq"] = 100000
     analog_1_time_params["adc_samp_freq"] = nfwbs_1_adc_params.get('adc_samp_freq')
     analog_1.set_time_params(analog_1_time_params)
@@ -396,34 +399,35 @@ if __name__ == '__main__':
         plt.show()
         plt.close(fig)
         
-    # dictionary_1 = nyfr_1.get_nyfr_dict()
-    # pinv_1 = np.linalg.pinv(100*dictionary_1)
-    # premultiply_1 = pinv_1 @ quantized_nyfr_1
-    
-    # recovery_config_path = Path(getenv('RECOVERY_CONF'))
-    # recovery_1 = Recovery(quantized_nyfr_1, dictionary_1, config_file_path=recovery_config_path)
-    # recovery_params_1 = recovery_1.get_recovery_params()
-    # recovery_method_1 = recovery_params_1.get('method')
-    # recovered_freq_1 = recovery_1.get_recovered_coefs()
-    # recovered_sig_freq_1 = fftshift(np.abs(fft(recovered_freq_1))) / (wbf_samp_freq_1*lpf_cond_total_time_1)
-    # recovered_signal_1 = ifft(recovered_freq_1)
+    dictionary_1 = nfwbs_1.create_dictionary(nfwbs_1_signals.lo_phase_mod_mid,
+                                             nfwbs_1_signals.lo_phase_mod_wavelet,
+                                             wbf_time=wbf_time_1)
+    pinv_1 = np.linalg.pinv(dictionary_1.dictionary)
+    premultiply_1 = pinv_1 @ quantized_nfwbs_1
 
-    # start = time.time()
-    # premultiply_signal_1 = np.dot(np.linalg.pinv(dictionary_1), quantized_nyfr_1)
-    # end = time.time()
-    # logger.info(f"Premultiplication Time: {end - start:.6f} seconds")
+    recovery_1 = Recovery(config_file_path=Path(getenv('RECOVERY_CONF')))
+    recovery_method_1 = "spgl1" 
+    recovery_1.set_recovery_method(recovery_method_1)
+
+    start = time.time()    
+    recovered_freq_1 = recovery_1.recover_signal(quantized_nfwbs_1, dictionary_1.dictionary)
+    end = time.time()
+    logger.info(f"NFWBS SPGL-1 recovery time: {end - start:.6f} seconds")  
+
+    recovered_sig_freq_1 = fftshift(np.abs(fft(recovered_freq_1))) / (wbf_samp_freq_1*lpf_cond_total_time_1)
+    recovered_signal_1 = ifft(recovered_freq_1)
 
     if display_recovered_signals:
         fig, axes = plt.subplots(1, 2, figsize=(8,4))
         axes[0].plot(real_freq_1, real_input_freq_1)
         axes[0].set_title("Frequency (File)")
-        axes[0].set_ylim(0, 1)
-        axes[0].set_xlim(-50000, 50000)
+        # axes[0].set_ylim(0, 1)
+        axes[0].set_xlim(-300000, 300000)
         #axes[0].set_xlim(-0.0002, 0.0002)
         axes[1].plot(wbf_freq_1, recovered_sig_freq_1)
         axes[1].set_title(f"Frequency (File)\nRecovery Method: {recovery_method_1}")
-        axes[1].set_ylim(0, 1)
-        axes[1].set_xlim(-50000, 50000)
+        # axes[1].set_ylim(0, 1)
+        axes[1].set_xlim(-300000, 300000)
         fig.suptitle("NFWBS Recovered Signals")
         fig.tight_layout()
         plt.show()

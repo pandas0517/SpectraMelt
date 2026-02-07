@@ -59,6 +59,7 @@ class NFWBSResult:
     mixed_2_signal: MixerResult | None = None
     lpf_2_signal: LPFResult | None = None
     lo_phase_mod_mid: np.ndarray | None = None
+    lo_phase_mod_wavelet: np.ndarray | None = None
 
 
 
