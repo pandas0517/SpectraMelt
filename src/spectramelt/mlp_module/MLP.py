@@ -556,7 +556,7 @@ class MLP:
         return mlp_model
         
 
-    def load_model(self, model_file_path: Path | None) -> Model:
+    def load_model(self, model_file_path: Path | None = None) -> Model:
         if model_file_path is None:
             model_file_path = self.model_params.get('file_path', "ml_model.keras")
 

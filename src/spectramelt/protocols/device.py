@@ -1,8 +1,9 @@
 from typing import(
     Protocol,
     TypedDict,
-    NotRequired
+    # NotRequired
 )
+from typing_extensions import NotRequired
 from .components import (
     ADCResultProtocol,
     WBFResultProtocol,

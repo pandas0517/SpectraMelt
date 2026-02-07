@@ -6,9 +6,10 @@ from typing import(
     Dict,
     Any,
     Literal,
-    NotRequired,
+    # NotRequired,
     TYPE_CHECKING
 )
+from typing_extensions import NotRequired
 from pathlib import Path
 import numpy as np
 

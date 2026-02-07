@@ -19,15 +19,15 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_recovery_set = True
-    use_mlp = True
-    decode_recovery_to_time = False
+    create_recovery_set = False
+    use_mlp = False
+    decode_recovery_to_time = True
+    assume_zero_phase=True
 
     create_recovery_dataframe = True
     set_recovery_dataframe = True
 
-    display_recovered_signals = True
-    use_dB = True
+    display_recovered_signals = False
     DUT_type = "NYFR"
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -64,7 +64,7 @@ if __name__ == '__main__':
             dataset.create_recovery_set(recovery)
             
     if decode_recovery_to_time:
-        dataset.decode_time_signals()
+        dataset.decode_time_signals(assume_zero_phase=assume_zero_phase)
 
     if create_recovery_dataframe:
         dataset.create_recovery_dataframe(recovery)
