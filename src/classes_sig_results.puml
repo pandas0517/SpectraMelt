@@ -1,0 +1,24 @@
+@startuml classes_sig_results
+set namespaceSeparator none
+class AnalogData <<dataclass>> {
+  adj_spacing : float | None
+  frequency : np.ndarray | None
+  num_points : int | None
+  sim_freq : float | None
+  time : np.ndarray | None
+  total_time : float | None
+}
+class InputSignalEffects <<dataclass>> {
+  delay : tuple[float, ...] | None
+  echo_att : tuple[float, ...] | None
+  local_doppler : tuple[float, ...] | None
+  noise : np.ndarray | None
+  phase_inversion : tuple[bool, ...] | None
+}
+class InputSignalResult <<dataclass>> {
+  effects : InputSignalEffects | None
+  input_signal : np.ndarray | None
+}
+
+InputSignalEffects --* InputSignalResult : effects
+@enduml

@@ -1,0 +1,203 @@
+@startuml classes_protocols
+set namespaceSeparator none
+class ADCResultProtocol <<protocol>> {
+  quantized
+}
+class AllInputSetSignals <<protocol>> {
+  dataset
+  recovery
+}
+class AnalogDataProtocol <<protocol>> {
+  frequency
+  time
+}
+class AnalogProtocol <<protocol>> {
+  create_analog() -> AnalogDataProtocol
+}
+class DUTProtocol <<protocol>> {
+  create_dictionary(...) -> OutputSignalDictProtocol
+  create_output_signal(...) -> OutputSignalResultProtocol
+  get_all_params() -> OutputSetAllParams
+  get_config_name() -> str
+  get_freq_modes() -> OutputSetFreqModes
+  get_lo_params() -> LOParams
+  get_outputset_params() -> OutputSetParams
+}
+
+note right of DUTProtocol::create_dictionary
+  lo_phase_mod_mid: np.ndarray
+  wbf_time: np.ndarray
+end note
+
+note right of DUTProtocol::create_output_signal
+  input_signal: np.ndarray
+  real_time: np.ndarray
+  return_wbf: bool
+end note
+
+class DataframeParam <<protocol>> {
+  file_path : NotRequired[Path]
+}
+class InputSetAllParams <<protocol>> {
+  wave_params : NotRequired[WavesParams]
+}
+class InputSetParams <<protocol>> {
+  fft_shift : NotRequired[bool]
+  normalize : NotRequired[bool]
+  num_recovery_sigs : NotRequired[int]
+  num_sigs : NotRequired[int]
+  overwrite : NotRequired[bool]
+  tones_per_sig : NotRequired[list[int]]
+  wave_precision : NotRequired[int]
+}
+class InputSignalProtocol <<protocol>> {
+  create_input_signal(real_time: np.ndarray) -> InputSignalResultParams
+  get_all_params() -> InputSetAllParams
+  get_config_name() -> str
+  get_freq_modes() -> list[str]
+  get_inputset_params() -> InputSetParams
+  set_wave_params(wave_params: WavesParams) -> None
+}
+class InputSignalResultParams <<protocol>> {
+  input_signal : NotRequired[np.ndarray]
+}
+class LOParams <<protocol>> {
+  freq : int
+}
+class MLPProtocol <<protocol>> {
+  get_training_params() -> TrainingParams
+  load_model(model_file_path: Path | None) -> Model
+  model_prediction(...) -> np.ndarray
+  reset_tensorflow_session() -> None
+  set_model_file_path(model_file_path: str) -> None
+  set_recovery_stats_from_h5(...) -> None
+}
+
+note right of MLPProtocol::model_prediction
+  init_guess: np.ndarray
+  mode: Literal[
+    complex
+    real
+    imag
+    real_imag
+    mag
+    ang
+    mag_ang
+    mag_ang_sincos
+  ]
+end note
+
+note right of MLPProtocol::set_recovery_stats_from_h5
+  norm_h5_path: Path
+  dataset_name: str
+end note
+
+class NormParams <<protocol>> {
+  input_type : NotRequired[str]
+  output_type : NotRequired[str]
+}
+class OutputSetAllParams <<protocol>> {
+}
+class OutputSetFreqModes <<protocol>> {
+  output : list[str]
+  wideband : list[str]
+}
+class OutputSetParams <<protocol>> {
+  DUT_type : NotRequired[str]
+  fft_shift : NotRequired[bool]
+  fft_shift_wbf : NotRequired[bool]
+  normalize : NotRequired[bool]
+  normalize_wbf : NotRequired[bool]
+  overwrite : NotRequired[bool]
+}
+class OutputSignalDictProtocol <<protocol>> {
+  dictionary
+}
+class OutputSignalResultProtocol <<protocol>> {
+  adc_signal
+  lo_phase_mod_mid
+  wbf_signal
+}
+class PreMultiplyParams <<protocol>> {
+  apply_fft : NotRequired[bool]
+  fft_shift : NotRequired[bool]
+  normalize : NotRequired[bool]
+  overwrite : NotRequired[bool]
+  scale_dict : NotRequired[float]
+}
+class QuantizedSignalProtocol <<protocol>> {
+  mid_times
+  quantized_values
+  sampled_frequency
+}
+class RecoveryAllParams <<protocol>> {
+}
+class RecoveryParams <<protocol>> {
+  method : str
+}
+class RecoveryProtocol <<protocol>> {
+  create_rec_df(...) -> None
+  get_all_params() -> RecoveryAllParams
+  get_config_name() -> str
+  get_dataframe_params() -> DataframeParams
+  get_freq_modes() -> list[str]
+  get_premultiply_params() -> PreMultiplyParams
+  get_recovery_params() -> RecoveryParams
+  process_signal_file(...) -> list[dict]
+  recover_signal(...) -> np.ndarray
+  set_recovery_type(recovery_type: str) -> None
+}
+
+note right of RecoveryProtocol::create_rec_df
+  inputset_config_file: Path | None
+  recovery_df_file_path: Path | None
+end note
+
+note right of RecoveryProtocol::process_signal_file
+  recovery_file: Path
+  wbf_wave_file: Path
+  input_file: Path
+  num_recovery_sigs: int
+  dataset_config_name: str
+  inputset_config_name: str
+  DUT_config_name: str
+  recovery_config_name: str
+  wbf_freq: np.ndarray
+end note
+
+note right of RecoveryProtocol::recover_signal
+  signal: np.ndarray
+  dictionary: np.ndarray | None
+end note
+
+class SignalSet <<protocol>> {
+  freq_path : Path
+  time_path : Path
+  time_set : List
+  wave_path : Path
+  wave_set : List
+}
+class TrainingParams <<protocol>> {
+  norm_params : NotRequired[NormParams]
+}
+class WBFResultProtocol <<protocol>> {
+  freq
+  time
+  wbf_sub_sig
+}
+class WaveParams <<protocol>> {
+  amp : float
+  freq : float
+  imag : float
+  phase : float
+  real : float
+}
+class WavesParams <<protocol>> {
+  amp_range : NotRequired[Tuple[float, float]]
+  freq_range : NotRequired[Tuple[int, int]]
+  phase_range : NotRequired[Tuple[float, float]]
+  waves : NotRequired[List[Dict[str, Any]]]
+}
+SignalSet --* AllInputSetSignals : dataset
+SignalSet --* AllInputSetSignals : recovery
+@enduml

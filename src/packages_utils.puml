@@ -1,0 +1,23 @@
+@startuml packages_utils
+set namespaceSeparator none
+package "spectramelt.utils" as spectramelt.utils {
+}
+package "spectramelt.utils.config_utils" as spectramelt.utils.config_utils {
+}
+package "spectramelt.utils.file_utils" as spectramelt.utils.file_utils {
+}
+package "spectramelt.utils.logging_utils" as spectramelt.utils.logging_utils {
+}
+package "spectramelt.utils.plotting_utils" as spectramelt.utils.plotting_utils {
+}
+package "spectramelt.utils.signal_utils" as spectramelt.utils.signal_utils {
+}
+spectramelt.utils --> spectramelt.utils.config_utils
+spectramelt.utils --> spectramelt.utils.file_utils
+spectramelt.utils --> spectramelt.utils.logging_utils
+spectramelt.utils --> spectramelt.utils.plotting_utils
+spectramelt.utils --> spectramelt.utils.signal_utils
+spectramelt.utils.config_utils --> spectramelt.utils.logging_utils
+spectramelt.utils.file_utils --> spectramelt.utils.logging_utils
+spectramelt.utils.plotting_utils --> spectramelt.utils.signal_utils
+@enduml

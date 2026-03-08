@@ -1,0 +1,14 @@
+@startuml packages_protocols
+set namespaceSeparator none
+package "spectramelt.protocols" as spectramelt.protocols {
+}
+package "spectramelt.protocols.components" as spectramelt.protocols.components {
+}
+package "spectramelt.protocols.device" as spectramelt.protocols.device {
+}
+package "spectramelt.protocols.signals" as spectramelt.protocols.signals {
+}
+spectramelt.protocols --> spectramelt.protocols.device
+spectramelt.protocols --> spectramelt.protocols.signals
+spectramelt.protocols.device --> spectramelt.protocols.components
+@enduml

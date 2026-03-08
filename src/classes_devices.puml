@@ -1,0 +1,83 @@
+@startuml classes_devices
+set namespaceSeparator none
+class NFWBS {
+  adc_params : NoneType, dict
+  config_name : str
+  dict_type : str
+  freq_modes : NoneType, dict
+  lo_1_params : NoneType
+  lo_2_params : NoneType
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  lpf_1_params : NoneType
+  lpf_2_params : NoneType
+  mixer_1_params : NoneType
+  mixer_2_params : NoneType
+  outputset_params : NoneType, dict
+  pulse_1_params : NoneType
+  pulse_2_params : NoneType
+  wavelet_params : NoneType
+  wbf_params : NoneType
+  + create_dictionary(...)
+  + create_output_signal(...) -> NFWBSResult
+}
+
+note right of NFWBS::create_dictionary
+  lo_phase_mod_mid
+  lo_phase_mod_wavelet
+  wbf_time
+end note
+
+note right of NFWBS::create_output_signal
+  input_signal
+  real_time
+  return_internal
+  return_wbf
+  return_lo_1
+  return_pulse_1
+  return_mixed_1
+  return_lpf_1
+  return_lo_2
+  return_pulse_2
+  return_wavelet
+  return_mixed_2
+  return_lpf_2
+  return_effects
+  use_gpu
+end note
+
+class NYFR {
+  adc_params : NoneType, dict
+  config_name : str
+  dict_type : str
+  freq_modes : NoneType, dict
+  lo_params : NoneType
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  lpf_params : NoneType
+  mixer_params : NoneType
+  outputset_params : NoneType, dict
+  pulse_params : NoneType
+  wbf_params : NoneType
+  + create_dictionary(...) -> NYFRDictionary
+  + create_output_signal(...) -> NYFRResult
+}
+
+note right of NYFR::create_dictionary
+  lo_phase_mod_mid
+  wbf_time
+end note
+
+note right of NYFR::create_output_signal
+  input_signal
+  real_time
+  return_internal
+  return_wbf
+  return_lo
+  return_pulse
+  return_mixed
+  return_lpf
+  return_effects
+end note
+
+@enduml

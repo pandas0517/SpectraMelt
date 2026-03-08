@@ -1,0 +1,16 @@
+@startuml packages_results
+set namespaceSeparator none
+package "spectramelt.results" as spectramelt.results {
+}
+package "spectramelt.results.components" as spectramelt.results.components {
+}
+package "spectramelt.results.device" as spectramelt.results.device {
+}
+package "spectramelt.results.signals" as spectramelt.results.signals {
+}
+spectramelt.results --> spectramelt.results.components
+spectramelt.results --> spectramelt.results.device
+spectramelt.results --> spectramelt.results.signals
+spectramelt.results.components --> spectramelt.results.signals
+spectramelt.results.device --> spectramelt.results.components
+@enduml

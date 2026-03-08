@@ -1,0 +1,74 @@
+@startuml classes_device_results
+top to bottom direction
+class ADCResult <<dataclass>> {
+}
+class LOResult <<dataclass>> {
+}
+class LPFResult <<dataclass>> {
+}
+class MixerResult <<dataclass>> {
+}
+class PGResult <<dataclass>> {
+}
+class WaveletResult <<dataclass>> {
+}
+class WBFResult <<dataclass>> {
+}
+class NFWBSDictionary <<dataclass>> {
+  dictionary : np.ndarray | None
+  k_bands : int | None
+  zones : int | None
+}
+class NFWBSResult <<dataclass>> {
+  adc_signal : ADCResult | None
+  lo_1_signal : LOResult | None
+  lo_2_signal : LOResult | None
+  lo_phase_mod_mid : np.ndarray | None
+  lo_phase_mod_wavelet : np.ndarray | None
+  lpf_1_signal : LPFResult | None
+  lpf_2_signal : LPFResult | None
+  mixed_1_signal : MixerResult | None
+  mixed_2_signal : MixerResult | None
+  pulse_1_signal : PGResult | None
+  pulse_2_signal : PGResult | None
+  wavelet_signal : WaveletResult | None
+  wbf_signal : WBFResult | None
+}
+class NYFRDictionary <<dataclass>> {
+  dictionary : np.ndarray | None
+  k_bands : int | None
+  zones : int | None
+}
+class NYFRResult <<dataclass>> {
+  adc_signal : ADCResult | None
+  lo_phase_mod_mid : np.ndarray | None
+  lo_signal : LOResult | None
+  lpf_signal : LPFResult | None
+  mixed_signal : MixerResult | None
+  pulse_signal : PGResult | None
+  wbf_signal : WBFResult | None
+}
+class WBFResult <<dataclass>> {
+  freq : np.ndarray | None
+  time : np.ndarray | None
+  wbf_signal : LPFResult | None
+  wbf_sub_sig : np.ndarray | None
+}
+
+NYFRDictionary -[hidden]right- NYFRResult
+NYFRResult --* ADCResult : adc_signal
+NYFRResult --* LOResult : lo_signal
+NYFRResult --* LPFResult : lpf_signal
+NYFRResult --* MixerResult : mixed_signal
+NYFRResult --* PGResult : pulse_signal
+NYFRResult --* WBFResult : wbf_signal
+NFWBSResult -[hidden]right- NFWBSDictionary
+NFWBSResult --* ADCResult : adc_signal
+NFWBSResult --* LOResult : lo_signal
+NFWBSResult --* LPFResult : lpf_signal
+NFWBSResult --* MixerResult : mixed_signal
+NFWBSResult --* PGResult : pulse_signal
+NFWBSResult --* WaveletResult : wavelet_signal
+NFWBSResult --* WBFResult : wbf_signal
+
+@enduml

@@ -1,0 +1,66 @@
+@startuml classes_dataset
+set namespaceSeparator none
+class DataSet {
+  DUT_config_name : str
+  ML_config_name : str
+  VALID_DUT_TYPES : set
+  config_name
+  directories : dict
+  directory_params : NoneType, dict
+  filenames : NoneType, dict
+  flat_filenames : dict
+  input_config_name : str
+  input_rng
+  internal_directory_params : NoneType, dict
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  recovery_config_name : str
+  create_input_set(...)
+  create_nyfr_wave_params(nyfr: DUTProtocol)
+  create_output_set(...)
+  create_premultiply_set(...)
+  create_recovery_dataframe(recovery: RecoveryProtocol | None)
+  create_recovery_set(...)
+  create_wbf_wave_params()
+  decode_time_signals(assume_zero_phase)
+  update_input_wave_params()
+}
+
+note right of DataSet::create_input_set
+  analog: AnalogProtocol
+  input_signal: InputSignalProtocol
+  normalize
+  fft_shift
+  overwrite
+end note
+
+note right of DataSet::create_output_set
+  DUT: DUTProtocol
+  analog: AnalogProtocol | None
+  input_signal: InputSignalProtocol | None
+  normalize, fft_shift
+  normalize_wbf
+  fft_shift_wbf
+  overwrite
+end note
+
+note right of DataSet::create_premultiply_set
+  DUT_params
+  premultiply_params
+  dictionary_path
+  input_config_name
+  normalize
+  apply_fft
+  fft_shift
+  overwrite
+end note
+
+note right of DataSet::create_recovery_set
+  recovery: RecoveryProtocol
+  mlp: MLPProtocol | None
+  dictionary_path
+  input_config_name
+  DUT_config_name
+end note
+
+@enduml

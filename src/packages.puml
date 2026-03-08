@@ -1,0 +1,56 @@
+@startuml packages
+left to right direction
+set namespaceSeparator none
+package spectramelt {
+}
+package ADC {
+}
+package Analog {
+}
+package DataSet {
+}
+package IHT {
+}
+package InputSignal {
+}
+package LocalOscillator {
+}
+package LowPassFilter {
+}
+package Mixer {
+}
+package mlp_module {
+}
+package NFWBS {
+}
+package NYFR {
+}
+package OMP {
+}
+package PulseGenerator {
+}
+package Recovery {
+}
+package WaveletGenerator {
+}
+spectramelt --> Analog
+spectramelt --> DataSet
+Analog --> InputSignal
+spectramelt --> Recovery
+Recovery -down-> IHT
+Recovery -down-> OMP
+Recovery -down-> mlp_module
+InputSignal -down-> NFWBS
+InputSignal -down-> NYFR
+NFWBS -down-> ADC
+NFWBS -down-> LocalOscillator
+NFWBS -down-> LowPassFilter
+NFWBS -down-> Mixer
+NFWBS -down-> PulseGenerator
+NFWBS -down-> WaveletGenerator
+NYFR -down-> ADC
+NYFR -down-> LocalOscillator
+NYFR -down-> LowPassFilter
+NYFR -down-> Mixer
+NYFR -down-> PulseGenerator
+@enduml

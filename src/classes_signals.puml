@@ -1,0 +1,76 @@
+@startuml classes_signals
+set namespaceSeparator none
+class Analog {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  time_params : NoneType, dict
+  + create_analog() -> AnalogData
+}
+class InputSignal {
+  config_name
+  env_params : NoneType, dict
+  freq_modes : list
+  inputset_params : NoneType, dict
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  rng
+  wave_params : NoneType, dict
+  + create_input_signal(...) -> InputSignalResult
+}
+
+note right of InputSignal::create_input_signal
+  real_time
+  return_effects
+end note
+
+class Recovery {
+  VALID_RECOVERY_METHODS : set
+  VALID_RECOVERY_MODE_ANALYSIS : set
+  config_name
+  dataframe_params : NoneType, dict
+  freq_modes : list
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  recovery_params : NoneType, dict
+  - is_valid_recovery_method(name) -> bool
+  - is_valid_saved_freq_mode(name) -> bool
+  + create_rec_df(...)
+  + process_signal_file(...) -> list[dict]
+  + recover_signal(...) -> np.ndarray
+}
+
+note right of Recovery::create_rec_df
+  inputset_config_file: Path | None
+  recovery_df_file_path: Path | None
+end note
+
+note right of Recovery::process_signal_file
+  recovery_file: Path
+  rec_time_file: Path
+  wbf_file: Path
+  wbf_wave_file: Path
+  input_file: Path
+  num_recovery_sigs: int
+  dataset_config_name: str
+  inputset_config_name: str
+  DUT_config_name: str
+  recovery_config_name: str
+  wbf_freq: np.ndarray
+end note
+
+note right of Recovery::recover_signal
+  signal
+  dictionary
+  num_waves
+  mlp: Optional[MLPProtocol]
+  mlp_model
+  model_file_path
+  recovery_type
+  recovery_method
+end note
+
+' Analog -[hidden]down- InputSignal
+InputSignal -[hidden]- Recovery
+
+@enduml

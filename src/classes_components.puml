@@ -1,0 +1,125 @@
+@startuml classes_components
+top to bottom direction
+set namespaceSeparator none
+
+class ADC {
+  config_name
+  log_params : dict
+  logger : NoneType, RootLogger
+  adc_params : dict
+  rng
+  + analog_to_digital(...) -> ADCResult
+}
+
+note right of ADC::analog_to_digital
+  signal: np.ndarray
+  real_time: np.ndarray
+  return_conditioned
+  return_sample_hold
+  return_effects
+end note
+
+class LocalOscillator {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  lo_params : NoneType, dict
+  rng
+  + generate_signal(...) -> LOResult
+}
+
+note right of LocalOscillator::generate_signal
+  real_time: np.ndarray
+  return_phase_mod: bool
+  return_pre_start: bool
+  return_effects: bool
+end note
+
+class LowPassFilter {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  lpf_params : NoneType, dict
+  rng
+  + apply_filter(...) -> LPFResult
+}
+
+note right of LowPassFilter::apply_filter
+  signal_in: np.ndarray
+  real_time: np.ndarray
+  return_effects
+end note
+
+class Mixer {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  mixer_params : NoneType, dict
+  rng
+  + mix(...) -> MixerResult
+}
+
+note right of Mixer
+  mix parameters:
+    rf_signal: np.ndarray
+    lo_signal: np.ndarray
+    return_effects
+end note
+
+class PulseGenerator {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  pulse_params : NoneType, dict
+  rng
+  + generate(...) -> PGResult
+}
+
+note right of PulseGenerator::generate
+  signal
+  real_time
+  pre_start_val
+  return_effects
+end note
+
+class WaveletGenerator {
+  config_name
+  log_params : NoneType, dict
+  logger : NoneType, RootLogger
+  wavelet_params : NoneType, dict
+  rng
+  + generate_wavelet_train(...) -> WaveletResult
+  + generate_wavelet_train_cpu(...) -> WaveletResult
+  + generate_wavelet_train_gpu() -> WaveletResult
+}
+
+note right of WaveletGenerator::generate_wavelet_train
+  sample_train: np.ndarray
+  t: np.ndarray
+  device: str
+  return_components: bool
+  return_scaling_factor: bool
+  return_effects: bool
+end note
+
+note right of WaveletGenerator::generate_wavelet_train_cpu
+  sample_train
+  t
+  return_components
+  return_scaling_factor
+  return_effects
+end note
+
+note right of WaveletGenerator::generate_wavelet_train_gpu
+  sample_train: np.ndarray
+  t: np.ndarray
+  return_components: bool
+  return_scaling_factor: bool
+  return_effects: bool
+end note
+
+ADC -[hidden]-> Mixer
+LocalOscillator -[hidden]-> PulseGenerator
+LowPassFilter -[hidden]-> WaveletGenerator
+
+@enduml

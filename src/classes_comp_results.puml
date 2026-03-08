@@ -1,0 +1,85 @@
+@startuml classes_comp_results
+set namespaceSeparator none
+class ADCEffects <<dataclass>> {
+  hold_noise : Optional[List[float]]
+  jitter_indices : Optional[np.ndarray]
+  thermal_noise : Optional[List[float]]
+}
+class ADCResult <<dataclass>> {
+  conditioned : Optional[ConditionedSignal]
+  effects : Optional[ADCEffects]
+  quantized
+  sample_hold : Optional[SampleHoldSignal]
+}
+class ConditionedSignal <<dataclass>> {
+  freq : ndarray
+  signal : ndarray
+  time : ndarray
+  total_time : float
+}
+class LOEffects <<dataclass>> {
+  amp_noise : np.ndarray | None
+  phase_noise : np.ndarray | None
+  pre_amp_noise : np.ndarray | None
+  pre_phase_noise : np.ndarray | None
+}
+class LOResult <<dataclass>> {
+  effects : LOEffects | None
+  lo : ndarray
+  phase_mod : np.ndarray | None
+  pre_start_lo : float | None
+}
+class LPFResult <<dataclass>> {
+  filtered : ndarray
+  noise : np.ndarray | None
+}
+class MixerResult <<dataclass>> {
+  mixed : ndarray
+  noise : np.ndarray | None
+}
+class PGEffects <<dataclass>> {
+  amp_noise : list[float] | None
+  jitter : np.ndarray | None
+}
+class PGResult {
+  effects : Optional[PGEffects] | None
+  pulses : ndarray
+}
+class QuantizedSignal <<dataclass>> {
+  adc_indices : ndarray
+  mid_times : ndarray
+  quantized_values : ndarray
+  sampled_frequency : ndarray
+}
+class SampleHoldSignal <<dataclass>> {
+  indices : ndarray
+  output_signal : ndarray
+  sampled_values : ndarray
+}
+class WaveletEffects <<dataclass>> {
+  amp_noise : np.ndarray | None
+  drift : float | None
+}
+class WaveletResult <<dataclass>> {
+  amp : float | None
+  components : list[np.ndarray] | None
+  effects : Optional[WaveletEffects] | None
+  wavelet_train : np.ndarray | None
+}
+
+LOEffects --* LOResult : effects
+PGEffects --* PGResult : effects
+ADCEffects --* ADCResult : effects
+ConditionedSignal --* ADCResult : conditioned
+QuantizedSignal --* ADCResult : quantized
+SampleHoldSignal --* ADCResult : sample_hold
+WaveletEffects --* WaveletResult : effects
+
+ADCResult --> ADC : returned by
+LOResult --> LocalOscillator : returned by
+LPFResult --> LowPassFilter : returned by
+MixerResult --> Mixer : returned by
+PGResult --> PulseGenerator : returned by
+WaveletResult --> WaveletGenerator : returned by
+
+@enduml

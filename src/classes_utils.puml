@@ -1,0 +1,17 @@
+@startuml classes_utils
+set namespaceSeparator none
+class ColorFormatter {
+  format(record)
+}
+class PlotBlock {
+  data : ndarray
+  decibel : bool
+  family : str
+  freqs_neg : ndarray
+  freqs_pos : ndarray
+  label : str
+  neg_vals : ndarray
+  pos_vals : ndarray
+  source : Optional[str]
+}
+@enduml

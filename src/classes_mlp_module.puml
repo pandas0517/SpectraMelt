@@ -1,0 +1,115 @@
+@startuml classes_mlp_module
+set namespaceSeparator none
+class HuberSparseAmplitudeLoss {
+  amplitude_weight : float
+  delta : float
+  huber : Huber
+  tau : float
+  + call(y_true, y_pred)
+  - noise_aware_weight(y_true)
+}
+class MLP {
+  CUSTOM_LOSSES : set
+  VALID_MONITORS : set
+  VALID_NORM_SCOPE : set
+  VALID_NORM_TYPES : set
+  config_name : str
+  freq_modes : list
+  input_max : NoneType
+  input_mean : NoneType
+  input_min : NoneType
+  input_norm_scope : NoneType
+  input_norm_type : NoneType
+  input_scale : NoneType
+  log_params : dict
+  logger : NoneType, RootLogger
+  model_params : dict
+  output_max : NoneType
+  output_mean : NoneType
+  output_min : NoneType
+  output_norm_scope : NoneType
+  output_norm_type : NoneType
+  output_scale : NoneType
+  premultiply_params : NoneType, dict
+  rng
+  training_params : dict
+  - is_valid_keras_activation(name)
+  - is_valid_keras_loss(name: str) -> bool
+  - is_valid_monitor(name: str) -> bool
+  - is_valid_norm_scope(norm_scope) -> bool
+  - is_valid_norm_type(norm_type) -> bool
+  - is_valid_test_fraction(value)
+  - validate_activation_list(activation_list)
+  + create_model(...)
+  + fit_model(...)
+  + load_model(model_file_path: Path | None) -> Model
+  + make_hdf5_batch_loader(...)
+  + model_prediction(...) -> np.array
+  + normalize_hdf5_dataset(...)
+  + prepare_large_dataset(...)
+  + reset_tensorflow_session()
+  + scan_hdf5_stats(...)
+  + train_on_hdf5(...)
+}
+
+note right of MLP::create_model
+  input_signal_size
+  output_signal_size
+  model_file_path
+end note
+
+note right of MLP::fit_model
+  input_set
+  output_set
+  model_file_path
+end note
+
+note right of MLP::make_hdf5_batch_loader
+  h5_input_path
+  h5_output_path
+end note
+
+note right of MLP::model_prediction
+  init_guess
+  mode
+  norm_h5_input_path
+  norm_h5_output_path
+  mlp_model
+  in_norm_type
+  out_norm_type
+end note
+
+note right of MLP::normalize_hdf5_dataset
+  input_h5_path
+  dataset_name
+  batch_size
+  output_dataset_name
+  dtype
+  norm_type
+  norm_scope
+end note
+
+note right of MLP::prepare_large_dataset
+  input_file_list
+  output_file_list
+  h5_out_input: str
+  h5_out_output: str
+  mode: str
+  sample_signal: np.ndarray
+  max_signals_per_file: int | None
+end note
+
+note right of MLP::scan_hdf5_stats
+  h5_path
+  dataset_name
+  batch_size
+  norm_scope
+end note
+
+note right of MLP::train_on_hdf5
+  h5_input_path
+  h5_output_path
+  model_file_path
+end note
+
+@enduml

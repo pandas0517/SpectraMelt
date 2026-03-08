@@ -1,0 +1,12 @@
+@startuml packages_mlp_module
+set namespaceSeparator none
+package "spectramelt.mlp_module" as spectramelt.mlp_module {
+}
+package "spectramelt.mlp_module.MLP" as spectramelt.mlp_module.MLP {
+}
+package "spectramelt.mlp_module.losses" as spectramelt.mlp_module.losses {
+}
+spectramelt.mlp_module --> spectramelt.mlp_module.MLP
+spectramelt.mlp_module --> spectramelt.mlp_module.losses
+spectramelt.mlp_module.MLP --> spectramelt.mlp_module.losses
+@enduml
