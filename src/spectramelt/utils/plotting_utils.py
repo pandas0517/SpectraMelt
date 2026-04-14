@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 import matplotlib.pyplot as plt
 import pickle
 from dataclasses import dataclass
@@ -355,11 +356,56 @@ def load_and_prepare_arrays(freq_file):
 # Plot layout
 # =========================
 
-def assign_columns(blocks, time_signal=None):
+def assign_columns(blocks, time_signals=None):
+    """
+    Arrange blocks into columns for plotting.
+
+    - All time signals (from np.ndarray or dict) are stacked in a **single column**,
+      each entry is a separate row (top-to-bottom).
+    - Frequency blocks are added as separate columns after time.
+
+    Parameters
+    ----------
+    blocks : list[PlotBlock]
+        Already-expanded frequency/time blocks.
+    time_signals : np.ndarray or dict[str, np.ndarray], optional
+        If np.ndarray, treated as a single time signal.
+        If dict, each key becomes a row in the time column.
+        Keys are plotted in precedence: ["mag", "real_imag", "mag_ang", "mag_ang_sincos"],
+        then any remaining keys.
+
+    Returns
+    -------
+    list[list[PlotBlock]]
+        Columns of PlotBlocks ready for plotting.
+    """
     columns = []
 
-    if time_signal is not None:
-        columns.append([PlotBlock("time", "Time", time_signal)])
+    # --- Time signals as a single column ---
+    if time_signals is not None:
+        time_column = []
+
+        if isinstance(time_signals, np.ndarray):
+            time_column.append(PlotBlock("time", "Time", time_signals))
+
+        elif isinstance(time_signals, dict):
+            precedence = ["mag", "real_imag", "mag_ang", "mag_ang_sincos"]
+            # Add in precedence order
+            for key in precedence:
+                if key in time_signals:
+                    ts = time_signals[key]
+                    time_column.append(PlotBlock("time", key, ts))
+            # Add remaining keys not in precedence
+            for key, ts in time_signals.items():
+                if key not in precedence:
+                    time_column.append(PlotBlock("time", key, ts))
+        else:
+            raise TypeError(f"time_signals must be np.ndarray or dict, got {type(time_signals)}")
+
+        if time_column:
+            columns.append(time_column)
+
+    # --- Split frequency blocks ---
 
     polar   = [b for b in blocks if b.family == "polar"]
     complex = [b for b in blocks if b.family == "complex"]
@@ -403,39 +449,97 @@ def plot_dynamic_frequency_modes(
     freq_modes,
     freq_range,
     signals_per_file,
-    time_signal_file=None,
+    time_signal_file: Path | str | None = None,
     wave_params_file=None,
     base_title=None,
     normalize=False,
     fft_shift_flag=False,
     decibels=False
 ):
+    """
+    Plot frequency-domain signals alongside recovered time-domain signals.
 
+    - Supports .npy (single array) or .npz (dictionary of modes) time signals.
+    - Multiple time modes are plotted in precedence order as separate rows
+      in a **single column**.
+    - Frequency-domain modes are expanded into PlotBlocks.
+    """
+
+    # --- Load wave parameters if provided ---
     wave_params = None
-    if wave_params_file and wave_params_file.exists():
+    if wave_params_file and Path(wave_params_file).exists():
         with open(wave_params_file, "rb") as f:
             wave_params = pickle.load(f)
 
+    # --- Load time signals ---
     time_signals = None
-    if time_signal_file and time_signal_file.exists():
-        time_signals = np.load(time_signal_file)
+    time_titles = None
+    if time_signal_file:
+        time_signal_file = Path(time_signal_file)
+        if time_signal_file.exists():
+            if time_signal_file.suffix == ".npy":
+                arr = np.load(time_signal_file)
+                time_signals = [arr]  # wrap in list for consistency
+                time_titles = ["Time"]
+            elif time_signal_file.suffix == ".npz":
+                with np.load(time_signal_file) as time_npz:
+                    available = set(time_npz.files)
+                    valid_modes = [m for m in freq_modes if m in available]
+                    missing = set(freq_modes) - set(valid_modes)
+                    if missing:
+                        print(f"Warning: Missing recovered time modes in {time_signal_file}: {missing}")
 
+                    # Precedence order for plotting
+                    mode_order = ["mag", "real_imag", "mag_ang", "mag_ang_sincos"]
+                    time_signals = []
+                    time_titles = []
+                    for m in mode_order:
+                        if m in time_npz:
+                            ts_arr = time_npz[m]
+                            time_signals.append(ts_arr)
+                            time_titles.append(m)
+
+    # --- Load frequency-domain signals ---
     freq_arrays = load_and_prepare_arrays(freq_signal_file)
 
+    # --- Loop over signals ---
     for idx in range(signals_per_file):
         wp = wave_params[idx] if wave_params is not None else None
-        time_signal = time_signals[idx] if time_signals is not None else None
 
+        # --- Extract current time signal(s) for this index ---
+        current_time_signals = []
+        current_titles = []
+        if time_signals is not None:
+            for ts, title in zip(time_signals, time_titles):
+                if ts.ndim > 1:
+                    current_time_signals.append(ts[idx])
+                else:
+                    current_time_signals.append(ts)
+                current_titles.append(title)
+
+        # --- Expand frequency modes ---
         blocks = expand_freq_modes(freq_arrays, freq_modes, idx,
                                    fft_shift_flag, normalize, wp, decibels)
-        columns = assign_columns(blocks, time_signal)
 
+        # --- Assign columns ---
+        columns = []
+
+        # --- Time column: all time modes in a single column
+        if current_time_signals:
+            time_column = [
+                PlotBlock("time", f"Time ({t})", ts)
+                for ts, t in zip(current_time_signals, current_titles)
+            ]
+            columns.append(time_column)
+
+        # Frequency-domain columns
+        freq_cols = assign_columns(blocks)
+        columns.extend(freq_cols)
+
+        # --- Prepare figure ---
         ncols = len(columns)
         nrows = max(len(c) for c in columns)
-
-        fig, axes = plt.subplots(
-            nrows, ncols, figsize=(4 * ncols, 3 * nrows), squeeze=False
-        )
+        fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows), squeeze=False)
 
         for c, col in enumerate(columns):
             plot_column(axes[:, c], col, freq=freq, time=time, freq_range=freq_range)

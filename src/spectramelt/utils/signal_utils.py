@@ -52,7 +52,10 @@ def snr_db(x_ref, x_rec, eps=1e-12):
 
 
 def enob_from_snr(snr_db):
-    return (snr_db - 1.76) / 6.02
+    enob = (snr_db - 1.76) / 6.02
+    if enob < 0:
+        enob = 0
+    return enob
 
 
 def filter_valid_names(names, valid_set=None):
@@ -435,64 +438,6 @@ def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
         else:
             items[new_key] = v
     return items
-
-
-def create_meta_data_dictionary(idx):
-    meta_data = {
-        'rms_util': {
-            'col_name': "rms_util_" + str(idx),
-            'value': 0            
-        },
-        'snr_db': {
-            'col_name': "snr_db_" + str(idx),
-            'value': 0            
-        },
-        'enob': {
-            'col_name': "enob_" + str(idx),
-            'value': 0            
-        },
-        'num_rec_freq': {
-            'col_name': "num_rec_freq_" + str(idx),
-            'value': 0
-        },
-        'num_spur_freq': {
-            'col_name': "num_spur_freq_" + str(idx),
-            'value': 0
-        },
-        'ave_rec_mag_err': {
-            'col_name': "ave_rec_mag_err_" + str(idx),
-            'value': 0
-        },
-        'rec_tone_thresh': {
-            'col_name': "rec_tone_thresh_" + str(idx),
-            'value': 0
-        },
-        'ave_rec_mag': {
-            'col_name': "ave_rec_mag_" + str(idx),
-            'value': 0
-        },
-        'max_rec_mag': {
-            'col_name': "max_rec_mag_" + str(idx),
-            'value': 0
-        },
-        'min_rec_mag': {
-            'col_name': "min_rec_mag_" + str(idx),
-            'value': 0
-        },
-        'ave_spur_mag': {
-            'col_name': "ave_spur_mag_" + str(idx),
-            'value': 0
-        },
-        'max_spur_mag': {
-            'col_name': "max_spur_mag_" + str(idx),
-            'value': 0
-        },
-        'min_spur_mag': {
-            'col_name': "min_spur_mag_" + str(idx),
-            'value': 0
-        }
-    }
-    return meta_data
 
 
 def filter_valid(vals):

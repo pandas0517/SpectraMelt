@@ -19,9 +19,9 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    create_set = True
-    test_max_min = True
-    update_input_waves = True
+    create_set = False
+    test_max_min = False
+    update_input_waves = False
     display_signals = True
     use_dB = True
 
@@ -89,7 +89,7 @@ if __name__ == '__main__':
                     logger.error(f"Input frequency file {freq_signal_file} does not exist")
                     raise ValueError(f"Input frequency file {freq_signal_file} does not exist")
 
-                base_title = f"Simulated Analog\n"
+                base_title = f"Simulated Analog\n{file_path}"
 
                 plot_dynamic_frequency_modes(
                     freq_signal_file,

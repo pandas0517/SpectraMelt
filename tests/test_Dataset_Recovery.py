@@ -21,13 +21,14 @@ if __name__ == '__main__':
     
     create_recovery_set = False
     use_mlp = False
-    decode_recovery_to_time = True
-    assume_zero_phase=True
+    decode_recovery_to_time = False
+    assume_zero_phase = False
 
     create_recovery_dataframe = True
     set_recovery_dataframe = True
 
     display_recovered_signals = False
+    use_dB = True
     DUT_type = "NYFR"
 
     logger = get_logger(Path(__file__).stem, Path(getenv('SPECTRAMELT_LOG')))
@@ -83,7 +84,7 @@ if __name__ == '__main__':
         logging.getLogger('matplotlib').setLevel(logging.INFO)
         logging.getLogger("PIL").setLevel(logging.INFO)
         
-        time_signal_filename = filenames.get('time_signals', "time_signals.npy")
+        time_signal_filename = Path(filenames.get('time_signals', "time_signals.npy"))
         wbf_time_freq_filename = filenames.get('wbf_time_freq', "wbf_time_freq.npz")
         time_freq_file = wideband_dir / wbf_time_freq_filename
         with np.load(time_freq_file) as time_freq:
@@ -94,7 +95,7 @@ if __name__ == '__main__':
             freq = time_freq["freq"]
         
         N = len(freq)
-        signals_per_file = 3
+        signals_per_file = 1
         
         for file_path in recovery_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(freq_signal_filename):         
@@ -108,19 +109,19 @@ if __name__ == '__main__':
                     logger.warning(f"Wave parameter file {wave_file} does not exist")
                     wave_file = None
 
-                recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename}"
+                recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename.with_suffix('.npz')}"
                 if not recovery_time_file.exists():
                     logger.warning(f"Recovered time file {recovery_time_file} does not exist")
                     recovery_time_file = None
                     
-                base_title = f"Recovery for {DUT_type} Signals\n"
+                base_title = f"Recovery for {DUT_type} Signals\n{file_path}"
 
                     
                 plot_dynamic_frequency_modes(
                     file_path,
                     time,
                     freq,
-                    recovery_freq_modes,
+                    selected_freq_modes,
                     freq_range,
                     signals_per_file,
                     recovery_time_file,

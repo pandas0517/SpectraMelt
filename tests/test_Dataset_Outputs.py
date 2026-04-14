@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     load_dotenv()
     
-    create_output_set = True
+    create_output_set = False
 
     create_wbf_wave_params = False
     create_nyfr_wave_params = False
@@ -124,7 +124,7 @@ if __name__ == '__main__':
             time = time_freq["time"]
             freq = time_freq["freq"]
             
-        signals_per_file = 3
+        signals_per_file = 1
         
         for file_path in wideband_dir.iterdir():
             if file_path.is_file() and file_path.name.endswith(input_time_signal_filename):
@@ -141,7 +141,7 @@ if __name__ == '__main__':
                     logger.error(f"Wideband frequency file {freq_signal_file} does not exist")
                     raise ValueError(f"Wideband frequency file {freq_signal_file} does not exist")
 
-                base_title = f"Output for Wideband Frequency\n" 
+                base_title = f"Output for Wideband Frequency\n{file_path}" 
                 
                 plot_dynamic_frequency_modes(
                     freq_signal_file,

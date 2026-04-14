@@ -29,9 +29,9 @@ if __name__ == '__main__':
     display_mixed_2_signals = False
     display_lpf_2_signals = False
     display_conditioned_signals = False
-    display_ADC_signals = False
-    display_recovered_signals = True
-    display_premultiply_signals = True
+    display_ADC_signals = True
+    display_recovered_signals = False
+    display_premultiply_signals = False
     
     use_gpu = False
     use_device_message = "CPU"
@@ -130,6 +130,7 @@ if __name__ == '__main__':
     quantized_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.quantized_values
     samp_freq_nfwbs_1 = nfwbs_1_signals.adc_signal.quantized.sampled_frequency
     quant_freq_nfwbs_1 = fftshift(np.abs(fft(quantized_nfwbs_1))) / len(samp_freq_nfwbs_1)
+    quant_freq_nfwbs_1_db = 20 * np.log10(np.copy(quant_freq_nfwbs_1))
 
     wbf_time_1 = wbf_signal_1.time
     wbf_freq_1 = wbf_signal_1.freq
@@ -383,17 +384,22 @@ if __name__ == '__main__':
         plt.close(fig)
     
     if display_ADC_signals:
-        fig, axes = plt.subplots(1, 3, figsize=(8,4))
-        axes[0].plot(lpf_cond_time_1, lpf_cond_sig_1)
-        axes[0].plot(lpf_cond_time_1, sh_output_nfwbs_1)
-        axes[0].set_title("Sample and Hold - Time (Ideal)")
-        axes[0].set_xlim(0, 0.00015)
-        axes[1].step(mid_times_nfwbs_1, quantized_nfwbs_1, color='green', where='mid')
-        axes[1].set_xlim(-.0001, 0.0003)
-        axes[1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (Ideal)")
-        axes[2].plot(samp_freq_nfwbs_1, quant_freq_nfwbs_1)
-        axes[2].set_ylim(0, 0.00025)
-        axes[2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
+        fig, axes = plt.subplots(2, 3, figsize=(8,4))
+        axes[0,0].plot(lpf_cond_time_1, lpf_cond_sig_1)
+        axes[0,0].plot(lpf_cond_time_1, sh_output_nfwbs_1)
+        axes[0,0].set_title("Sample and Hold - Time (Ideal)")
+        axes[0,0].set_xlim(0, 0.00015)
+        axes[0,1].step(mid_times_nfwbs_1, quantized_nfwbs_1, color='green', where='mid')
+        axes[0,1].set_xlim(-.0001, 0.0003)
+        axes[0,1].set_title(f"{bits_nyfr_1}-bit quantizer - Time (Ideal)")
+        axes[1,0].plot(samp_freq_nfwbs_1, quant_freq_nfwbs_1)
+        axes[1,0].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
+        axes[1,1].plot(samp_freq_nfwbs_1, quant_freq_nfwbs_1_db)
+        axes[1,1].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
+        axes[1,1].set_ylabel("dB")
+        axes[1,2].plot(samp_freq_nfwbs_1, quant_freq_nfwbs_1_db)
+        axes[1,2].set_title(f"{bits_nyfr_1}-bit quantizer - Frequency (Ideal)")
+        axes[1,2].set_ylabel("dB")
         fig.suptitle("NFWBS ADC Signals")
         fig.tight_layout()
         plt.show()

@@ -1141,78 +1141,124 @@ class DataSet:
     def decode_time_signals(self, assume_zero_phase=False):
         """
         Decode all frequency-domain .npz files in the recovery directory
-        into time-domain signals and save them as .npy files.
+        into time-domain signals and save them as .npz files.
 
-        If assume_zero_phase=True and 'mag' is present, uses magnitude-only reconstruction
-        as the first priority.
+        Every entry in the input frequency file is reconstructed and saved.
 
-        Signals are assumed Physics-normalized (denormalize by multiplying by signal length).
+        If assume_zero_phase=True and 'mag' is present, magnitude-only
+        reconstruction assumes zero phase; otherwise random phase is used.
+
+        Signals are assumed Physics-normalized (denormalize by multiplying
+        by signal length).
         """
+
         recovery_dir = Path(self.directories.get('recovery', "Recovery"))
-        time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
+        time_signal_filename = Path(self.filenames.get('time_signals', "time_signals.npy"))
         freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz")
 
         recovery_dir.mkdir(parents=True, exist_ok=True)
 
         for file_path in recovery_dir.iterdir():
+
             if not file_path.is_file() or not file_path.name.endswith(freq_signals_filename):
                 continue
 
-            # Key for saving
             stem = file_path.name
             key_part = stem.replace(freq_signals_filename, "")
-            recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename}"
+
+            recovery_time_file = recovery_dir / f"{key_part}{time_signal_filename.with_suffix('.npz')}"
 
             with np.load(file_path) as freq_data:
+
                 keys = freq_data.files
-                time_signal = None
+                time_signals = {}
 
-                # --- Priority reconstruction ---
-                if assume_zero_phase and 'mag' in keys:
-                    arr = freq_data['mag']
-                    complex_freq = arr * np.exp(0j)  # zero-phase assumption
-                    complex_freq = enforce_hermitian(complex_freq)
-                    time_signal = np.fft.ifft(complex_freq) * len(arr)
+                for key in keys:
 
-                elif 'real_imag' in keys:
-                    arr = freq_data['real_imag'].reshape(-1, 2)
-                    real, imag = arr[:, 0], arr[:, 1]
-                    complex_freq = real + 1j * imag
-                    complex_freq = enforce_hermitian(complex_freq)
-                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+                    try:
+                        arr = freq_data[key]
 
-                elif 'mag_ang' in keys:
-                    arr = freq_data['mag_ang'].reshape(-1, 2)
-                    mag, ang = arr[:, 0], arr[:, 1]
-                    complex_freq = mag * np.exp(1j * ang)
-                    complex_freq = enforce_hermitian(complex_freq)
-                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+                        # Determine number of signals (batch) and length per signal
+                        if arr.ndim == 1:
+                            arr = arr[None, :]  # single signal as batch of 1
+                        num_signals = arr.shape[0]
 
-                elif 'mag_ang_sincos' in keys:
-                    arr = freq_data['mag_ang_sincos'].reshape(-1, 3)
-                    mag, sin_comp, cos_comp = arr[:, 0], arr[:, 1], arr[:, 2]
-                    ang = np.arctan2(sin_comp, cos_comp)
-                    complex_freq = mag * np.exp(1j * ang)
-                    complex_freq = enforce_hermitian(complex_freq)
-                    time_signal = np.fft.ifft(complex_freq) * arr.shape[0]
+                        signals_out = []
 
-                else:
-                    self.logger.warning(f"Cannot reconstruct time signal from {file_path}")
+                        if key == "mag":
+                            # arr.shape = (num_signals, N)
+                            for sig in arr:
+                                if assume_zero_phase:
+                                    complex_freq = sig * np.exp(0j)
+                                else:
+                                    phase = np.random.uniform(0, 2*np.pi, sig.shape)
+                                    complex_freq = sig * np.exp(1j * phase)
+                                complex_freq = enforce_hermitian(complex_freq)
+                                t_sig = np.fft.ifft(complex_freq) * len(sig)
+                                signals_out.append(np.real(t_sig))
+
+                        elif key == "real_imag":
+                            # arr.shape = (num_signals, 2*N) or (num_signals, N, 2)
+                            if arr.ndim == 2 and arr.shape[1] % 2 == 0:
+                                arr = arr.reshape(num_signals, -1, 2)
+                            for sig in arr:  # sig.shape = (N,2)
+                                real, imag = sig[:, 0], sig[:, 1]
+                                complex_freq = real + 1j * imag
+                                complex_freq = enforce_hermitian(complex_freq)
+                                t_sig = np.fft.ifft(complex_freq) * len(real)
+                                signals_out.append(np.real(t_sig))
+
+                        elif key == "mag_ang":
+                            # arr.shape = (num_signals, 2*N) or (num_signals, N, 2)
+                            if arr.ndim == 2 and arr.shape[1] % 2 == 0:
+                                arr = arr.reshape(num_signals, -1, 2)
+                            for sig in arr:
+                                mag, ang = sig[:, 0], sig[:, 1]
+                                complex_freq = mag * np.exp(1j * ang)
+                                complex_freq = enforce_hermitian(complex_freq)
+                                t_sig = np.fft.ifft(complex_freq) * len(mag)
+                                signals_out.append(np.real(t_sig))
+
+                        elif key == "mag_ang_sincos":
+                            # arr.shape = (num_signals, 3*N) or (num_signals, N, 3)
+                            if arr.ndim == 2 and arr.shape[1] % 3 == 0:
+                                arr = arr.reshape(num_signals, -1, 3)
+                            for sig in arr:
+                                mag, sin_comp, cos_comp = sig[:, 0], sig[:, 1], sig[:, 2]
+                                ang = np.arctan2(sin_comp, cos_comp)
+                                complex_freq = mag * np.exp(1j * ang)
+                                complex_freq = enforce_hermitian(complex_freq)
+                                t_sig = np.fft.ifft(complex_freq) * len(mag)
+                                signals_out.append(np.real(t_sig))
+
+                        else:
+                            self.logger.warning(
+                                f"Cannot reconstruct key '{key}' from {file_path}"
+                            )
+                            continue
+
+                        # --- Stack batch signals to (num_signals, N) ---
+                        time_signals[key] = np.stack(signals_out, axis=0)
+
+                        # --- Energy check for imaginary residuals (optional) ---
+                        for i, t_sig in enumerate(signals_out):
+                            imag_energy = np.mean(np.abs(np.imag(t_sig))**2)
+                            real_energy = np.mean(np.real(t_sig)**2)
+                            if imag_energy > 1e-6 * real_energy:
+                                self.logger.warning(
+                                    f"Large imaginary residual in {file_path} ({key}, signal {i}): "
+                                    f"{10*np.log10(imag_energy/real_energy):.2f} dB"
+                                )
+
+                    except Exception as e:
+                        self.logger.error(f"Failed decoding key '{key}' in {file_path}: {e}")
+
+                if not time_signals:
+                    self.logger.warning(f"No valid signals reconstructed from {file_path}")
                     continue
 
-                # --- Energy check for imaginary residuals ---
-                imag_energy = np.mean(np.abs(np.imag(time_signal))**2)
-                real_energy = np.mean(np.real(time_signal)**2)
-
-                if imag_energy > 1e-6 * real_energy:
-                    self.logger.warning(
-                        f"Large imaginary residual in {file_path}: "
-                        f"{10*np.log10(imag_energy/real_energy):.2f} dB"
-                    )
-
-                # --- Save real-valued time signal ---
-                np.save(recovery_time_file, np.real(time_signal))
-                self.logger.info(f"Saved time-domain signal: {recovery_time_file}")
+                np.savez(recovery_time_file, **time_signals)
+                self.logger.info(f"Saved time-domain signals: {recovery_time_file}")
 
         
     def create_recovery_dataframe(self, recovery: RecoveryProtocol | None):
@@ -1251,7 +1297,7 @@ class DataSet:
            
         input_dir: Path = self.directories.get('inputs', "Inputs")
         inputset_config_filename = self.filenames.get('input_config', "inputset_config.json")
-        input_time_signal_filename = self.filenames.get('time_signals', "time_signals.npy")
+        input_time_signal_filename = Path(self.filenames.get('time_signals', "time_signals.npy"))
         freq_signals_filename = self.filenames.get('freq_signals', "freq_signals.npz",)
         wave_params_filename = self.flat_filenames.get('wave_params', "wave_params.pkl")
         inputset_config_file = input_dir.parent / inputset_config_filename
@@ -1326,7 +1372,7 @@ class DataSet:
             get_prefix_before_recovery(p.name): p
             for p in input_dir.iterdir()
             if p.is_file()
-            and p.name.endswith(input_time_signal_filename)
+            and p.name.endswith(str(input_time_signal_filename))
             and "recovery" in p.name.lower()
         }
 
@@ -1342,7 +1388,7 @@ class DataSet:
             get_prefix_before_recovery(p.name): p
             for p in recovery_dir.iterdir()
             if p.is_file()
-            and p.name.endswith(input_time_signal_filename)
+            and p.name.endswith(str(input_time_signal_filename.with_suffix(".npz")))
             and "recovery" in p.name.lower()
         }
         
@@ -1358,13 +1404,22 @@ class DataSet:
             get_prefix_before_recovery(p.name): p
             for p in wideband_dir.iterdir()
             if p.is_file()
-            and p.name.endswith(input_time_signal_filename)
+            and p.name.endswith(str(input_time_signal_filename))
             and "recovery" in p.name.lower()
         }
+
+        wbf_freq_dict = {
+            get_prefix_before_recovery(p.name): p
+            for p in wideband_dir.iterdir()
+            if p.is_file()
+            and p.name.endswith(freq_signals_filename)
+            and "recovery" in p.name.lower()
+        }       
         
         missing_in_wbf_wave = recovery_dict.keys() - wbf_wave_dict.keys()
         missing_in_rec_time = recovery_dict.keys() - rec_time_dict.keys()
         missing_in_wbf = recovery_dict.keys() - wbf_dict.keys()
+        missing_in_wbf_freq = recovery_dict.keys() - wbf_freq_dict.keys()
         missing_in_recovery = wbf_wave_dict.keys() - recovery_dict.keys()
         missing_in_input = recovery_dict.keys() - input_dict.keys()
 
@@ -1377,22 +1432,27 @@ class DataSet:
             raise ValueError("Files missing in wideband filtered waves:", missing_in_wbf_wave)
         
         if missing_in_wbf:
-            self.logger.error("Files missing in wideband filtered frequency:", missing_in_wbf)
-            raise ValueError("Files missing in wideband filtered frequency:", missing_in_wbf)
+            self.logger.error("Files missing in wideband filtered time:", missing_in_wbf)
+            raise ValueError("Files missing in wideband filtered time:", missing_in_wbf)
+        
+        if missing_in_wbf_freq:
+            self.logger.error("Files missing in wideband filtered frequency:", missing_in_wbf_freq)
+            raise ValueError("Files missing in wideband filtered frequency:", missing_in_wbf_freq)
 
         if missing_in_recovery:
             self.logger.error("Files missing in recovery:", missing_in_recovery)
             raise ValueError("Files missing in recovery:", missing_in_recovery)
 
         if missing_in_input:
-            self.logger.error("Files missing in recovery:", missing_in_input)
-            raise ValueError("Files missing in recovery:", missing_in_input)        
+            self.logger.error("Files missing in input:", missing_in_input)
+            raise ValueError("Files missing in input:", missing_in_input)
         
         sorted_keys = sorted(recovery_dict.keys(), key=numeric_key)
         matched_recovery_files = [recovery_dict[k] for k in sorted_keys]
         matched_rec_time_files = [rec_time_dict[k] for k in sorted_keys]
         matched_wave_files     = [wbf_wave_dict[k] for k in sorted_keys]
         matched_wbf_files      = [wbf_dict[k] for k in sorted_keys]
+        matched_wbf_freq_files = [wbf_freq_dict[k] for k in sorted_keys]
         input_files            = [input_dict[k] for k in sorted_keys]
 
         all_rows = []
@@ -1402,6 +1462,7 @@ class DataSet:
                 recovery_file=recovery_file,
                 rec_time_file=matched_rec_time_files[idx_file],
                 wbf_file=matched_wbf_files[idx_file],
+                wbf_freq_file=matched_wbf_freq_files[idx_file],
                 wbf_wave_file=matched_wave_files[idx_file],
                 input_file=input_files[idx_file],
                 num_recovery_sigs=num_recovery_sigs,

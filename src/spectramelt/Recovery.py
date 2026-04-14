@@ -5,7 +5,6 @@ from .utils import(
     get_logger,
     compute_recovery_stats,
     flatten_dict,
-    create_meta_data_dictionary,
     safe_min,
     safe_max,
     safe_mean,
@@ -320,6 +319,7 @@ class Recovery:
         recovery_file: Path,
         rec_time_file: Path,
         wbf_file: Path,
+        wbf_freq_file: Path,
         wbf_wave_file: Path,
         input_file: Path,
         num_recovery_sigs: int,
@@ -351,10 +351,34 @@ class Recovery:
             if missing:
                 print(f"Warning: Missing recovery modes in {recovery_file}: {missing}")
             recovery = {m: recovery_npz[m] for m in valid}
+
+        # ---------- Load wide-band filtered frequency ----------
+        with np.load(wbf_freq_file) as wbf_npz:
+            available = set(wbf_npz.files)
+            valid = [m for m in freq_modes if m in available]
+            missing = set(freq_modes) - set(valid)
+            if missing:
+                print(f"Warning: Missing wbf modes in {wbf_freq_file}: {missing}")
+            wbf_freq_all_signals = {m: wbf_npz[m] for m in valid}            
         
-        # Time domain signals for SNR calculation
-        rec_time_signals = np.load(rec_time_file)
-        wbf_time_signals = np.load(wbf_file)
+        use_time = False
+        if rec_time_file.exists() and rec_time_file is not None:
+            # Time domain signals for SNR calculation
+            if rec_time_file.suffix == ".npz":
+                with np.load(rec_time_file) as recovery_time_npz:
+                    available = set(recovery_time_npz.files)
+                    valid = [m for m in freq_modes if m in available]
+                    missing = set(freq_modes) - set(valid)
+                    if missing:
+                        print(f"Warning: Missing recovered time modes in {rec_time_file}: {missing}")
+                    rec_time_signals = {m: recovery_time_npz[m] for m in valid}
+            elif rec_time_file == ".npy":
+                self.logger.error("Unsupported file extension .npy")
+                raise ValueError("Unsupported file extension .npy")
+            use_time = True
+
+        if wbf_file.exists() and wbf_file is not None:
+            wbf_time_signals = np.load(wbf_file)
 
         # Split real_imag if present
         if "real_imag" in recovery:
@@ -420,9 +444,6 @@ class Recovery:
 
                 all_bins = np.arange(wbf_freq.size)
                 non_rec_bins = np.setdiff1d(all_bins, rec_bins)
-                
-                snr = snr_db(wbf_time_signals[idx_sig],
-                             rec_time_signals[idx_sig])
 
                 # ========================================================
                 # MAG MODE
@@ -482,9 +503,35 @@ class Recovery:
                 )
 
                 # ---- write per-signal columns ----
-                meta = create_meta_data_dictionary(idx_sig)
-                meta["snr_db"]["value"] = snr
-                meta["enob"]["value"] = enob_from_snr(snr)
+                meta = self.create_meta_data_dictionary(idx_sig, use_time, freq_modes)
+
+                # ---- time-domain SNR ----
+                if use_time:
+                    time_snr = snr_db(wbf_time_signals[idx_sig], rec_time_signals[mode][idx_sig])
+                    meta["rec_time_snr_db"]["value"] = time_snr
+                    meta["rec_time_enob"]["value"] = enob_from_snr(time_snr)
+
+                # ---- frequency-domain SNR ----
+                if mode == "mag":
+                    freq_snr = snr_db(wbf_freq_all_signals[mode][idx_sig], mag)
+                elif mode == "real_imag":
+                    # Compute real and imag SNR separately
+                    wbf_real, wbf_imag = np.array_split(wbf_freq_all_signals[mode][idx_sig], 2)
+                    snr_real = snr_db(wbf_real, real)
+                    snr_imag = snr_db(wbf_imag, imag)
+                    freq_snr = (snr_real + snr_imag) / 2  # store average in meta
+                else:
+                    freq_snr = None
+
+                # ---- update meta dictionary ----
+                rec_key_snr = f"rec_{mode}_snr_db"
+                rec_key_enob = f"rec_{mode}_enob"
+
+                if rec_key_snr in meta and freq_snr is not None:
+                    meta[rec_key_snr]["value"] = freq_snr
+                if rec_key_enob in meta and freq_snr is not None:
+                    meta[rec_key_enob]["value"] = enob_from_snr(freq_snr)
+
                 meta["rms_util"]["value"] = (
                     np.sqrt(np.mean(wbf_time_signals[idx_sig]**2)) / 10.0
                 )
@@ -517,9 +564,13 @@ class Recovery:
                 if row["ave_num_rec"] != -1 else -1
             )
 
+            if use_time:
+                row["ave_time_snr_db"] = safe_mean([row[f"rec_time_snr_db_{i}"] for i in range(num_recovery_sigs)])
+                row["ave_time_enob"] = safe_mean([row[f"rec_time_enob_{i}"] for i in range(num_recovery_sigs)])
+
             row["ave_rms_util"]    = safe_mean([row[f"rms_util_{i}"] for i in range(num_recovery_sigs)])
-            row["ave_snr_db"]      = safe_mean([row[f"snr_db_{i}"] for i in range(num_recovery_sigs)])
-            row["ave_enob"]        = safe_mean([row[f"enob_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_snr_db"]      = safe_mean([row[f"rec_{mode}_snr_db_{i}"] for i in range(num_recovery_sigs)])
+            row["ave_enob"]        = safe_mean([row[f"rec_{mode}_enob_{i}"] for i in range(num_recovery_sigs)])
             row["ave_rec_mag_err"] = safe_mean([row[f"ave_rec_mag_err_{i}"] for i in range(num_recovery_sigs)])
             row["ave_rec_mag"]     = safe_mean([row[f"ave_rec_mag_{i}"] for i in range(num_recovery_sigs)])
             row["max_rec_mag"]     = safe_max([row[f"max_rec_mag_{i}"] for i in range(num_recovery_sigs)])
@@ -531,6 +582,71 @@ class Recovery:
             rows.append(row)
 
         return rows
+
+
+    def create_meta_data_dictionary(self, idx, use_time, freq_modes):
+
+        meta_data = {
+            'rms_util': {
+                'col_name': "rms_util_" + str(idx),
+                'value': 0            
+            },
+            'num_rec_freq': {
+                'col_name': "num_rec_freq_" + str(idx),
+                'value': 0
+            },
+            'num_spur_freq': {
+                'col_name': "num_spur_freq_" + str(idx),
+                'value': 0
+            },
+            'ave_rec_mag_err': {
+                'col_name': "ave_rec_mag_err_" + str(idx),
+                'value': 0
+            },
+            'rec_tone_thresh': {
+                'col_name': "rec_tone_thresh_" + str(idx),
+                'value': 0
+            },
+            'ave_rec_mag': {
+                'col_name': "ave_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'max_rec_mag': {
+                'col_name': "max_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'min_rec_mag': {
+                'col_name': "min_rec_mag_" + str(idx),
+                'value': 0
+            },
+            'ave_spur_mag': {
+                'col_name': "ave_spur_mag_" + str(idx),
+                'value': 0
+            },
+            'max_spur_mag': {
+                'col_name': "max_spur_mag_" + str(idx),
+                'value': 0
+            },
+            'min_spur_mag': {
+                'col_name': "min_spur_mag_" + str(idx),
+                'value': 0
+            }
+        }
+
+        modes = (["time"] if use_time else []) + freq_modes
+
+        for mode in modes:
+            meta_data[f"rec_{mode}_snr_db"] = {
+                'col_name': f"rec_{mode}_snr_db_{idx}",
+                'value': 0
+            }
+
+            meta_data[f"rec_{mode}_enob"] = {
+                'col_name': f"rec_{mode}_enob_{idx}",
+                'value': 0
+            }
+
+        return meta_data
 
     # -------------------------------
     # Getters
