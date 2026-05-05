@@ -10,7 +10,7 @@ from NYFR import NYFR
 
 [SpectraMelt Dissertation](http://rave.ohiolink.edu/etdc/view?acc_num=wright1777891867941326)
 
-[SpectraMelt Journal](10.3390/signals7020025)
+[SpectraMelt Journal](https://doi.org/10.3390/signals7020025)
 
 ## Architecture
 
