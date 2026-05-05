@@ -8,7 +8,8 @@ from NYFR import NYFR
 
 ## SpectraMelt Papers
 
-[SpectraMelt_Dissertation](http://rave.ohiolink.edu/etdc/view?acc_num=wright1777891867941326)
+[SpectraMelt Dissertation](http://rave.ohiolink.edu/etdc/view?acc_num=wright1777891867941326)
+
 [SpectraMelt Journal](10.3390/signals7020025)
 
 ## Architecture
